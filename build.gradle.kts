@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "4.0.4"
     id("io.spring.dependency-management") version "1.1.7"
+    id("org.sonarqube") version "7.2.3.7755"
 }
 
 group = "p2p-shopping"
@@ -26,4 +27,11 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+sonar {
+    properties {
+        property("sonar.projectKey", "P2P-Shopping_P2P-Shopping")
+        property("sonar.organization", "p2p-shopping")
+    }
 }
