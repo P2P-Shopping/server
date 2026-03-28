@@ -24,33 +24,3 @@ public class RoutingController {
         return new RoutingResponse("success", mockRoute);
     }
 }
-
-class RoutingRequest {
-    public double userLat;
-    public double userLng;
-    public List<String> productIds;
-}
-
-class RoutingResponse {
-    public String status;
-    public List<RoutePoint> route;
-
-    public RoutingResponse(String status, List<RoutePoint> route) {
-        this.status = status;
-        this.route = route;
-    }
-}
-
-class RoutePoint {
-    public String itemId;
-    public String name;
-    public double lat;
-    public double lng;
-
-    public RoutePoint(String itemId, String name, double lat, double lng) {
-        this.itemId = itemId;
-        this.name = name;
-        this.lat = lat;
-        this.lng = lng;
-    }
-}
