@@ -2,6 +2,7 @@ package p2ps.telemetry.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import p2ps.telemetry.dto.TelemetryPingDTO;
 import p2ps.telemetry.model.TelemetryRecord;
@@ -14,6 +15,7 @@ public class TelemetryService {
 
     private final TelemetryRepository telemetryRepository;
 
+    @Async
     public void processPing(TelemetryPingDTO pingDTO) {
         log.info("[SERVICE] Processing ping for the product: {}", pingDTO.getItemId());
 
