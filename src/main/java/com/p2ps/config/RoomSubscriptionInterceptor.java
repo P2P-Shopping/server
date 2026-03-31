@@ -39,7 +39,7 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
                 
                 // Security Check: Only allow alphanumeric list IDs (plus hyphens). Prevents directory traversal or wildcard injection.
                 if (!listId.matches("^[a-zA-Z0-9-]+$")) {
-                    logger.warn("Security Alert: Blocked malformed room subscription attempt to -> {}", destination);
+                    logger.warn("Security Alert: Blocked malformed room subscription attempt");
                     throw new IllegalArgumentException("Invalid List ID format");
                 }
             }

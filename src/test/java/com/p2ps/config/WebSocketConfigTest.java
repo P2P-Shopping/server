@@ -1,5 +1,6 @@
 package com.p2ps.config;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -14,11 +15,17 @@ import static org.mockito.Mockito.*;
 
 class WebSocketConfigTest {
 
+    private RoomSubscriptionInterceptor interceptor;
+    private WebSocketConfig config;
+
+    @BeforeEach
+    void setUp() {
+        interceptor = mock(RoomSubscriptionInterceptor.class);
+        config = new WebSocketConfig(interceptor);
+    }
+
     @Test
     void registerStompEndpoints() throws Exception {
-        RoomSubscriptionInterceptor interceptor = mock(RoomSubscriptionInterceptor.class);
-        WebSocketConfig config = new WebSocketConfig(interceptor);
-
         String[] allowedOrigins = {"https://example.com"};
         Field field = WebSocketConfig.class.getDeclaredField("allowedOrigins");
         field.setAccessible(true);
@@ -39,9 +46,6 @@ class WebSocketConfigTest {
 
     @Test
     void configureMessageBroker() {
-        RoomSubscriptionInterceptor interceptor = mock(RoomSubscriptionInterceptor.class);
-        WebSocketConfig config = new WebSocketConfig(interceptor);
-
         MessageBrokerRegistry registry = mock(MessageBrokerRegistry.class);
 
         config.configureMessageBroker(registry);
@@ -52,9 +56,6 @@ class WebSocketConfigTest {
 
     @Test
     void configureClientInboundChannel() {
-        RoomSubscriptionInterceptor interceptor = mock(RoomSubscriptionInterceptor.class);
-        WebSocketConfig config = new WebSocketConfig(interceptor);
-
         ChannelRegistration registration = mock(ChannelRegistration.class);
 
         config.configureClientInboundChannel(registration);

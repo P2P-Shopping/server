@@ -27,10 +27,10 @@ public class ListSyncController {
     @SendTo("/topic/list/{listId}")
     public ListUpdatePayload handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
         if (payload == null) {
-            logger.warn("Received null payload for list update on room: {}", listId);
-            throw new IllegalArgumentException("Payload must not be null");
+            logger.warn("Received null payload for list update on room");
+            throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
         }
-        logger.debug("Routing {} action for room: {}", payload.getAction(), listId);
+        logger.debug("Routing action for room");
         return payload;
     }
 }

@@ -36,5 +36,39 @@ class ListUpdatePayloadTest {
         assertEquals(original.getItemId(), deserialized.getItemId());
         assertEquals(original.getContent(), deserialized.getContent());
     }
+
+    @Test
+    void testJsonDeserialization_UnrecognizedAction_MapsToUnknown() throws Exception {
+        String json = "{\"action\":\"FOOBAR\",\"itemId\":\"item-1\",\"content\":\"Milk\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.UNKNOWN, payload.getAction());
+        assertEquals("item-1", payload.getItemId());
+        assertEquals("Milk", payload.getContent());
+    }
+
+    @Test
+    void testJsonDeserialization_NullAction_DefaultsToNull() throws Exception {
+        String json = "{\"action\":null,\"itemId\":\"item-2\",\"content\":\"Bread\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertNull(payload.getAction());
+    }
+
+    @Test
+    void testJsonDeserialization_OmittedAction_DefaultsToNull() throws Exception {
+        String json = "{\"itemId\":\"item-3\",\"content\":\"Eggs\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertNull(payload.getAction());
+    }
+
+    @Test
+    void testJsonDeserialization_LowercaseAction_MapsToCorrectEnum() throws Exception {
+        String json = "{\"action\":\"add\",\"itemId\":\"item-4\",\"content\":\"Butter\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.ADD, payload.getAction());
+    }
 }
 
