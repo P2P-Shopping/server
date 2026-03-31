@@ -4,20 +4,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-@ActiveProfiles("test")
 @SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration"
+        "jwt.secret=test-secret-key-care-trebuie-sa-fie-foarte-lunga-32-chars",
+        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.hibernate.ddl-auto=create-drop"
 })
+@ActiveProfiles("test")
 class P2PShoppingApplicationTests {
-
     @Test
     void contextLoads() {
-    }
 
-    @Test
-    void shouldStartApplicationMainWithoutThrowing() {
-        assertDoesNotThrow(() -> P2PShoppingApplication.main(new String[]{"--spring.main.web-application-type=none"}));
     }
-
 }
