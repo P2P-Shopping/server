@@ -1,5 +1,6 @@
 package p2ps.telemetry.services;
 
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -27,7 +28,7 @@ public class TelemetryService {
         telemetryRecord.setLng(pingDTO.getLng());
         telemetryRecord.setAccuracyMeters(pingDTO.getAccuracyMeters());
         telemetryRecord.setTimestamp(pingDTO.getTimestamp());
-        telemetryRecord.setServerReceivedTimestamp(System.currentTimeMillis());
+        telemetryRecord.setServerReceivedTimestamp(Instant.now());
 
         try {
             telemetryRepository.save(telemetryRecord);
