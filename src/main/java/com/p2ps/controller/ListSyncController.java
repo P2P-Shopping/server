@@ -19,7 +19,7 @@ public class ListSyncController {
 
     /**
      * Intercepts updates sent to a specific shopping list and broadcasts them to that list's room.
-     * * @param listId  the unique identifier of the shopping list, extracted from the destination path
+     * @param listId  the unique identifier of the shopping list, extracted from the destination path
      * @param payload the data detailing the modification made to the list
      * @return the exact payload to be broadcasted to all active subscribers of the room
      */
