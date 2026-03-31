@@ -4,9 +4,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.Map;
 
 // Catches all exceptions and returns a clean JSON response
 @RestControllerAdvice
@@ -48,5 +52,15 @@ public class GlobalExceptionHandler {
         );
 
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
+    public ResponseEntity<Map<String, String>> handleAuthenticationError(Exception ex) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED) // Trimitem 401 în loc de 500
+                .body(Map.of(
+                        "error", "Unauthorized",
+                        "message", "Invalid email or password" // Mesaj generic, sigur
+                ));
     }
 }

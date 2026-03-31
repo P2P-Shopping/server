@@ -2,37 +2,45 @@ package com.p2ps.auth.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 
-
-import java.security.Key;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
 
-    // se  injecteaza aici valoarea din application.properties (.env)
     @Value("${jwt.secret}")
     private String secretKeyString;
 
-    private Key secretKey;
+    private SecretKey secretKey;
 
-    private static final long EXPIRATION_TIME = 1000L * 60 * 60 * 24; //24h
+    private static final long EXPIRATION_TIME = 1000L * 60 * 60 * 24; // 24h
+
     @PostConstruct
     public void init() {
-        this.secretKey = Keys.hmacShaKeyFor(secretKeyString.getBytes());
+
+        byte[] keyBytes = secretKeyString == null
+                ? new byte[0]
+                : secretKeyString.getBytes(StandardCharsets.UTF_8);
+
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT secret must be at least 32 bytes for HS256");
+        }
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(String email) {
+
         return Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .subject(email)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .signWith(secretKey)
                 .compact();
     }
 
@@ -50,10 +58,10 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+        return Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }
