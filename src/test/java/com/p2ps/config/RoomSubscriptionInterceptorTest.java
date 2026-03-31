@@ -38,15 +38,13 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
-    void preSend_InvalidSubscription_ThrowsException() {
+    void preSend_InvalidSubscription_ReturnsNull() {
         Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/invalid_ID!");
         MessageChannel channel = mock(MessageChannel.class);
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            interceptor.preSend(message, channel);
-        });
+        Message<?> result = interceptor.preSend(message, channel);
 
-        assertEquals("Invalid List ID format", exception.getMessage());
+        assertNull(result);
     }
 
     @ParameterizedTest(name = "command={0}, destination={1}")

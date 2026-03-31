@@ -48,19 +48,19 @@ class ListUpdatePayloadTest {
     }
 
     @Test
-    void testJsonDeserialization_NullAction_DefaultsToNull() throws Exception {
+    void testJsonDeserialization_NullAction_DefaultsToUnknown() throws Exception {
         String json = "{\"action\":null,\"itemId\":\"item-2\",\"content\":\"Bread\"}";
         ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
 
-        assertNull(payload.getAction());
+        assertEquals(ActionType.UNKNOWN, payload.getAction());
     }
 
     @Test
-    void testJsonDeserialization_OmittedAction_DefaultsToNull() throws Exception {
+    void testJsonDeserialization_OmittedAction_DefaultsToUnknown() throws Exception {
         String json = "{\"itemId\":\"item-3\",\"content\":\"Eggs\"}";
         ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
 
-        assertNull(payload.getAction());
+        assertEquals(ActionType.UNKNOWN, payload.getAction());
     }
 
     @Test
