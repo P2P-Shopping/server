@@ -1,5 +1,6 @@
 package com.p2ps.auth.service;
 
+import com.p2ps.exception.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.p2ps.auth.model.Users;
@@ -16,17 +17,13 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public Users registerUser(String email, String rawPassword) {
-
+    public Users registerUser(String email, String rawPassword, String firstName, String lastName) {
         if (userRepository.existsByEmail(email)) {
-            throw new RuntimeException("Email already in use!");
+            throw new UserAlreadyExistsException("Email already in use!");
         }
 
-        // 2. Hash-uim parola cu BCrypt
         String hashedPassword = passwordEncoder.encode(rawPassword);
-
-        // 3. Creăm entitatea și o salvăm
-        Users newUser = new Users(email, hashedPassword);
+        Users newUser = new Users(email, hashedPassword, firstName, lastName);
         return userRepository.save(newUser);
     }
 }

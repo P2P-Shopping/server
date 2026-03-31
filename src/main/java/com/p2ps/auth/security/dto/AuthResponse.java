@@ -1,4 +1,4 @@
-package com.p2ps.security.dto;
+package com.p2ps.auth.security.dto;
 
 
 import lombok.Getter;
