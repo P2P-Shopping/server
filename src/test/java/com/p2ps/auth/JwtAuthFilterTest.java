@@ -4,7 +4,6 @@ package com.p2ps.auth;
 import com.p2ps.auth.security.JwtAuthFilter;
 import com.p2ps.auth.security.JwtUtil;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -45,12 +44,11 @@ class JwtAuthFilterTest {
     private JwtAuthFilter jwtAuthFilter;
 
     @Test
-    void doFilterInternal_WithValidTokenInCookie() throws Exception {
+    void doFilterInternal_WithValidTokenInHeader() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        Cookie cookie = new Cookie("token", "valid-jwt");
-        request.setCookies(cookie);
+        request.addHeader("Authorization", "Bearer valid-jwt");
 
         when(jwtUtil.extractEmail("valid-jwt")).thenReturn("test@test.com");
         when(jwtUtil.isTokenExpired("valid-jwt")).thenReturn(false);
@@ -63,7 +61,7 @@ class JwtAuthFilterTest {
     }
 
     @Test
-    void doFilterInternal_NoCookie_ShouldContinueChain() throws Exception {
+    void doFilterInternal_NoHeader_ShouldContinueChain() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         SecurityContextHolder.clearContext();
