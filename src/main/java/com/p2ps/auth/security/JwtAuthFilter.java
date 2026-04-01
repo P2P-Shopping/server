@@ -23,40 +23,62 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    public void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/ws");
+    }
 
-        String token = null;
-        String userEmail = null;
+    public String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank()) {
+            return null;
+        }
 
-        // Extract token from Authorization header
-        String authorizationHeader = request.getHeader("Authorization");
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            token = authorizationHeader.substring(7);
+        String token = authorizationHeader.trim();
+
+        if (token.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return token.substring(7).trim();
+        }
+
+        return token;
+    }
+
+    public UsernamePasswordAuthenticationToken authenticateToken(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
         }
 
         try {
-            if (token != null) {
-                userEmail = jwtUtil.extractEmail(token);
+            String userEmail = jwtUtil.extractEmail(token);
+
+            if (userEmail != null && !jwtUtil.isTokenExpired(token)) {
+                return new UsernamePasswordAuthenticationToken(userEmail, null, new ArrayList<>());
             }
+        } catch (Exception ex) {
+            return null;
+        }
 
-            // Authenticate if user is not already in the SecurityContext
-            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null && !jwtUtil.isTokenExpired(token)){
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            userEmail, null, new ArrayList<>()
-                    );
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        return null;
+    }
 
-                    // Set user as authenticated
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                }
+    @Override
+    public void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
-        } catch (Exception _) {
-            // Clear context if token is expired, malformed, or invalid
+        String token = extractBearerToken(request.getHeader("Authorization"));
+
+        try {
+            UsernamePasswordAuthenticationToken authToken = authenticateToken(token);
+
+            if (authToken != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            } else if (token != null) {
+                SecurityContextHolder.clearContext();
+            }
+        } catch (Exception ex) {
             SecurityContextHolder.clearContext();
         }
 
-        // Continue the filter chain
         filterChain.doFilter(request, response);
     }
 }
