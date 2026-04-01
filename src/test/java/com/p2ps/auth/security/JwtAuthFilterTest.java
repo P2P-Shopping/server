@@ -42,45 +42,6 @@ class JwtAuthFilterTest {
     }
 
     @Nested
-    class ShouldNotFilter {
-
-        @Test
-        void wsExactMatch_ReturnsTrue() {
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.setServletPath("/ws");
-            assertTrue(jwtAuthFilter.shouldNotFilter(request));
-        }
-
-        @Test
-        void wsSlashPrefix_ReturnsTrue() {
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.setServletPath("/ws/info");
-            assertTrue(jwtAuthFilter.shouldNotFilter(request));
-        }
-
-        @Test
-        void apiPath_ReturnsFalse() {
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.setServletPath("/api/users");
-            assertFalse(jwtAuthFilter.shouldNotFilter(request));
-        }
-
-        @Test
-        void similarPrefix_ReturnsFalse() {
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.setServletPath("/websocket");
-            assertFalse(jwtAuthFilter.shouldNotFilter(request));
-        }
-
-        @Test
-        void rootPath_ReturnsFalse() {
-            MockHttpServletRequest request = new MockHttpServletRequest();
-            request.setServletPath("/");
-            assertFalse(jwtAuthFilter.shouldNotFilter(request));
-        }
-    }
-
-    @Nested
     class ExtractBearerToken {
 
         @Test

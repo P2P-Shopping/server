@@ -7,6 +7,7 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.List;
@@ -202,7 +203,7 @@ class StompJwtAuthInterceptorTest {
     }
 
     @Test
-    void preSend_ConnectWithInvalidTokenFallsThrough() {
+    void preSend_ConnectWithInvalidTokenThrowsException() {
         JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
         StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(jwtAuthFilter);
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
@@ -214,9 +215,6 @@ class StompJwtAuthInterceptorTest {
 
         when(jwtAuthFilter.authenticateToken(anyString())).thenReturn(null);
 
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNotNull(result);
-        assertNull(StompHeaderAccessor.wrap(result).getUser());
+        assertThrows(BadCredentialsException.class, () -> interceptor.preSend(message, channel));
     }
 }
