@@ -1,6 +1,7 @@
 package com.p2ps.config;
 
 import com.p2ps.auth.security.JwtAuthFilter;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
@@ -28,6 +29,7 @@ public class StompJwtAuthInterceptor implements ChannelInterceptor {
     }
 
     @Override
+    @Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
 
@@ -76,7 +78,7 @@ public class StompJwtAuthInterceptor implements ChannelInterceptor {
         }
 
         Object sessionToken = sessionAttributes.get(JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE);
-        return sessionToken instanceof String ? (String) sessionToken : null;
+        return sessionToken instanceof String string ? string : null;
     }
 
     private String extractBearerToken(String authorizationHeader) {

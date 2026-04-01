@@ -53,7 +53,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (userEmail != null && !jwtUtil.isTokenExpired(token)) {
                 return new UsernamePasswordAuthenticationToken(userEmail, null, new ArrayList<>());
             }
-        } catch (Exception ex) {
+        } catch (Exception _) {
             return null;
         }
 
@@ -75,7 +75,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             } else if (token != null) {
                 SecurityContextHolder.clearContext();
             }
-        } catch (Exception ex) {
+        } catch (Exception _) {
             SecurityContextHolder.clearContext();
         }
 
