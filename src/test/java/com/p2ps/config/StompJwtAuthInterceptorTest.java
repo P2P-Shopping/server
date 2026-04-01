@@ -51,12 +51,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
@@ -176,12 +175,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
@@ -194,12 +192,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
