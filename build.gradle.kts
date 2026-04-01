@@ -47,6 +47,8 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.junit.platform:junit-platform-suite-api")
+    testImplementation("org.testcontainers:testcontainers:1.19.0")
+    testImplementation("org.testcontainers:postgresql:1.19.0")
     testRuntimeOnly("org.junit.platform:junit-platform-suite-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
