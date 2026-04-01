@@ -112,4 +112,35 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized()); // Aici verificam ca returneaza 401
     }
+
+    @Test
+    void register_ShouldReturnConflict_WhenEmailAlreadyExists() throws Exception {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("existent@example.com");
+        request.setPassword("Password123!");
+        request.setFirstName("Ion");
+        request.setLastName("Popescu");
+
+        when(userService.registerUser(anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new com.p2ps.exception.UserAlreadyExistsException("Email already in use!"));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict()); // Testăm ramura de 409
+    }
+
+    @Test
+    void register_ShouldReturnBadRequest_WhenNamesAreBlank() throws Exception {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("valid@email.com");
+        request.setPassword("Password123!");
+        request.setFirstName(""); // Blank
+        request.setLastName("");  // Blank
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
 }
