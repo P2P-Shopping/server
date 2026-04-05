@@ -2,6 +2,8 @@ package com.p2ps.config;
 
 import com.p2ps.auth.security.JwtAuthFilter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -18,12 +20,18 @@ import static org.mockito.Mockito.*;
 
 class StompJwtAuthInterceptorTest {
 
-    @Test
-    void preSend_ConnectWithHeaderTokenAuthenticates() {
+    @ParameterizedTest
+    @CsvSource({
+        "Authorization, Bearer valid-token, valid-token",
+        "authorization, Bearer lower-token, lower-token",
+        "token, token-header-value, token-header-value",
+        "access_token, access-token-value, access-token-value"
+    })
+    void preSend_ConnectWithHeaderTokenAuthenticates(String headerName, String headerValue, String expectedToken) {
         JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
         StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(jwtAuthFilter);
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.addNativeHeader("Authorization", "Bearer valid-token");
+        accessor.addNativeHeader(headerName, headerValue);
         accessor.setLeaveMutable(true);
         accessor.setSessionAttributes(new HashMap<>());
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
@@ -31,7 +39,7 @@ class StompJwtAuthInterceptorTest {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken("user@test.com", null, List.of());
 
         when(jwtAuthFilter.authenticateToken(anyString())).thenAnswer(invocation -> {
-            assertEquals("valid-token", invocation.getArgument(0));
+            assertEquals(expectedToken, invocation.getArgument(0));
             return authentication;
         });
 
@@ -51,12 +59,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
@@ -96,75 +103,8 @@ class StompJwtAuthInterceptorTest {
 
             assertSame(message, result, "Expected same message for " + command);
         }
-    }
 
-    @Test
-    void preSend_ConnectWithLowercaseAuthorizationHeader() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(jwtAuthFilter);
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.addNativeHeader("authorization", "Bearer lower-token");
-        accessor.setLeaveMutable(true);
-        accessor.setSessionAttributes(new HashMap<>());
-        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        MessageChannel channel = mock(MessageChannel.class);
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken("user@test.com", null, List.of());
-
-        when(jwtAuthFilter.authenticateToken(anyString())).thenAnswer(invocation -> {
-            assertEquals("lower-token", invocation.getArgument(0));
-            return authentication;
-        });
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNotNull(result);
-        assertSame(authentication, StompHeaderAccessor.wrap(result).getUser());
-    }
-
-    @Test
-    void preSend_ConnectWithTokenHeader() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(jwtAuthFilter);
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.addNativeHeader("token", "token-header-value");
-        accessor.setLeaveMutable(true);
-        accessor.setSessionAttributes(new HashMap<>());
-        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        MessageChannel channel = mock(MessageChannel.class);
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken("user@test.com", null, List.of());
-
-        when(jwtAuthFilter.authenticateToken(anyString())).thenAnswer(invocation -> {
-            assertEquals("token-header-value", invocation.getArgument(0));
-            return authentication;
-        });
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNotNull(result);
-        assertSame(authentication, StompHeaderAccessor.wrap(result).getUser());
-    }
-
-    @Test
-    void preSend_ConnectWithAccessTokenHeader() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(jwtAuthFilter);
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.addNativeHeader("access_token", "access-token-value");
-        accessor.setLeaveMutable(true);
-        accessor.setSessionAttributes(new HashMap<>());
-        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        MessageChannel channel = mock(MessageChannel.class);
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken("user@test.com", null, List.of());
-
-        when(jwtAuthFilter.authenticateToken(anyString())).thenAnswer(invocation -> {
-            assertEquals("access-token-value", invocation.getArgument(0));
-            return authentication;
-        });
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNotNull(result);
-        assertSame(authentication, StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
@@ -176,12 +116,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
@@ -194,12 +133,11 @@ class StompJwtAuthInterceptorTest {
         Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
         MessageChannel channel = mock(MessageChannel.class);
 
-        when(jwtAuthFilter.authenticateToken(null)).thenReturn(null);
-
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNotNull(result);
         assertNull(StompHeaderAccessor.wrap(result).getUser());
+        verify(jwtAuthFilter, never()).authenticateToken(any());
     }
 
     @Test
