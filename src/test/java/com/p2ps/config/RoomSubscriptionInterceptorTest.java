@@ -9,6 +9,7 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.stream.Stream;
 
@@ -20,16 +21,28 @@ class RoomSubscriptionInterceptorTest {
     private final RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor();
 
     private Message<?> createMessage(StompCommand command, String destination) {
+        return createMessage(command, destination, null);
+    }
+
+    private Message<?> createMessage(StompCommand command, String destination, UsernamePasswordAuthenticationToken user) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
         if (destination != null) {
             accessor.setDestination(destination);
         }
+        if (user != null) {
+            accessor.setUser(user);
+        }
+        accessor.setLeaveMutable(true);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
     @Test
     void preSend_ValidSubscription() {
-        Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/valid-ID-123");
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/valid-ID-123",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
         MessageChannel channel = mock(MessageChannel.class);
 
         Message<?> result = interceptor.preSend(message, channel);
@@ -39,7 +52,11 @@ class RoomSubscriptionInterceptorTest {
 
     @Test
     void preSend_InvalidSubscription_ReturnsNull() {
-        Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/invalid_ID!");
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/invalid_ID!",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
         MessageChannel channel = mock(MessageChannel.class);
 
         Message<?> result = interceptor.preSend(message, channel);
@@ -50,7 +67,9 @@ class RoomSubscriptionInterceptorTest {
     @ParameterizedTest(name = "command={0}, destination={1}")
     @MethodSource("nonBlockingSubscriptions")
     void preSend_NonBlockingSubscriptions_Pass(StompCommand command, String destination) {
-        Message<?> message = createMessage(command, destination);
+        Message<?> message = command == StompCommand.SUBSCRIBE
+                ? createMessage(command, destination, new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of()))
+                : createMessage(command, destination);
         MessageChannel channel = mock(MessageChannel.class);
 
         Message<?> result = interceptor.preSend(message, channel);
@@ -65,5 +84,14 @@ class RoomSubscriptionInterceptorTest {
                 Arguments.of(StompCommand.SUBSCRIBE, "/topic/other/invalid_ID!")
         );
     }
-}
 
+    @Test
+    void preSend_SubscribeWithoutPrincipal_ReturnsNull() {
+        Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/valid-ID-123");
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+}
