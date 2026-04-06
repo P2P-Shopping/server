@@ -14,6 +14,7 @@ class ListUpdatePayloadTest {
 
         payload.setAction(ActionType.ADD);
         assertEquals(ActionType.ADD, payload.getAction());
+        assertEquals(ActionType.ADD, payload.getActionType());
 
         payload.setActionType(ActionType.UPDATE);
         assertEquals(ActionType.UPDATE, payload.getAction());
@@ -47,13 +48,35 @@ class ListUpdatePayloadTest {
 
     @Test
     void testJsonDeserialization_ActionTypeAlias_MapsToTyping() throws Exception {
-        String json = "{\"actionType\":\"typing\",\"itemId\":\"item-5\",\"content\":\"Still here\",\"isChecked\":true}";
+        String json = "{\"action_type\":\"typing\",\"itemId\":\"item-5\",\"content\":\"Still here\",\"isChecked\":true}";
         ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
 
         assertEquals(ActionType.TYPING, payload.getAction());
         assertEquals("item-5", payload.getItemId());
         assertEquals("Still here", payload.getContent());
         assertEquals(Boolean.TRUE, payload.getChecked());
+    }
+
+    @Test
+    void testJsonDeserialization_CompletedAliasTrue_MapsToCheckedTrue() throws Exception {
+        String json = "{\"action\":\"update\",\"itemId\":\"item-6\",\"content\":\"Done\",\"completed\":true}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.UPDATE, payload.getAction());
+        assertEquals("item-6", payload.getItemId());
+        assertEquals("Done", payload.getContent());
+        assertEquals(Boolean.TRUE, payload.getChecked());
+    }
+
+    @Test
+    void testJsonDeserialization_CompletedAliasFalse_MapsToCheckedFalse() throws Exception {
+        String json = "{\"action\":\"update\",\"itemId\":\"item-7\",\"content\":\"Pending\",\"completed\":false}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.UPDATE, payload.getAction());
+        assertEquals("item-7", payload.getItemId());
+        assertEquals("Pending", payload.getContent());
+        assertEquals(Boolean.FALSE, payload.getChecked());
     }
 
     @Test
@@ -90,4 +113,3 @@ class ListUpdatePayloadTest {
         assertEquals(ActionType.ADD, payload.getAction());
     }
 }
-

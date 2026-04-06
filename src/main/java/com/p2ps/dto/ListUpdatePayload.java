@@ -16,22 +16,16 @@ public class ListUpdatePayload {
     private String content;
     private Boolean checked;
 
-    /**
-     * Default constructor required for JSON deserialization by Jackson.
-     */
     public ListUpdatePayload() {}
 
-    /**
-     * Gets the action type.
-     * @return the action type
-     */
-    public ActionType getAction() {
-        return action;
-    }
 
     @JsonIgnore
     public ActionType getActionType() {
         return action;
+    }
+
+    public ActionType getAction() {
+        return getActionType();
     }
 
     @JsonIgnore

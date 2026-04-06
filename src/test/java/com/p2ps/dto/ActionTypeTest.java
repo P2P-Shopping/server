@@ -1,0 +1,22 @@
+package com.p2ps.dto;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+class ActionTypeTest {
+
+    @Test
+    void fromValueMatchesDifferentFormats() {
+        assertEquals(ActionType.ADD, ActionType.fromValue("add"));
+        assertEquals(ActionType.UPDATE, ActionType.fromValue("update"));
+        assertEquals(ActionType.CHECK_OFF, ActionType.fromValue("check-off"));
+        assertEquals(ActionType.TYPING, ActionType.fromValue("typing"));
+    }
+
+    @Test
+    void fromValueFallsBackToUnknownForInvalidInput() {
+        assertEquals(ActionType.UNKNOWN, ActionType.fromValue(null));
+        assertEquals(ActionType.UNKNOWN, ActionType.fromValue("not-a-real-action"));
+    }
+}

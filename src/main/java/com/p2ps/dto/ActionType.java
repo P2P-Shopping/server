@@ -15,9 +15,13 @@ public enum ActionType {
     UNKNOWN("UNKNOWN");
 
     private final String value;
+    private final String normalizedValue;
+    private final String normalizedName;
 
     ActionType(String value) {
         this.value = value;
+        this.normalizedValue = normalize(value);
+        this.normalizedName = normalize(name());
     }
 
     @JsonValue
@@ -33,7 +37,7 @@ public enum ActionType {
 
         String normalizedValue = normalize(value);
         for (ActionType action : ActionType.values()) {
-            if (normalize(action.value).equals(normalizedValue) || normalize(action.name()).equals(normalizedValue)) {
+            if (action.normalizedValue.equals(normalizedValue) || action.normalizedName.equals(normalizedValue)) {
                 return action;
             }
         }

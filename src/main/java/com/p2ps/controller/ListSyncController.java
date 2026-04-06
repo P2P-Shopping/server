@@ -21,10 +21,6 @@ public class ListSyncController {
 
     private final ListSyncRouterService listSyncRouterService;
 
-    public ListSyncController() {
-        this(new ListSyncRouterService());
-    }
-
     @Autowired
     public ListSyncController(ListSyncRouterService listSyncRouterService) {
         this.listSyncRouterService = listSyncRouterService;

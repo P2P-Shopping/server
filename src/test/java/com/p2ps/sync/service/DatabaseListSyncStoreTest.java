@@ -14,8 +14,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,15 +49,87 @@ class DatabaseListSyncStoreTest {
         ListUpdatePayload result = store.apply("list-1", payload);
 
         assertSame(payload, result);
-        assertTrue(Boolean.TRUE.equals(payload.getChecked()));
+        assertEquals(Boolean.TRUE, payload.getChecked());
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
         verify(repository).save(captor.capture());
 
         RoomItemState saved = captor.getValue();
-        assertEquals("list-1", saved.getListId());
-        assertEquals("item-1", saved.getItemId());
-        assertTrue(saved.isChecked());
+        assertEquals("list-1", savedStateValue(saved, "listId"));
+        assertEquals("item-1", savedStateValue(saved, "itemId"));
+        assertTrue(Boolean.TRUE.equals(savedStateValue(saved, "checked")));
+    }
+
+    @Test
+    void updatesExistingStateAndReturnsThePayload() {
+        RoomItemState existing = new RoomItemState("list-1", "item-2");
+        setStateValue(existing, "content", "Old");
+        setStateValue(existing, "checked", false);
+        when(repository.findByListIdAndItemId("list-1", "item-2")).thenReturn(Optional.of(existing));
+        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        payload.setItemId("item-2");
+        payload.setContent("New");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals("New", payload.getContent());
+        assertEquals(Boolean.FALSE, payload.getChecked());
+
+        ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
+        verify(repository).save(captor.capture());
+        RoomItemState saved = captor.getValue();
+        assertEquals("list-1", savedStateValue(saved, "listId"));
+        assertEquals("item-2", savedStateValue(saved, "itemId"));
+        assertEquals("New", savedStateValue(saved, "content"));
+        assertTrue(Boolean.FALSE.equals(savedStateValue(saved, "checked")));
+    }
+
+    @Test
+    void respectsExplicitCheckedFalseValueWithoutToggling() {
+        RoomItemState existing = new RoomItemState("list-1", "item-3");
+        setStateValue(existing, "checked", true);
+        when(repository.findByListIdAndItemId("list-1", "item-3")).thenReturn(Optional.of(existing));
+        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CHECK_OFF);
+        payload.setItemId("item-3");
+        payload.setChecked(Boolean.FALSE);
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(Boolean.FALSE, payload.getChecked());
+
+        ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
+        verify(repository).save(captor.capture());
+        assertTrue(Boolean.FALSE.equals(savedStateValue(captor.getValue(), "checked")));
+    }
+
+    @Test
+    void respectsExplicitCheckedTrueValueWithoutToggling() {
+        RoomItemState existing = new RoomItemState("list-1", "item-4");
+        setStateValue(existing, "checked", false);
+        when(repository.findByListIdAndItemId("list-1", "item-4")).thenReturn(Optional.of(existing));
+        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CHECK_OFF);
+        payload.setItemId("item-4");
+        payload.setChecked(Boolean.TRUE);
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(Boolean.TRUE, payload.getChecked());
+
+        ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
+        verify(repository).save(captor.capture());
+        assertTrue(Boolean.TRUE.equals(savedStateValue(captor.getValue(), "checked")));
     }
 
     @Test
@@ -80,5 +154,62 @@ class DatabaseListSyncStoreTest {
 
         assertSame(payload, result);
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void ignoresBlankListIdsAndNullPayloads() {
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.ADD);
+        payload.setItemId("item-1");
+
+        assertSame(payload, store.apply(" ", payload));
+        assertNull(store.apply("list-1", null));
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void updatesExistingStateContentAndTogglesCheckedWhenPayloadOmitsIt() {
+        RoomItemState existing = new RoomItemState("list-1", "item-1");
+        setStateValue(existing, "content", "Old");
+        setStateValue(existing, "checked", true);
+        when(repository.findByListIdAndItemId("list-1", "item-1")).thenReturn(Optional.of(existing));
+        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CHECK_OFF);
+        payload.setItemId("item-1");
+        payload.setContent("New");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals("New", payload.getContent());
+        assertEquals(Boolean.FALSE, payload.getChecked());
+        verify(repository).save(any(RoomItemState.class));
+        verify(repository, never()).deleteByListIdAndItemId(eq("list-1"), eq("item-1"));
+    }
+
+    private static Object savedStateValue(RoomItemState state, String fieldName) {
+        return readStateValue(state, fieldName);
+    }
+
+    private static Object readStateValue(RoomItemState state, String fieldName) {
+        try {
+            var field = RoomItemState.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(state);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private static void setStateValue(RoomItemState state, String fieldName, Object value) {
+        try {
+            var field = RoomItemState.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(state, value);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
     }
 }

@@ -36,8 +36,6 @@ public class DatabaseListSyncStore implements ListSyncStore {
 
         RoomItemState state = roomItemStateRepository.findByListIdAndItemId(listId, itemId)
                 .orElseGet(() -> new RoomItemState(listId, itemId));
-        state.setListId(listId);
-        state.setItemId(itemId);
 
         if (payload.getContent() != null) {
             state.setContent(payload.getContent());

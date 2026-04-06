@@ -5,7 +5,9 @@ import com.p2ps.dto.ListUpdatePayload;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ListSyncRouterServiceTest {
 
@@ -40,6 +42,43 @@ class ListSyncRouterServiceTest {
 
         assertSame(payload, result);
         assertEquals(0, store.invocationCount);
+    }
+
+    @Test
+    void returnsPayloadWhenRoomIdIsBlank() {
+        RecordingStore store = new RecordingStore();
+        ListSyncRouterService routerService = new ListSyncRouterService(store);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+
+        ListUpdatePayload result = routerService.route("   ", payload);
+
+        assertSame(payload, result);
+        assertEquals(0, store.invocationCount);
+    }
+
+    @Test
+    void throwsWhenPayloadIsNull() {
+        ListSyncRouterService routerService = new ListSyncRouterService(new RecordingStore());
+
+        assertThrows(IllegalArgumentException.class, () -> routerService.route("list-1", null));
+    }
+
+    @Test
+    void ignoresBlankItemIdsInTheStore() {
+        RecordingStore store = new RecordingStore();
+        ListSyncRouterService routerService = new ListSyncRouterService(store);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        payload.setItemId(" ");
+
+        ListUpdatePayload result = routerService.route("list-1", payload);
+
+        assertSame(payload, result);
+        assertNull(payload.getContent());
+        assertEquals(1, store.invocationCount);
     }
 
     private static final class RecordingStore implements ListSyncStore {

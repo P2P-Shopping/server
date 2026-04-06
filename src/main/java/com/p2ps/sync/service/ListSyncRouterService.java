@@ -17,7 +17,7 @@ public class ListSyncRouterService {
 
     private final ListSyncStore listSyncStore;
 
-    public ListSyncRouterService() {
+    ListSyncRouterService() {
         this(new InMemoryListSyncStore());
     }
 
@@ -26,13 +26,17 @@ public class ListSyncRouterService {
         this.listSyncStore = listSyncStore;
     }
 
+    /**
+     * Routes list update payloads to the configured store.
+     * Payload is required; listId is optional so blank destinations are ignored and the payload is returned unchanged.
+     */
     public ListUpdatePayload route(String listId, ListUpdatePayload payload) {
         if (payload == null) {
             throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
         }
 
         if (listId == null || listId.isBlank()) {
-            logger.warn("Skipping sync routing because the room id is blank");
+            logger.warn("Skipping sync routing because listId was blank; returning payload unchanged");
             return payload;
         }
 
@@ -66,17 +70,19 @@ public class ListSyncRouterService {
 
             InMemoryItemState state = states.computeIfAbsent(key, ignored -> new InMemoryItemState());
 
-            if (payload.getContent() != null) {
-                state.content = payload.getContent();
-            }
-            if (payload.getChecked() != null) {
-                state.checked = payload.getChecked();
-            } else if (action == ActionType.CHECK_OFF) {
-                state.checked = !state.checked;
-            }
+            synchronized (state) {
+                if (payload.getContent() != null) {
+                    state.content = payload.getContent();
+                }
+                if (payload.getChecked() != null) {
+                    state.checked = payload.getChecked();
+                } else if (action == ActionType.CHECK_OFF) {
+                    state.checked = !state.checked;
+                }
 
-            payload.setContent(state.content);
-            payload.setChecked(state.checked);
+                payload.setContent(state.content);
+                payload.setChecked(state.checked);
+            }
             return payload;
         }
 
