@@ -11,6 +11,7 @@ import com.p2ps.dto.ListUpdatePayload;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +31,7 @@ class ListSyncControllerTest {
         ListUpdatePayload result = controller.handleListUpdate("list-1", payload);
 
         assertSame(payload, result);
+        verify(listSyncRouterService).route("list-1", payload);
     }
 
     @Test

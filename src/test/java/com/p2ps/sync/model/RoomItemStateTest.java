@@ -21,7 +21,7 @@ class RoomItemStateTest {
     }
 
     @Test
-    void onUpdateRefreshesTimestamp() throws Exception {
+    void onUpdateRefreshesTimestamp() {
         RoomItemState state = new RoomItemState("list-1", "item-1");
         state.onCreate();
 

@@ -25,4 +25,23 @@ class SyncPayloadTest {
         assertEquals("Milk", deserialized.getContent());
         assertEquals(Boolean.TRUE, deserialized.getChecked());
     }
+
+    @Test
+    void deserializesLegacyJsonKeys() throws Exception {
+        String json = """
+                {
+                  "action_type": "check_off",
+                  "itemId": "item-2",
+                  "content": "Bread",
+                  "completed": true
+                }
+                """;
+
+        SyncPayload payload = objectMapper.readValue(json, SyncPayload.class);
+
+        assertEquals(ActionType.CHECK_OFF, payload.getAction());
+        assertEquals("item-2", payload.getItemId());
+        assertEquals("Bread", payload.getContent());
+        assertEquals(Boolean.TRUE, payload.getChecked());
+    }
 }

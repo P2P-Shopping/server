@@ -16,8 +16,6 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,9 +53,9 @@ class DatabaseListSyncStoreTest {
         verify(repository).save(captor.capture());
 
         RoomItemState saved = captor.getValue();
-        assertEquals("list-1", savedStateValue(saved, "listId"));
-        assertEquals("item-1", savedStateValue(saved, "itemId"));
-        assertTrue(Boolean.TRUE.equals(savedStateValue(saved, "checked")));
+        assertEquals("list-1", readStateValue(saved, "listId"));
+        assertEquals("item-1", readStateValue(saved, "itemId"));
+        assertEquals(Boolean.TRUE, readStateValue(saved, "checked"));
     }
 
     @Test
@@ -82,10 +80,10 @@ class DatabaseListSyncStoreTest {
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
         verify(repository).save(captor.capture());
         RoomItemState saved = captor.getValue();
-        assertEquals("list-1", savedStateValue(saved, "listId"));
-        assertEquals("item-2", savedStateValue(saved, "itemId"));
-        assertEquals("New", savedStateValue(saved, "content"));
-        assertTrue(Boolean.FALSE.equals(savedStateValue(saved, "checked")));
+        assertEquals("list-1", readStateValue(saved, "listId"));
+        assertEquals("item-2", readStateValue(saved, "itemId"));
+        assertEquals("New", readStateValue(saved, "content"));
+        assertEquals(Boolean.FALSE, readStateValue(saved, "checked"));
     }
 
     @Test
@@ -107,7 +105,7 @@ class DatabaseListSyncStoreTest {
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
         verify(repository).save(captor.capture());
-        assertTrue(Boolean.FALSE.equals(savedStateValue(captor.getValue(), "checked")));
+        assertEquals(Boolean.FALSE, readStateValue(captor.getValue(), "checked"));
     }
 
     @Test
@@ -129,7 +127,7 @@ class DatabaseListSyncStoreTest {
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
         verify(repository).save(captor.capture());
-        assertTrue(Boolean.TRUE.equals(savedStateValue(captor.getValue(), "checked")));
+        assertEquals(Boolean.TRUE, readStateValue(captor.getValue(), "checked"));
     }
 
     @Test
@@ -186,11 +184,7 @@ class DatabaseListSyncStoreTest {
         assertEquals("New", payload.getContent());
         assertEquals(Boolean.FALSE, payload.getChecked());
         verify(repository).save(any(RoomItemState.class));
-        verify(repository, never()).deleteByListIdAndItemId(eq("list-1"), eq("item-1"));
-    }
-
-    private static Object savedStateValue(RoomItemState state, String fieldName) {
-        return readStateValue(state, fieldName);
+        verify(repository, never()).deleteByListIdAndItemId("list-1", "item-1");
     }
 
     private static Object readStateValue(RoomItemState state, String fieldName) {
