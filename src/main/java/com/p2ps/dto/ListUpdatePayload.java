@@ -1,5 +1,7 @@
 package com.p2ps.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 
@@ -12,6 +14,7 @@ public class ListUpdatePayload {
     private ActionType action = ActionType.UNKNOWN;
     private String itemId;
     private String content;
+    private Boolean checked;
 
     /**
      * Default constructor required for JSON deserialization by Jackson.
@@ -26,6 +29,17 @@ public class ListUpdatePayload {
         return action;
     }
 
+    @JsonIgnore
+    public ActionType getActionType() {
+        return action;
+    }
+
+    @JsonIgnore
+    public void setActionType(ActionType action) {
+        setAction(action);
+    }
+
+    @JsonAlias({"actionType", "action_type"})
     @JsonSetter(nulls = Nulls.AS_EMPTY)
     public void setAction(ActionType action) {
         this.action = action == null ? ActionType.UNKNOWN : action;
@@ -53,5 +67,18 @@ public class ListUpdatePayload {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    /**
+     * Gets whether the item is checked off.
+     * @return true when the item is marked complete, false otherwise
+     */
+    public Boolean getChecked() {
+        return checked;
+    }
+
+    @JsonAlias({"isChecked", "completed"})
+    public void setChecked(Boolean checked) {
+        this.checked = checked;
     }
 }

@@ -15,11 +15,17 @@ class ListUpdatePayloadTest {
         payload.setAction(ActionType.ADD);
         assertEquals(ActionType.ADD, payload.getAction());
 
+        payload.setActionType(ActionType.UPDATE);
+        assertEquals(ActionType.UPDATE, payload.getAction());
+
         payload.setItemId("item-123");
         assertEquals("item-123", payload.getItemId());
 
         payload.setContent("Apples");
         assertEquals("Apples", payload.getContent());
+
+        payload.setChecked(Boolean.TRUE);
+        assertEquals(Boolean.TRUE, payload.getChecked());
     }
 
     @Test
@@ -28,6 +34,7 @@ class ListUpdatePayloadTest {
         original.setAction(ActionType.ADD);
         original.setItemId("item-123");
         original.setContent("Apples");
+        original.setChecked(Boolean.TRUE);
 
         String json = objectMapper.writeValueAsString(original);
         ListUpdatePayload deserialized = objectMapper.readValue(json, ListUpdatePayload.class);
@@ -35,6 +42,18 @@ class ListUpdatePayloadTest {
         assertEquals(original.getAction(), deserialized.getAction());
         assertEquals(original.getItemId(), deserialized.getItemId());
         assertEquals(original.getContent(), deserialized.getContent());
+        assertEquals(original.getChecked(), deserialized.getChecked());
+    }
+
+    @Test
+    void testJsonDeserialization_ActionTypeAlias_MapsToTyping() throws Exception {
+        String json = "{\"actionType\":\"typing\",\"itemId\":\"item-5\",\"content\":\"Still here\",\"isChecked\":true}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.TYPING, payload.getAction());
+        assertEquals("item-5", payload.getItemId());
+        assertEquals("Still here", payload.getContent());
+        assertEquals(Boolean.TRUE, payload.getChecked());
     }
 
     @Test
