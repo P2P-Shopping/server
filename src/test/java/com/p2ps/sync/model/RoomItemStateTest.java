@@ -7,6 +7,8 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class RoomItemStateTest {
 
@@ -37,17 +39,17 @@ class RoomItemStateTest {
     void constructorSetsListAndItemIds() {
         RoomItemState state = new RoomItemState("list-9", "item-9");
 
-        assertTrue("list-9".equals(readField(state, "listId")));
-        assertTrue("item-9".equals(readField(state, "itemId")));
+        assertEquals("list-9", readField(state, "listId"));
+        assertEquals("item-9", readField(state, "itemId"));
     }
 
     @Test
     void noArgConstructorIsAvailableForJpa() {
         RoomItemState state = new RoomItemState();
 
-        assertTrue(readField(state, "id") == null);
-        assertTrue(readField(state, "listId") == null);
-        assertTrue(readField(state, "itemId") == null);
+        assertNull(readField(state, "id"));
+        assertNull(readField(state, "listId"));
+        assertNull(readField(state, "itemId"));
     }
 
     private static Object readField(RoomItemState state, String name) {

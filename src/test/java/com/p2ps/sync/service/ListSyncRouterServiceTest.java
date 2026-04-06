@@ -88,6 +88,9 @@ class ListSyncRouterServiceTest {
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UPDATE);
         payload.setItemId(" ");
+        // populate mutable fields so the sanitization behavior is meaningful
+        payload.setContent("ShouldBeCleared");
+        payload.setChecked(Boolean.TRUE);
 
         ListUpdatePayload result = routerService.route("list-1", payload);
 
@@ -145,6 +148,9 @@ class ListSyncRouterServiceTest {
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UPDATE);
         payload.setItemId("   ");
+        // populate mutable fields so the sanitization behavior is meaningful
+        payload.setContent("ShouldBeCleared");
+        payload.setChecked(Boolean.FALSE);
 
         ListUpdatePayload result = routerService.route("list-1", payload);
 

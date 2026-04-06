@@ -43,6 +43,19 @@ public class ListSyncRouterService {
         ActionType action = payload.getAction();
         logger.debug("Routing action {} for room {}", action, listId);
 
+        // For persistent actions that operate on an item, if the itemId is blank
+        // clear mutable fields so we don't accidentally propagate content/checked
+        // values when the store cannot apply them.
+        if (action == ActionType.ADD || action == ActionType.UPDATE
+                || action == ActionType.DELETE || action == ActionType.CHECK_OFF) {
+            String itemId = payload.getItemId();
+            if (itemId == null || itemId.isBlank()) {
+                logger.debug("Blank itemId for persistent action; clearing mutable fields");
+                payload.setContent(null);
+                payload.setChecked(null);
+            }
+        }
+
         return switch (action) {
             case ADD, UPDATE, DELETE, CHECK_OFF -> listSyncStore.apply(listId, payload);
             case TYPING, UNKNOWN -> payload;
