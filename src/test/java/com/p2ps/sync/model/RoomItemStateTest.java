@@ -33,6 +33,23 @@ class RoomItemStateTest {
         assertTrue(updated.isAfter(Instant.EPOCH));
     }
 
+    @Test
+    void constructorSetsListAndItemIds() {
+        RoomItemState state = new RoomItemState("list-9", "item-9");
+
+        assertTrue("list-9".equals(readField(state, "listId")));
+        assertTrue("item-9".equals(readField(state, "itemId")));
+    }
+
+    @Test
+    void noArgConstructorIsAvailableForJpa() {
+        RoomItemState state = new RoomItemState();
+
+        assertTrue(readField(state, "id") == null);
+        assertTrue(readField(state, "listId") == null);
+        assertTrue(readField(state, "itemId") == null);
+    }
+
     private static Object readField(RoomItemState state, String name) {
         try {
             Field field = RoomItemState.class.getDeclaredField(name);

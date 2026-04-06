@@ -24,4 +24,10 @@ class ActionTypeTest {
         assertEquals(ActionType.UNKNOWN, ActionType.fromValue("   "));
         assertEquals(ActionType.UNKNOWN, ActionType.fromValue("not-a-real-action"));
     }
+
+    @Test
+    void exposesSerializedValues() {
+        assertEquals("ADD", ActionType.ADD.getValue());
+        assertEquals("UNKNOWN", ActionType.UNKNOWN.getValue());
+    }
 }
