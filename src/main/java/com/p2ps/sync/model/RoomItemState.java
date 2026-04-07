@@ -37,6 +37,9 @@ public class RoomItemState {
     @Column(name = "checked", nullable = false)
     private boolean checked;
 
+    @Column(name = "client_timestamp")
+    private Long clientTimestamp;
+
     @Column(name = "last_updated", nullable = false)
     private Instant lastUpdated;
 

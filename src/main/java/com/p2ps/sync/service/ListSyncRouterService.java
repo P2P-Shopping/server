@@ -77,6 +77,8 @@ public class ListSyncRouterService {
             ActionType action = payload.getAction();
 
             if (action == ActionType.DELETE) {
+                // This in-memory delete can race with concurrent computeIfAbsent/update calls.
+                // That limitation is acceptable for test/dev use; production code should use a safer removal strategy.
                 states.remove(key);
                 return payload;
             }

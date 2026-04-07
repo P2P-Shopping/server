@@ -86,6 +86,7 @@ CREATE TABLE room_item_states (
     item_id         VARCHAR(128) NOT NULL,
     content         VARCHAR(512),
     checked         BOOLEAN NOT NULL DEFAULT FALSE,
+    client_timestamp BIGINT,
     last_updated    TIMESTAMP NOT NULL DEFAULT NOW(),
 
     UNIQUE (list_id, item_id)

@@ -96,6 +96,7 @@ class ListSyncRouterServiceTest {
 
         assertSame(payload, result);
         assertNull(payload.getContent());
+        assertNull(payload.getChecked());
         assertEquals(1, store.invocationCount);
     }
 

@@ -8,7 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+
+import java.security.Principal;
 
 /**
  * WebSocket controller responsible for routing list-specific synchronization messages.
@@ -20,10 +23,12 @@ public class ListSyncController {
     private static final Logger logger = LoggerFactory.getLogger(ListSyncController.class);
 
     private final ListSyncRouterService listSyncRouterService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public ListSyncController(ListSyncRouterService listSyncRouterService) {
+    public ListSyncController(ListSyncRouterService listSyncRouterService, SimpMessagingTemplate messagingTemplate) {
         this.listSyncRouterService = listSyncRouterService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     /**
@@ -34,13 +39,23 @@ public class ListSyncController {
      */
     @MessageMapping("/list/{listId}/update")
     @SendTo("/topic/list/{listId}")
-    public ListUpdatePayload handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
+    public ListUpdatePayload handleListUpdate(@DestinationVariable String listId, Principal principal, ListUpdatePayload payload) {
         if (payload == null) {
             logger.warn("Received null payload for list update on room");
             throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
         }
 
         logger.debug("Routing action for room");
-        return listSyncRouterService.route(listId, payload);
+        ListUpdatePayload routedPayload = listSyncRouterService.route(listId, payload);
+        if ("Rejection".equals(routedPayload.getStatus()) && principal != null) {
+            messagingTemplate.convertAndSendToUser(
+                    principal.getName(),
+                    "/queue/list/" + listId + "/rejection",
+                    routedPayload
+            );
+            return null;
+        }
+
+        return routedPayload;
     }
 }

@@ -15,6 +15,9 @@ public class ListUpdatePayload {
     private String itemId;
     private String content;
     private Boolean checked;
+    private Long timestamp;
+
+    private String status;
 
     public ListUpdatePayload() {}
 
@@ -74,5 +77,21 @@ public class ListUpdatePayload {
     @JsonAlias({"isChecked", "completed"})
     public void setChecked(Boolean checked) {
         this.checked = checked;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }
