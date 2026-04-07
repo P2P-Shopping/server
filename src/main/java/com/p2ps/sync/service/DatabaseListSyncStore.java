@@ -4,18 +4,17 @@ import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 import com.p2ps.sync.model.RoomItemState;
 import com.p2ps.sync.repository.RoomItemStateRepository;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
 
 @Service
 @Transactional
 public class DatabaseListSyncStore implements ListSyncStore {
 
     private final RoomItemStateRepository roomItemStateRepository;
-    private final Map<String, Object> locks = new ConcurrentHashMap<>();
 
     public DatabaseListSyncStore(RoomItemStateRepository roomItemStateRepository) {
         this.roomItemStateRepository = roomItemStateRepository;
@@ -32,25 +31,30 @@ public class DatabaseListSyncStore implements ListSyncStore {
             return payload;
         }
 
-        synchronized (locks.computeIfAbsent(key(listId, itemId), ignored -> new Object())) {
+        try {
             ActionType action = payload.getAction();
-            if (action == ActionType.DELETE) {
-                // In-memory delete can race with concurrent computeIfAbsent/update calls; acceptable for dev/test use.
-                roomItemStateRepository.deleteByListIdAndItemId(listId, itemId);
-                payload.setStatus("Success");
-                return payload;
-            }
-
             RoomItemState state = roomItemStateRepository.findByListIdAndItemId(listId, itemId)
                     .orElseGet(() -> new RoomItemState(listId, itemId));
 
+            if (action == ActionType.DELETE) {
+                state.setDeleted(true);
+                state.setDeletedAt(Instant.now());
+                if (payload.getTimestamp() != null) {
+                    state.setClientTimestamp(payload.getTimestamp());
+                }
+                roomItemStateRepository.save(state);
+                payload.setTimestamp(state.getClientTimestamp());
+                payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+                return payload;
+            }
+
             Long currentTimestamp = state.getClientTimestamp();
             Long incomingTimestamp = payload.getTimestamp();
-            if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp >= currentTimestamp) {
+            if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
                 payload.setContent(state.getContent());
                 payload.setChecked(state.isChecked());
                 payload.setTimestamp(currentTimestamp);
-                payload.setStatus("Rejection");
+                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
                 return payload;
             }
 
@@ -63,6 +67,8 @@ public class DatabaseListSyncStore implements ListSyncStore {
                 state.setChecked(!state.isChecked());
             }
 
+            state.setDeleted(false);
+            state.setDeletedAt(null);
             if (incomingTimestamp != null) {
                 state.setClientTimestamp(incomingTimestamp);
             }
@@ -72,12 +78,11 @@ public class DatabaseListSyncStore implements ListSyncStore {
             payload.setContent(state.getContent());
             payload.setChecked(state.isChecked());
             payload.setTimestamp(state.getClientTimestamp());
-            payload.setStatus("Success");
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+            return payload;
+        } catch (OptimisticLockingFailureException ex) {
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
         }
-    }
-
-    private String key(String listId, String itemId) {
-        return listId + "::" + itemId;
     }
 }

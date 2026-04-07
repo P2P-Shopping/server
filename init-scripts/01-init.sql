@@ -87,7 +87,12 @@ CREATE TABLE room_item_states (
     content         VARCHAR(512),
     checked         BOOLEAN NOT NULL DEFAULT FALSE,
     client_timestamp BIGINT,
+    deleted         BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at      TIMESTAMP,
+    row_version     BIGINT NOT NULL DEFAULT 0,
     last_updated    TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CHECK (client_timestamp IS NULL OR client_timestamp >= 0),
 
     UNIQUE (list_id, item_id)
 );

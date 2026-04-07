@@ -14,9 +14,8 @@ class ListUpdatePayloadTest {
 
         payload.setAction(ActionType.ADD);
         assertEquals(ActionType.ADD, payload.getAction());
-        assertEquals(ActionType.ADD, payload.getActionType());
 
-        payload.setActionType(ActionType.UPDATE);
+        payload.setAction(ActionType.UPDATE);
         assertEquals(ActionType.UPDATE, payload.getAction());
 
         payload.setItemId("item-123");

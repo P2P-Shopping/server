@@ -10,6 +10,4 @@ import java.util.Optional;
 public interface RoomItemStateRepository extends JpaRepository<RoomItemState, String> {
 
     Optional<RoomItemState> findByListIdAndItemId(String listId, String itemId);
-
-    void deleteByListIdAndItemId(String listId, String itemId);
 }

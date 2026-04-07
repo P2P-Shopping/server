@@ -47,7 +47,7 @@ public class ListSyncController {
 
         logger.debug("Routing action for room");
         ListUpdatePayload routedPayload = listSyncRouterService.route(listId, payload);
-        if ("Rejection".equals(routedPayload.getStatus()) && principal != null) {
+        if (ListUpdatePayload.STATUS_REJECTION.equals(routedPayload.getStatus()) && principal != null) {
             messagingTemplate.convertAndSendToUser(
                     principal.getName(),
                     "/queue/list/" + listId + "/rejection",

@@ -2,7 +2,6 @@ package com.p2ps.sync.model;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -18,8 +17,8 @@ class RoomItemStateTest {
 
         state.onCreate();
 
-        assertNotNull(readField(state, "id"));
-        assertNotNull(readField(state, "lastUpdated"));
+        assertNotNull(state.getId());
+        assertNotNull(state.getLastUpdated());
     }
 
     @Test
@@ -27,11 +26,11 @@ class RoomItemStateTest {
         RoomItemState state = new RoomItemState("list-1", "item-1");
         state.onCreate();
 
-        setField(state, "lastUpdated", Instant.EPOCH);
+        state.setLastUpdated(Instant.EPOCH);
 
         state.onUpdate();
 
-        Instant updated = (Instant) readField(state, "lastUpdated");
+        Instant updated = state.getLastUpdated();
         assertTrue(updated.isAfter(Instant.EPOCH));
     }
 
@@ -39,36 +38,16 @@ class RoomItemStateTest {
     void constructorSetsListAndItemIds() {
         RoomItemState state = new RoomItemState("list-9", "item-9");
 
-        assertEquals("list-9", readField(state, "listId"));
-        assertEquals("item-9", readField(state, "itemId"));
+        assertEquals("list-9", state.getListId());
+        assertEquals("item-9", state.getItemId());
     }
 
     @Test
     void noArgConstructorIsAvailableForJpa() {
         RoomItemState state = new RoomItemState();
 
-        assertNull(readField(state, "id"));
-        assertNull(readField(state, "listId"));
-        assertNull(readField(state, "itemId"));
-    }
-
-    private static Object readField(RoomItemState state, String name) {
-        try {
-            Field field = RoomItemState.class.getDeclaredField(name);
-            field.setAccessible(true);
-            return field.get(state);
-        } catch (ReflectiveOperationException ex) {
-            throw new AssertionError(ex);
-        }
-    }
-
-    private static void setField(RoomItemState state, String name, Object value) {
-        try {
-            Field field = RoomItemState.class.getDeclaredField(name);
-            field.setAccessible(true);
-            field.set(state, value);
-        } catch (ReflectiveOperationException ex) {
-            throw new AssertionError(ex);
-        }
+        assertNull(state.getId());
+        assertNull(state.getListId());
+        assertNull(state.getItemId());
     }
 }

@@ -1,7 +1,6 @@
 package com.p2ps.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 
@@ -10,6 +9,9 @@ import com.fasterxml.jackson.annotation.Nulls;
  * Defines the standard structure for messages broadcasted to list-specific WebSocket rooms.
  */
 public class ListUpdatePayload {
+
+    public static final String STATUS_SUCCESS = "Success";
+    public static final String STATUS_REJECTION = "Rejection";
 
     private ActionType action = ActionType.UNKNOWN;
     private String itemId;
@@ -21,19 +23,8 @@ public class ListUpdatePayload {
 
     public ListUpdatePayload() {}
 
-
-    @JsonIgnore
-    public ActionType getActionType() {
-        return action;
-    }
-
     public ActionType getAction() {
-        return getActionType();
-    }
-
-    @JsonIgnore
-    public void setActionType(ActionType action) {
-        setAction(action);
+        return action;
     }
 
     @JsonAlias({"actionType", "action_type"})
