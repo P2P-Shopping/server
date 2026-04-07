@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -18,7 +19,7 @@ public class ListSyncRouterService {
     private final ListSyncStore listSyncStore;
 
     ListSyncRouterService() {
-        this(new InMemoryListSyncStore());
+        this(new LockingListSyncStore(new InMemoryListSyncStore()));
     }
 
     @Autowired
@@ -108,6 +109,62 @@ public class ListSyncRouterService {
         private static final class InMemoryItemState {
             private String content;
             private boolean checked;
+        }
+    }
+
+    private static final class LockingListSyncStore implements ListSyncStore {
+
+        private static final long LOCK_WINDOW_MILLIS = 50L;
+
+        private final ListSyncStore delegate;
+        private final Map<String, LockState> locks = new ConcurrentHashMap<>();
+
+        private LockingListSyncStore(ListSyncStore delegate) {
+            this.delegate = Objects.requireNonNull(delegate, "delegate");
+        }
+
+        @Override
+        public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
+            String itemId = payload.getItemId();
+            if (itemId == null || itemId.isBlank()) {
+                return delegate.apply(listId, payload);
+            }
+
+            String key = listId + "::" + itemId;
+            LockState state = locks.computeIfAbsent(key, ignored -> new LockState());
+            synchronized (state) {
+                long now = System.currentTimeMillis();
+                long waitMillis = state.lockedUntilMillis - now;
+                if (waitMillis > 0) {
+                    try {
+                        state.wait(waitMillis);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupted while waiting for item lock: " + key, e);
+                    }
+                }
+
+                now = System.currentTimeMillis();
+                state.lockedUntilMillis = now + LOCK_WINDOW_MILLIS;
+                Long timestamp = payload.getTimestamp();
+                if (timestamp != null && timestamp < state.lastTimestamp) {
+                    payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+                    state.notifyAll();
+                    return payload;
+                }
+
+                ListUpdatePayload routed = delegate.apply(listId, payload);
+                if (timestamp != null) {
+                    state.lastTimestamp = timestamp;
+                }
+                state.notifyAll();
+                return routed;
+            }
+        }
+
+        private static final class LockState {
+            private long lockedUntilMillis;
+            private long lastTimestamp;
         }
     }
 }
