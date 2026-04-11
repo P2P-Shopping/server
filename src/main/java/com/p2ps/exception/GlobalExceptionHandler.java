@@ -1,5 +1,10 @@
 package com.p2ps.exception;
 
+import com.p2ps.lists.exception.ItemNotFoundException;
+import com.p2ps.lists.exception.ListAccessDeniedException;
+import com.p2ps.lists.exception.ListUserNotFoundException;
+import com.p2ps.lists.exception.ListValidationException;
+import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
@@ -44,6 +49,34 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST); // 400 Bad Request
     }
+
+    @ExceptionHandler(ListValidationException.class)
+    public ResponseEntity<ErrorResponse> handleListValidationException(ListValidationException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Validation Error",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class, ListUserNotFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNotFoundExceptions(RuntimeException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Resource Not Found",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ListAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleListAccessDeniedException(ListAccessDeniedException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Forbidden",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
         //Log the full error internally (for the backend team to see)
