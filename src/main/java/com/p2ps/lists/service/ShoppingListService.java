@@ -3,6 +3,7 @@ package com.p2ps.lists.service;
 
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
+import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.model.ShoppingList;
@@ -10,6 +11,7 @@ import com.p2ps.lists.repo.ShoppingListRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,11 +49,31 @@ public class ShoppingListService {
                 .collect(Collectors.toList());
     }
 
-    //  convertim entitatea in dto
     private ShoppingListDTO mapToDTO(ShoppingList list) {
         ShoppingListDTO dto = new ShoppingListDTO();
         dto.setId(list.getId());
         dto.setTitle(list.getTitle());
+
+        if (list.getItems() != null) {
+            dto.setItems(list.getItems().stream()
+                    .map(item -> {
+                        ItemDTO itemDto = new ItemDTO();
+                        itemDto.setId(item.getId());
+                        itemDto.setName(item.getName());
+                        itemDto.setChecked(item.isChecked());
+                        itemDto.setBrand(item.getBrand());
+                        itemDto.setPrice(item.getPrice());
+                        itemDto.setQuantity(item.getQuantity());
+                        itemDto.setCategory(item.getCategory());
+                        itemDto.setRecurrent(item.isRecurrent());
+                        itemDto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
+                        return itemDto;
+                    })
+                    .toList());
+        } else {
+            dto.setItems(new ArrayList<>());
+        }
+
         return dto;
     }
 }

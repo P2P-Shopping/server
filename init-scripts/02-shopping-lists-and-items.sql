@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS items;
+
 CREATE TABLE IF NOT EXISTS shopping_lists (
     id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
