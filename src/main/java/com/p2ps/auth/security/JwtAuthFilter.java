@@ -2,6 +2,7 @@ package com.p2ps.auth.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,6 +37,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return token;
     }
 
+    private String extractTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("jwt-token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
     public UsernamePasswordAuthenticationToken authenticateToken(String token) {
         if (token == null || token.isBlank()) {
             return null;
@@ -55,10 +67,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    public void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        String token = extractBearerToken(request.getHeader("Authorization"));
+        // incercam sa extragem tokenul din cookie mai intai
+        String token = extractTokenFromCookie(request);
+
+        //  daca nu e in cookie, verificam headerul
+        if (token == null) {
+            token = extractBearerToken(request.getHeader("Authorization"));
+        }
+
 
         UsernamePasswordAuthenticationToken authToken = authenticateToken(token);
 

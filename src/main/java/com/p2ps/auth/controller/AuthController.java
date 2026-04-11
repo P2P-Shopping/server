@@ -5,6 +5,8 @@ import com.p2ps.auth.dto.RegisterRequest;
 import com.p2ps.auth.security.JwtUtil;
 import com.p2ps.auth.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -41,17 +43,23 @@ public class AuthController { // Acolada clasei deschisă aici
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request) {
-
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
-
 
         String token = jwtUtil.generateToken(request.getEmail());
 
-        return ResponseEntity.ok(Collections.singletonMap("token", token));
+
+        ResponseCookie cookie = ResponseCookie.from("jwt-token", token)
+                .httpOnly(true)
+                .secure(false) // trebuie mutat pe true cand vom trece la https
+                .path("/")
+                .maxAge(24 * 60 * 60) // 24h
+                .sameSite("Strict")
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(Map.of("message", "Login successful", "email", request.getEmail()));
     }
 }
