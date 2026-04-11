@@ -1,6 +1,8 @@
 package com.p2ps.telemetry.services;
 
 import java.time.Instant;
+import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -36,5 +38,10 @@ public class TelemetryService {
         } catch (Exception e) {
             log.error("[SERVICE] Failed to save ping: {}", e.getMessage(), e);
         }
+    }
+
+    public List<TelemetryRecord> getPings(String storeId, String itemId) {
+        log.info("[SERVICE] Getting pings for storeId: {}, itemId: {}", storeId, itemId);
+        return telemetryRepository.findByStoreIdAndItemId(storeId, itemId);
     }
 }
