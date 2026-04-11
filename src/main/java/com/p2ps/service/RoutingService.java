@@ -12,7 +12,7 @@ import java.util.List;
 @Service
 public class RoutingService {
 
-    @Cacheable(value = "routes",  key = "#request == null ? 'null' : #request.hashCode()")
+    @Cacheable(value = "routes",  key = "#request != null ? #request.hashCode() : 0")
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
         // Dev 1 will put their TSP algorithm logic inside here instead of the mock data.
         System.out.println(">>> CALCULEZ RUTA ACUM! A DURAT MULT... <<<");

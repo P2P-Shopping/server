@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.interceptor.SimpleKey;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -65,7 +66,7 @@ class RoutingServiceCacheTest {
         Cache cache = cacheManager.getCache("routes");
         assertNotNull(cache);
 
-        assertNotNull(cache.get("null"));
-        assertEquals(first, cache.get("null", RoutingResponse.class));
+        assertNotNull(cache.get(0));
+        assertEquals(first, cache.get(0, RoutingResponse.class));
     }
 }
