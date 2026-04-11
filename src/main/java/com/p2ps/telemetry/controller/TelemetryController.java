@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.p2ps.telemetry.dto.TelemetryPingDTO;
 import com.p2ps.telemetry.services.TelemetryService;
+import jakarta.validation.Valid;
 
 import java.util.Map;
 
@@ -18,7 +19,7 @@ public class TelemetryController {
     private final TelemetryService telemetryService;
 
     @PostMapping("/ping")
-    public ResponseEntity<Map<String, String>> receivePing(@RequestBody TelemetryPingDTO pingDTO) {
+    public ResponseEntity<Map<String, String>> receivePing(@Valid @RequestBody TelemetryPingDTO pingDTO) {
         //Console log
         log.info("[API] Ping received for the product: {}", pingDTO.getItemId());
 
