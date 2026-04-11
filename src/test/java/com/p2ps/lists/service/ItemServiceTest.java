@@ -67,6 +67,18 @@ class ItemServiceTest {
     }
 
     @Test
+    void addItemToListShouldThrowWhenPriceIsNegative() {
+        ItemRequest request = buildCreateRequest();
+        request.setPrice(new BigDecimal("-1.00"));
+
+        assertThrows(ListValidationException.class,
+                () -> itemService.addItemToList(UUID.randomUUID(), request, "ana@example.com"));
+
+        verify(shoppingListRepository, never()).findById(any(UUID.class));
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
     void addItemToListShouldThrowWhenUserDoesNotOwnList() {
         UUID listId = UUID.randomUUID();
         ShoppingList shoppingList = buildShoppingList("owner@example.com");
@@ -134,6 +146,36 @@ class ItemServiceTest {
     }
 
     @Test
+    void updateItemShouldThrowWhenNameIsBlank() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem("ana@example.com");
+        ItemRequest request = new ItemRequest();
+        request.setName("   ");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+        assertThrows(ListValidationException.class,
+                () -> itemService.updateItem(itemId, request, "ana@example.com"));
+
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
+    void updateItemShouldThrowWhenPriceIsNegative() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem("ana@example.com");
+        ItemRequest request = new ItemRequest();
+        request.setPrice(new BigDecimal("-4.10"));
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+        assertThrows(ListValidationException.class,
+                () -> itemService.updateItem(itemId, request, "ana@example.com"));
+
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
     void updateItemShouldApplyRequestFields() {
         UUID itemId = UUID.randomUUID();
         Item existingItem = buildItem("ana@example.com");
@@ -160,6 +202,7 @@ class ItemServiceTest {
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(existingItem));
         when(itemRepository.save(existingItem)).thenReturn(existingItem);
 
+        long beforeUpdate = System.currentTimeMillis();
         ItemDTO result = itemService.updateItem(itemId, request, "ana@example.com");
 
         assertEquals("Oat Milk", result.getName());
@@ -169,7 +212,8 @@ class ItemServiceTest {
         assertEquals("Plant-based", result.getCategory());
         assertTrue(result.isRecurrent());
         assertTrue(result.isChecked());
-        assertEquals(999L, result.getLastUpdatedTimestamp());
+        assertTrue(result.getLastUpdatedTimestamp() >= beforeUpdate);
+        assertTrue(result.getLastUpdatedTimestamp() != 999L);
     }
 
     @Test

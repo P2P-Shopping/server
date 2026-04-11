@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS shopping_lists (
 CREATE TABLE IF NOT EXISTS items (
     id UUID PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    is_checked BOOLEAN DEFAULT FALSE,
+    is_checked BOOLEAN NOT NULL DEFAULT FALSE,
     brand VARCHAR(100),
     quantity VARCHAR(50),
     price DECIMAL(10, 2) DEFAULT 0 CHECK (price >= 0),

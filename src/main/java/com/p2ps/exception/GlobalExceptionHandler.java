@@ -59,7 +59,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class, ListUserNotFoundException.class})
+    @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFoundExceptions(RuntimeException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
                 "Resource Not Found",
@@ -75,6 +75,15 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(ListUserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleListUserNotFoundException(ListUserNotFoundException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Unauthorized",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)

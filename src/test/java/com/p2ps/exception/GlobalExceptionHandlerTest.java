@@ -2,6 +2,7 @@ package com.p2ps.exception;
 
 import com.p2ps.lists.exception.ItemNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
+import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ListValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -75,5 +76,18 @@ class GlobalExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals("Forbidden", response.getBody().getMessage());
         assertEquals("You do not have permission to edit this item", response.getBody().getDetails());
+    }
+
+    @Test
+    void shouldReturnUnauthorizedForMissingListUser() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<ErrorResponse> response =
+                handler.handleListUserNotFoundException(new ListUserNotFoundException("User not found"));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Unauthorized", response.getBody().getMessage());
+        assertEquals("User not found", response.getBody().getDetails());
     }
 }

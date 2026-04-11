@@ -13,6 +13,7 @@ import com.p2ps.lists.repo.ShoppingListRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -31,6 +32,7 @@ public class ItemService {
         if (request.getName() == null || request.getName().trim().isEmpty()) {
             throw new ListValidationException("Item name cannot be empty");
         }
+        validatePrice(request.getPrice());
 
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
@@ -65,12 +67,16 @@ public class ItemService {
         }
 
 
-        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+        if (request.getName() != null) {
+            if (request.getName().trim().isEmpty()) {
+                throw new ListValidationException("Item name cannot be empty");
+            }
             item.setName(request.getName());
         }
 
         if (request.getBrand() != null) item.setBrand(request.getBrand());
         if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
+        validatePrice(request.getPrice());
         if (request.getPrice() != null) item.setPrice(request.getPrice());
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
@@ -81,7 +87,7 @@ public class ItemService {
             System.out.println("DEBUG: Status changed for item " + itemId + ". Triggering Team 3 telemetry");
         }
 
-        item.setLastUpdatedTimestamp(request.getTimestamp() != null ? request.getTimestamp() : System.currentTimeMillis());
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         return mapToDTO(itemRepository.save(item));
     }
@@ -96,6 +102,12 @@ public class ItemService {
         }
 
         itemRepository.delete(item);
+    }
+
+    private void validatePrice(BigDecimal price) {
+        if (price != null && price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ListValidationException("Price must be zero or positive");
+        }
     }
 
 

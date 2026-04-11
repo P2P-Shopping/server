@@ -74,7 +74,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = extractTokenFromCookie(request);
 
         //  daca nu e in cookie, verificam headerul
-        if (token == null) {
+        if (token == null|| token.isBlank()) {
             token = extractBearerToken(request.getHeader("Authorization"));
         }
 
