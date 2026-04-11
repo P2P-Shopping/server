@@ -5,17 +5,29 @@ import com.p2ps.controller.RoutingResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(classes = RoutingServiceCacheTest.TestConfig.class)
 @ActiveProfiles("test")
 class RoutingServiceCacheTest {
+
+    @TestConfiguration
+    @EnableCaching
+    static class TestConfig {
+        @Bean
+        RoutingService routingService() {
+            return new RoutingService();
+        }
+    }
 
     @Autowired
     private RoutingService routingService;
@@ -37,8 +49,8 @@ class RoutingServiceCacheTest {
         Cache cache = cacheManager.getCache("routes");
         assertNotNull(cache);
 
-        Object cachedValue = cache.get(request.hashCode());
-        assertNotNull(cachedValue);
+        assertNotNull(cache.get(request.hashCode()));
+        assertEquals(first, cache.get(request.hashCode(), RoutingResponse.class));
     }
 
     @Test
@@ -52,6 +64,8 @@ class RoutingServiceCacheTest {
 
         Cache cache = cacheManager.getCache("routes");
         assertNotNull(cache);
+
         assertNotNull(cache.get("null"));
+        assertEquals(first, cache.get("null", RoutingResponse.class));
     }
 }
