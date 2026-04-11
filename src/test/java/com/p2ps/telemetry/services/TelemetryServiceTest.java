@@ -110,12 +110,12 @@ class TelemetryServiceTest {
 
     @Test
     void shouldReturnPingsForStoreAndItem() {
-        TelemetryRecord record = new TelemetryRecord();
-        ReflectionTestUtils.setField(record, "storeId", "store-001");
-        ReflectionTestUtils.setField(record, "itemId", "pasta");
+        TelemetryRecord telemetryRecord = new TelemetryRecord();
+        ReflectionTestUtils.setField(telemetryRecord, "storeId", "store-001");
+        ReflectionTestUtils.setField(telemetryRecord, "itemId", "pasta");
 
         when(telemetryRepository.findByStoreIdAndItemId("store-001", "pasta"))
-                .thenReturn(List.of(record));
+                .thenReturn(List.of(telemetryRecord));
 
         List<TelemetryRecord> result = telemetryService.getPings("store-001", "pasta");
 
