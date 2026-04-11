@@ -24,6 +24,47 @@ public class DatabaseListSyncStore implements ListSyncStore {
         this.roomItemStateRepository = roomItemStateRepository;
     }
 
+    private void copyCanonicalFields(RoomItemState state, ListUpdatePayload payload) {
+        payload.setContent(state.getContent());
+        payload.setChecked(state.isChecked());
+        payload.setTimestamp(state.getClientTimestamp());
+    }
+
+    private void clearCanonicalFieldsForDelete(RoomItemState state, ListUpdatePayload payload) {
+        payload.setContent(null);
+        payload.setChecked(null);
+        payload.setTimestamp(state.getClientTimestamp());
+    }
+
+    private boolean handleTimestampRejectionIfOlder(RoomItemState state, ListUpdatePayload payload) {
+        Long currentTimestamp = state.getClientTimestamp();
+        Long incomingTimestamp = payload.getTimestamp();
+        if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
+            copyCanonicalFields(state, payload);
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+            return true;
+        }
+        return false;
+    }
+
+    // Attempt to persist state; on optimistic lock failure set payload rejection and log
+    private boolean trySave(RoomItemState state, ListUpdatePayload payload, boolean isDelete, String listId, String itemId, ActionType action) {
+        try {
+            roomItemStateRepository.saveAndFlush(state);
+            return true;
+        } catch (OptimisticLockingFailureException ex) {
+            if (isDelete) {
+                logger.warn("Optimistic locking rejected list sync delete for listId={}, itemId={}", listId, itemId, ex);
+            } else {
+                logger.warn("Optimistic locking rejected list sync update for listId={}, itemId={}, action={}",
+                        listId, itemId, action, ex);
+            }
+            copyCanonicalFields(state, payload);
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+            return false;
+        }
+    }
+
     @Override
     public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
         if (listId == null || listId.isBlank() || payload == null) {
@@ -39,40 +80,24 @@ public class DatabaseListSyncStore implements ListSyncStore {
         RoomItemState state = roomItemStateRepository.findByListIdAndItemId(listId, itemId)
                 .orElseGet(() -> new RoomItemState(listId, itemId));
 
-        Long currentTimestamp = state.getClientTimestamp();
-        Long incomingTimestamp = payload.getTimestamp();
-
-        if (action == ActionType.DELETE) {
-            if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
-                payload.setContent(state.getContent());
-                payload.setChecked(state.isChecked());
-                payload.setTimestamp(currentTimestamp);
-                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
-                return payload;
-            }
-
-            state.setDeleted(true);
-            state.setDeletedAt(Instant.now());
-            if (incomingTimestamp != null) {
-                state.setClientTimestamp(incomingTimestamp);
-            }
-            try {
-                roomItemStateRepository.saveAndFlush(state);
-            } catch (OptimisticLockingFailureException ex) {
-                logger.warn("Optimistic locking rejected list sync delete for listId={}, itemId={}", listId, itemId, ex);
-                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
-                return payload;
-            }
-            payload.setTimestamp(state.getClientTimestamp());
-            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+        // Common timestamp rejection check
+        if (handleTimestampRejectionIfOlder(state, payload)) {
             return payload;
         }
 
-        if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
-            payload.setContent(state.getContent());
-            payload.setChecked(state.isChecked());
-            payload.setTimestamp(currentTimestamp);
-            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+        if (action == ActionType.DELETE) {
+            state.setDeleted(true);
+            state.setDeletedAt(Instant.now());
+            if (payload.getTimestamp() != null) {
+                state.setClientTimestamp(payload.getTimestamp());
+            }
+
+            if (!trySave(state, payload, true, listId, itemId, action)) {
+                return payload;
+            }
+
+            clearCanonicalFieldsForDelete(state, payload);
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
         }
 
@@ -87,22 +112,15 @@ public class DatabaseListSyncStore implements ListSyncStore {
 
         state.setDeleted(false);
         state.setDeletedAt(null);
-        if (incomingTimestamp != null) {
-            state.setClientTimestamp(incomingTimestamp);
+        if (payload.getTimestamp() != null) {
+            state.setClientTimestamp(payload.getTimestamp());
         }
 
-        try {
-            roomItemStateRepository.saveAndFlush(state);
-        } catch (OptimisticLockingFailureException ex) {
-            logger.warn("Optimistic locking rejected list sync update for listId={}, itemId={}, action={}",
-                    listId, itemId, payload.getAction(), ex);
-            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+        if (!trySave(state, payload, false, listId, itemId, action)) {
             return payload;
         }
 
-        payload.setContent(state.getContent());
-        payload.setChecked(state.isChecked());
-        payload.setTimestamp(state.getClientTimestamp());
+        copyCanonicalFields(state, payload);
         payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
         return payload;
     }

@@ -81,6 +81,7 @@ public class ListSyncRouterService {
                 // This in-memory delete can race with concurrent computeIfAbsent/update calls.
                 // That limitation is acceptable for test/dev use; production code should use a safer removal strategy.
                 states.remove(key);
+                payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
                 return payload;
             }
 
@@ -133,6 +134,9 @@ public class ListSyncRouterService {
             String key = listId + "::" + itemId;
             LockState state = locks.computeIfAbsent(key, ignored -> new LockState());
             synchronized (state) {
+                long previousLastAccessed = state.lastAccessedMillis;
+                long now = System.currentTimeMillis();
+
                 long waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
                 while (waitMillis > 0) {
                     try {
@@ -144,7 +148,6 @@ public class ListSyncRouterService {
                     waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
                 }
 
-                long now = System.currentTimeMillis();
                 state.lockedUntilMillis = now + LOCK_WINDOW_MILLIS;
                 Long timestamp = payload.getTimestamp();
                 if (timestamp != null && timestamp < state.lastTimestamp) {
@@ -153,6 +156,8 @@ public class ListSyncRouterService {
                     payload.setTimestamp(state.timestamp);
                     payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
                     state.notifyAll();
+                    state.lastAccessedMillis = now;
+                    evictIfNeeded(key, state, false, previousLastAccessed, now);
                     return payload;
                 }
 
@@ -162,16 +167,33 @@ public class ListSyncRouterService {
                 state.timestamp = routed.getTimestamp();
                 state.lastTimestamp = routed.getTimestamp() != null ? routed.getTimestamp() : state.lastTimestamp;
                 state.notifyAll();
+                state.lastAccessedMillis = now;
+                boolean successfulDelete = payload.getAction() == ActionType.DELETE
+                        && ListUpdatePayload.STATUS_SUCCESS.equals(routed.getStatus());
+                evictIfNeeded(key, state, successfulDelete, previousLastAccessed, now);
                 return routed;
+            }
+        }
+
+        private void evictIfNeeded(String key, LockState state, boolean successfulDelete,
+                                   long previousLastAccessed, long now) {
+            if (!state.isLocked(now) && (successfulDelete
+                    || (previousLastAccessed > 0 && now - previousLastAccessed > LOCK_WINDOW_MILLIS))) {
+                locks.remove(key, state);
             }
         }
 
         private static final class LockState {
             private long lockedUntilMillis;
             private long lastTimestamp;
+            private long lastAccessedMillis;
             private String content;
             private Boolean checked;
             private Long timestamp;
+
+            private boolean isLocked(long now) {
+                return lockedUntilMillis > now;
+            }
         }
     }
 }
