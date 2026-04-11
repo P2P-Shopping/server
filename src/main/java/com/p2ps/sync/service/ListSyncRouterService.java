@@ -24,7 +24,7 @@ public class ListSyncRouterService {
 
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
-        this.listSyncStore = listSyncStore;
+        this.listSyncStore = new LockingListSyncStore(listSyncStore);
     }
 
     /**

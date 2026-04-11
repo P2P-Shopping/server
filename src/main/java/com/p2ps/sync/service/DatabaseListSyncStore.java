@@ -35,25 +35,14 @@ public class DatabaseListSyncStore implements ListSyncStore {
             return payload;
         }
 
-        try {
-            ActionType action = payload.getAction();
-            RoomItemState state = roomItemStateRepository.findByListIdAndItemId(listId, itemId)
-                    .orElseGet(() -> new RoomItemState(listId, itemId));
+        ActionType action = payload.getAction();
+        RoomItemState state = roomItemStateRepository.findByListIdAndItemId(listId, itemId)
+                .orElseGet(() -> new RoomItemState(listId, itemId));
 
-            if (action == ActionType.DELETE) {
-                state.setDeleted(true);
-                state.setDeletedAt(Instant.now());
-                if (payload.getTimestamp() != null) {
-                    state.setClientTimestamp(payload.getTimestamp());
-                }
-                roomItemStateRepository.save(state);
-                payload.setTimestamp(state.getClientTimestamp());
-                payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
-                return payload;
-            }
+        Long currentTimestamp = state.getClientTimestamp();
+        Long incomingTimestamp = payload.getTimestamp();
 
-            Long currentTimestamp = state.getClientTimestamp();
-            Long incomingTimestamp = payload.getTimestamp();
+        if (action == ActionType.DELETE) {
             if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
                 payload.setContent(state.getContent());
                 payload.setChecked(state.isChecked());
@@ -62,33 +51,59 @@ public class DatabaseListSyncStore implements ListSyncStore {
                 return payload;
             }
 
-            if (payload.getContent() != null) {
-                state.setContent(payload.getContent());
-            }
-            if (payload.getChecked() != null) {
-                state.setChecked(Boolean.TRUE.equals(payload.getChecked()));
-            } else if (action == ActionType.CHECK_OFF) {
-                state.setChecked(!state.isChecked());
-            }
-
-            state.setDeleted(false);
-            state.setDeletedAt(null);
+            state.setDeleted(true);
+            state.setDeletedAt(Instant.now());
             if (incomingTimestamp != null) {
                 state.setClientTimestamp(incomingTimestamp);
             }
-
-            roomItemStateRepository.save(state);
-
-            payload.setContent(state.getContent());
-            payload.setChecked(state.isChecked());
+            try {
+                roomItemStateRepository.saveAndFlush(state);
+            } catch (OptimisticLockingFailureException ex) {
+                logger.warn("Optimistic locking rejected list sync delete for listId={}, itemId={}", listId, itemId, ex);
+                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+                return payload;
+            }
             payload.setTimestamp(state.getClientTimestamp());
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
+        }
+
+        if (currentTimestamp != null && incomingTimestamp != null && incomingTimestamp < currentTimestamp) {
+            payload.setContent(state.getContent());
+            payload.setChecked(state.isChecked());
+            payload.setTimestamp(currentTimestamp);
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+            return payload;
+        }
+
+        if (payload.getContent() != null) {
+            state.setContent(payload.getContent());
+        }
+        if (payload.getChecked() != null) {
+            state.setChecked(Boolean.TRUE.equals(payload.getChecked()));
+        } else if (action == ActionType.CHECK_OFF) {
+            state.setChecked(!state.isChecked());
+        }
+
+        state.setDeleted(false);
+        state.setDeletedAt(null);
+        if (incomingTimestamp != null) {
+            state.setClientTimestamp(incomingTimestamp);
+        }
+
+        try {
+            roomItemStateRepository.saveAndFlush(state);
         } catch (OptimisticLockingFailureException ex) {
             logger.warn("Optimistic locking rejected list sync update for listId={}, itemId={}, action={}",
                     listId, itemId, payload.getAction(), ex);
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
         }
+
+        payload.setContent(state.getContent());
+        payload.setChecked(state.isChecked());
+        payload.setTimestamp(state.getClientTimestamp());
+        payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+        return payload;
     }
 }

@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,7 +42,7 @@ class DatabaseListSyncStoreTest {
     @Test
     void appliesCheckOffUpdatesToTheDatabase() {
         when(repository.findByListIdAndItemId("list-1", "item-1")).thenReturn(Optional.empty());
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -53,7 +54,7 @@ class DatabaseListSyncStoreTest {
         assertEquals(Boolean.TRUE, payload.getChecked());
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
 
         RoomItemState saved = captor.getValue();
         assertEquals("list-1", saved.getListId());
@@ -67,7 +68,7 @@ class DatabaseListSyncStoreTest {
         existing.setContent("Old");
         existing.setChecked(false);
         when(repository.findByListIdAndItemId("list-1", "item-2")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UPDATE);
@@ -81,7 +82,7 @@ class DatabaseListSyncStoreTest {
         assertEquals(Boolean.FALSE, payload.getChecked());
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         RoomItemState saved = captor.getValue();
         assertEquals("list-1", saved.getListId());
         assertEquals("item-2", saved.getItemId());
@@ -94,7 +95,7 @@ class DatabaseListSyncStoreTest {
         RoomItemState existing = new RoomItemState("list-1", "item-3");
         existing.setChecked(true);
         when(repository.findByListIdAndItemId("list-1", "item-3")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -107,7 +108,7 @@ class DatabaseListSyncStoreTest {
         assertEquals(Boolean.FALSE, payload.getChecked());
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         assertEquals(false, captor.getValue().isChecked());
     }
 
@@ -116,7 +117,7 @@ class DatabaseListSyncStoreTest {
         RoomItemState existing = new RoomItemState("list-1", "item-4");
         existing.setChecked(false);
         when(repository.findByListIdAndItemId("list-1", "item-4")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -129,7 +130,7 @@ class DatabaseListSyncStoreTest {
         assertEquals(Boolean.TRUE, payload.getChecked());
 
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         assertEquals(true, captor.getValue().isChecked());
     }
 
@@ -137,7 +138,7 @@ class DatabaseListSyncStoreTest {
     void deletesExistingStateForDeleteActions() {
         RoomItemState existing = new RoomItemState("list-1", "item-9");
         when(repository.findByListIdAndItemId("list-1", "item-9")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.DELETE);
@@ -147,7 +148,7 @@ class DatabaseListSyncStoreTest {
 
         assertSame(payload, result);
         ArgumentCaptor<RoomItemState> captor = ArgumentCaptor.forClass(RoomItemState.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         assertEquals(true, captor.getValue().isDeleted());
     }
 
@@ -179,7 +180,7 @@ class DatabaseListSyncStoreTest {
         existing.setContent("Old");
         existing.setChecked(true);
         when(repository.findByListIdAndItemId("list-1", "item-1")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -191,14 +192,14 @@ class DatabaseListSyncStoreTest {
         assertSame(payload, result);
         assertEquals("New", payload.getContent());
         assertEquals(false, payload.getChecked());
-        verify(repository).save(any(RoomItemState.class));
+        verify(repository).saveAndFlush(any(RoomItemState.class));
     }
 
     @Test
     void rejectsWhenOptimisticLockingFails() {
         RoomItemState existing = new RoomItemState("list-1", "item-10");
         when(repository.findByListIdAndItemId("list-1", "item-10")).thenReturn(Optional.of(existing));
-        when(repository.save(any(RoomItemState.class))).thenThrow(new OptimisticLockingFailureException("conflict"));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenThrow(new OptimisticLockingFailureException("conflict"));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UPDATE);
@@ -229,8 +230,48 @@ class DatabaseListSyncStoreTest {
         assertSame(payload, result);
         assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
         assertEquals("Current", result.getContent());
-        assertTrue(Boolean.TRUE.equals(result.getChecked()));
+        assertEquals(true, result.getChecked());
         assertEquals(200L, result.getTimestamp());
-        verify(repository, never()).save(any());
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsStaleDeleteWithoutMutatingState() {
+        RoomItemState existing = new RoomItemState("list-1", "item-12");
+        existing.setContent("Current");
+        existing.setChecked(true);
+        existing.setClientTimestamp(200L);
+        when(repository.findByListIdAndItemId("list-1", "item-12")).thenReturn(Optional.of(existing));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.DELETE);
+        payload.setItemId("item-12");
+        payload.setTimestamp(100L);
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+        assertEquals("Current", result.getContent());
+        assertEquals(true, result.getChecked());
+        assertEquals(200L, result.getTimestamp());
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsDeleteWhenOptimisticLockingFails() {
+        RoomItemState existing = new RoomItemState("list-1", "item-13");
+        when(repository.findByListIdAndItemId("list-1", "item-13")).thenReturn(Optional.of(existing));
+        when(repository.saveAndFlush(any(RoomItemState.class))).thenThrow(new OptimisticLockingFailureException("conflict"));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.DELETE);
+        payload.setItemId("item-13");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+        verify(repository).saveAndFlush(any(RoomItemState.class));
     }
 }
