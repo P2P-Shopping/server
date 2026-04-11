@@ -99,3 +99,7 @@ CREATE TABLE room_item_states (
 
 CREATE INDEX idx_room_item_states_list_id
     ON room_item_states (list_id);
+
+CREATE INDEX idx_room_item_states_active
+    ON room_item_states (list_id, item_id)
+    WHERE deleted = FALSE;

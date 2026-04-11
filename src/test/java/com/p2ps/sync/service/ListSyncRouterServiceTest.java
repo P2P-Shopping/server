@@ -81,7 +81,7 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
-    void ignoresBlankItemIdsInTheStore() {
+    void sanitizesPayloadAndInvokesStoreWhenItemIdIsBlank() {
         RecordingStore store = new RecordingStore();
         ListSyncRouterService routerService = new ListSyncRouterService(store);
 

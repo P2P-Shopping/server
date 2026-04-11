@@ -5,6 +5,8 @@ import com.p2ps.dto.ListUpdatePayload;
 import com.p2ps.sync.model.RoomItemState;
 import com.p2ps.sync.repository.RoomItemStateRepository;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.time.Instant;
 @Service
 @Transactional
 public class DatabaseListSyncStore implements ListSyncStore {
+
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseListSyncStore.class);
 
     private final RoomItemStateRepository roomItemStateRepository;
 
@@ -81,6 +85,8 @@ public class DatabaseListSyncStore implements ListSyncStore {
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
         } catch (OptimisticLockingFailureException ex) {
+            logger.warn("Optimistic locking rejected list sync update for listId={}, itemId={}, action={}",
+                    listId, itemId, payload.getAction(), ex);
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
         }

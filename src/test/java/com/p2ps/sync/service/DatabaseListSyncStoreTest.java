@@ -10,12 +10,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
@@ -190,5 +192,45 @@ class DatabaseListSyncStoreTest {
         assertEquals("New", payload.getContent());
         assertEquals(false, payload.getChecked());
         verify(repository).save(any(RoomItemState.class));
+    }
+
+    @Test
+    void rejectsWhenOptimisticLockingFails() {
+        RoomItemState existing = new RoomItemState("list-1", "item-10");
+        when(repository.findByListIdAndItemId("list-1", "item-10")).thenReturn(Optional.of(existing));
+        when(repository.save(any(RoomItemState.class))).thenThrow(new OptimisticLockingFailureException("conflict"));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        payload.setItemId("item-10");
+        payload.setContent("New");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+    }
+
+    @Test
+    void rejectsStaleTimestampWithoutSaving() {
+        RoomItemState existing = new RoomItemState("list-1", "item-11");
+        existing.setContent("Current");
+        existing.setChecked(true);
+        existing.setClientTimestamp(200L);
+        when(repository.findByListIdAndItemId("list-1", "item-11")).thenReturn(Optional.of(existing));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        payload.setItemId("item-11");
+        payload.setTimestamp(100L);
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+        assertEquals("Current", result.getContent());
+        assertTrue(Boolean.TRUE.equals(result.getChecked()));
+        assertEquals(200L, result.getTimestamp());
+        verify(repository, never()).save(any());
     }
 }

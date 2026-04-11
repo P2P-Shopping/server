@@ -13,9 +13,7 @@ import com.p2ps.dto.ListUpdatePayload;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,11 +54,7 @@ class ListSyncControllerTest {
 
         assertNull(result);
         verify(messagingTemplate).convertAndSendToUser("user-1", "/queue/list/list-1/rejection", payload);
-        assertFalse(mockingDetails(messagingTemplate).getInvocations().stream().anyMatch(invocation ->
-                invocation.getMethod().getName().equals("convertAndSend")
-                        && "/topic/list/list-1".equals(invocation.getArgument(0))
-                        && invocation.getArguments().length > 1
-                        && invocation.getArgument(1) == null));
+        verify(messagingTemplate, never()).convertAndSend("/topic/list/list-1", payload);
     }
 
     @Test

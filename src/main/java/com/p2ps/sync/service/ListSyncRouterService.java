@@ -133,30 +133,34 @@ public class ListSyncRouterService {
             String key = listId + "::" + itemId;
             LockState state = locks.computeIfAbsent(key, ignored -> new LockState());
             synchronized (state) {
-                long now = System.currentTimeMillis();
-                long waitMillis = state.lockedUntilMillis - now;
-                if (waitMillis > 0) {
+                long waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
+                while (waitMillis > 0) {
                     try {
                         state.wait(waitMillis);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException("Interrupted while waiting for item lock: " + key, e);
                     }
+                    waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
                 }
 
-                now = System.currentTimeMillis();
+                long now = System.currentTimeMillis();
                 state.lockedUntilMillis = now + LOCK_WINDOW_MILLIS;
                 Long timestamp = payload.getTimestamp();
                 if (timestamp != null && timestamp < state.lastTimestamp) {
+                    payload.setContent(state.content);
+                    payload.setChecked(state.checked);
+                    payload.setTimestamp(state.timestamp);
                     payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
                     state.notifyAll();
                     return payload;
                 }
 
                 ListUpdatePayload routed = delegate.apply(listId, payload);
-                if (timestamp != null) {
-                    state.lastTimestamp = timestamp;
-                }
+                state.content = routed.getContent();
+                state.checked = routed.getChecked();
+                state.timestamp = routed.getTimestamp();
+                state.lastTimestamp = routed.getTimestamp() != null ? routed.getTimestamp() : state.lastTimestamp;
                 state.notifyAll();
                 return routed;
             }
@@ -165,6 +169,9 @@ public class ListSyncRouterService {
         private static final class LockState {
             private long lockedUntilMillis;
             private long lastTimestamp;
+            private String content;
+            private Boolean checked;
+            private Long timestamp;
         }
     }
 }

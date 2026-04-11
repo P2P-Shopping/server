@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -14,12 +15,14 @@ import lombok.Setter;
 import java.time.Instant;
 import java.util.UUID;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "room_item_states", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"list_id", "item_id"})
+}, indexes = {
+        @Index(name = "idx_room_item_states_list_item", columnList = "list_id, item_id")
 })
+@Getter
+@Setter
 public class RoomItemState {
 
     @Id
