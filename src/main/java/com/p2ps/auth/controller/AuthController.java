@@ -10,10 +10,8 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
 import java.util.Map;
 
 @RestController
@@ -54,7 +52,7 @@ public class AuthController { // Acolada clasei deschisă aici
                 .httpOnly(true)
                 .secure(false) // trebuie mutat pe true cand vom trece la https
                 .path("/")
-                .maxAge(24 * 60 * 60) // 24h
+                .maxAge(24L * 60 * 60) // 24h
                 .sameSite("Strict")
                 .build();
 

@@ -21,9 +21,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -213,7 +211,7 @@ class ItemServiceTest {
         assertTrue(result.isRecurrent());
         assertTrue(result.isChecked());
         assertTrue(result.getLastUpdatedTimestamp() >= beforeUpdate);
-        assertTrue(result.getLastUpdatedTimestamp() != 999L);
+
     }
 
     @Test

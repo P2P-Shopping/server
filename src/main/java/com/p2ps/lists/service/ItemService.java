@@ -84,7 +84,7 @@ public class ItemService {
         // Logica de Checkbox + Trigger Echipa 3
         if (request.getIsChecked() != null && request.getIsChecked() != item.isChecked()) {
             item.setChecked(request.getIsChecked());
-            System.out.println("DEBUG: Status changed for item " + itemId + ". Triggering Team 3 telemetry");
+            
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
