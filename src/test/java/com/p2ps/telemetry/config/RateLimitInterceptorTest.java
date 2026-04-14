@@ -91,7 +91,10 @@ class RateLimitInterceptorTest {
 
     @Test
     void shouldRejectRequestWhenRateLimitIsExceeded() throws Exception {
-        Bucket bucket = Bucket.builder().addLimit(io.github.bucket4j.Bandwidth.simple(1, java.time.Duration.ofSeconds(1))).build();
+        // Use a mocked Bucket to make the test deterministic and explicit
+        Bucket bucket = org.mockito.Mockito.mock(Bucket.class);
+        when(bucket.tryConsume(1)).thenReturn(true).thenReturn(false);
+
         when(request.getHeader("X-API-Key")).thenReturn("test-telemetry-api-key");
         when(request.getHeader("X-Device-Id")).thenReturn("device-1");
         when(rateLimitingService.resolveBucket("device-1")).thenReturn(bucket);
@@ -192,7 +195,7 @@ class RateLimitInterceptorTest {
                 "\"deviceId\":\"device-1\",\"storeId\":\"store-7\",\"itemId\":\"item-1\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000" +
                 "},{" +
                 "\"deviceId\":\"device-2\",\"storeId\":\"store-7\",\"itemId\":\"item-2\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000" +
-                "}]}" ).getBytes(StandardCharsets.UTF_8));
+                "}]}").getBytes(StandardCharsets.UTF_8));
         telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
 
         assertFalse(interceptor.preHandle(telemetryRequest, new MockHttpServletResponse(), new Object()));
@@ -206,7 +209,7 @@ class RateLimitInterceptorTest {
         telemetryRequest.setContent(("{" +
                 "\"pings\":[{" +
                 "\"deviceId\":\"device-1\",\"storeId\":\"store-7\",\"itemId\":\"item-1\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000" +
-                "}]}" ).getBytes(StandardCharsets.UTF_8));
+                "}]}").getBytes(StandardCharsets.UTF_8));
         telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
         telemetryRequest.addHeader("X-Device-Id", "device-2");
 

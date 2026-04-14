@@ -50,7 +50,50 @@ class TelemetryRequestBodyCachingFilterTest {
     }
 
     @Test
-    void shouldRejectOversizedPayload() throws Exception {
+    void shouldRejectOversizedPayload_byDeclaredLength() throws Exception {
+        TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
+
+        MockHttpServletRequest req = new MockHttpServletRequest() {
+            @Override
+            public long getContentLengthLong() {
+                return 2L * 1024L * 1024L; // 2 MB declared
+            }
+        };
+        req.setMethod("POST");
+        req.setRequestURI("/api/v1/telemetry/ping");
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        filter.doFilter(req, resp, (request, response) -> {});
+
+        assertEquals(413, resp.getStatus());
+    }
+
+    @Test
+    void shouldRejectOversizedPayload_byStreamRead() throws Exception {
+        TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
+
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod("POST");
+        req.setRequestURI("/api/v1/telemetry/ping");
+
+        // supply a large body while leaving content-length as zero
+        byte[] big = new byte[2 * 1024 * 1024];
+        for (int i = 0; i < big.length; i++) {
+            big[i] = 'x';
+        }
+        req.setContent(big);
+        req.addHeader("Content-Length", "0");
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        filter.doFilter(req, resp, (request, response) -> {});
+
+        assertEquals(413, resp.getStatus());
+    }
+
+    @Test
+    void shouldRejectOversizedPayloadWhenContentLengthUnknown() throws Exception {
         TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
         int size = 1 * 1024 * 1024 + 10; // slightly over 1MB cap used by the filter
         byte[] large = new byte[size];
@@ -58,9 +101,39 @@ class TelemetryRequestBodyCachingFilterTest {
             large[i] = 'a';
         }
 
-        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping") {
+            @Override
+            public long getContentLengthLong() {
+                return -1L; // unknown length (chunked)
+            }
+
+            @Override
+            public jakarta.servlet.ServletInputStream getInputStream() {
+                final java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(large);
+                return new jakarta.servlet.ServletInputStream() {
+                    @Override
+                    public int read() throws IOException {
+                        return in.read();
+                    }
+
+                    @Override
+                    public boolean isFinished() {
+                        return in.available() == 0;
+                    }
+
+                    @Override
+                    public boolean isReady() {
+                        return true;
+                    }
+
+                    @Override
+                    public void setReadListener(jakarta.servlet.ReadListener readListener) {
+                        // no-op for tests
+                    }
+                };
+            }
+        };
         req.setContentType("application/json");
-        req.setContent(large);
 
         MockHttpServletResponse resp = new MockHttpServletResponse();
 
