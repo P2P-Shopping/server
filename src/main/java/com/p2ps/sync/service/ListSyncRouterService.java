@@ -19,7 +19,7 @@ public class ListSyncRouterService {
     private final ListSyncStore listSyncStore;
 
     public ListSyncRouterService() {
-        this(new LockingListSyncStore(new InMemoryListSyncStore()));
+        this(new InMemoryListSyncStore());
     }
 
     @Autowired
@@ -48,6 +48,12 @@ public class ListSyncRouterService {
                 payload.setContent(null);
                 payload.setChecked(null);
             }
+        }
+
+        if (action == ActionType.CHECK_OFF && payload.getChecked() == null) {
+            logger.debug("Rejecting CHECK_OFF without explicit checked value");
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+            return payload;
         }
 
         return switch (action) {
@@ -86,7 +92,6 @@ public class ListSyncRouterService {
             LockState state = locks.computeIfAbsent(key, ignored -> new LockState());
             synchronized (state) {
                 long previousLastAccessed = state.lastAccessedMillis;
-                long now = System.currentTimeMillis();
 
                 long waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
                 while (waitMillis > 0) {
@@ -99,20 +104,18 @@ public class ListSyncRouterService {
                     waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
                 }
 
-                state.lockedUntilMillis = now + LOCK_WINDOW_MILLIS;
+                long currentTime = System.currentTimeMillis();
+                long lockExpiry = System.currentTimeMillis() + LOCK_WINDOW_MILLIS;
+                state.lockedUntilMillis = lockExpiry;
                 Long timestamp = payload.getTimestamp();
-                if (timestamp != null && timestamp < state.lastTimestamp) {
+                if (timestamp != null && timestamp <= state.lastTimestamp) {
                     payload.setChecked(state.checked);
                     payload.setTimestamp(state.timestamp);
                     payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
                     state.notifyAll();
-                    state.lastAccessedMillis = now;
-                    evictIfNeeded(key, state, false, previousLastAccessed, now);
+                    state.lastAccessedMillis = currentTime;
+                    evictIfNeeded(key, state, false, previousLastAccessed, currentTime);
                     return payload;
-                }
-
-                if (payload.getAction() == ActionType.CHECK_OFF && payload.getChecked() == null) {
-                    payload.setChecked(state.checked == null ? Boolean.TRUE : !state.checked);
                 }
 
                 ListUpdatePayload routed = delegate.apply(listId, payload);
@@ -127,18 +130,19 @@ public class ListSyncRouterService {
                 }
 
                 state.notifyAll();
-                state.lastAccessedMillis = now;
+                state.lastAccessedMillis = currentTime;
                 boolean successfulDelete = payload.getAction() == ActionType.DELETE
                         && ListUpdatePayload.STATUS_SUCCESS.equals(routed.getStatus());
-                evictIfNeeded(key, state, successfulDelete, previousLastAccessed, now);
+                evictIfNeeded(key, state, successfulDelete, previousLastAccessed, currentTime);
                 return routed;
             }
         }
 
         private void evictIfNeeded(String key, LockState state, boolean successfulDelete,
-                                   long previousLastAccessed, long now) {
-            if (!state.isLocked(now) && (successfulDelete
-                    || (previousLastAccessed > 0 && now - previousLastAccessed > LOCK_WINDOW_MILLIS))) {
+                                   long previousLastAccessed, long currentTime) {
+            if (successfulDelete || (!state.isLocked(currentTime)
+                    && previousLastAccessed > 0
+                    && currentTime - previousLastAccessed > LOCK_WINDOW_MILLIS)) {
                 locks.remove(key, state);
             }
         }
@@ -150,8 +154,8 @@ public class ListSyncRouterService {
             private Boolean checked;
             private Long timestamp;
 
-            private boolean isLocked(long now) {
-                return lockedUntilMillis > now;
+            private boolean isLocked(long currentTime) {
+                return lockedUntilMillis > currentTime;
             }
         }
     }

@@ -13,6 +13,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -63,5 +64,47 @@ class DatabaseListSyncStoreTest {
 
         assertSame(payload, result);
         assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+    }
+
+    @Test
+    void rejectsInvalidUuidItemId() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CHECK_OFF);
+        payload.setItemId("not-a-uuid");
+        payload.setChecked(Boolean.TRUE);
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+    }
+
+    @Test
+    void returnsEarlyForBlankListIdAndNullPayload() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        payload.setItemId(UUID.randomUUID().toString());
+
+        assertSame(payload, store.apply(null, payload));
+        assertSame(payload, store.apply("", payload));
+        assertNull(store.apply("list-1", null));
+    }
+
+    @Test
+    void returnsEarlyWhenCheckedMissingForNonCheckOffAction() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.ADD);
+        payload.setItemId(UUID.randomUUID().toString());
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertNull(result.getStatus());
     }
 }

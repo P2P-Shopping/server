@@ -98,7 +98,7 @@ public class ItemService {
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
         item.setChecked(checked);
-        item.setLastUpdatedTimestamp(clientTimestamp != null ? clientTimestamp : System.currentTimeMillis());
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         return mapToDTO(itemRepository.save(item));
     }

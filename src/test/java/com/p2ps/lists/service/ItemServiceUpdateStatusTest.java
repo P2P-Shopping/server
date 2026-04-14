@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -41,10 +42,30 @@ class ItemServiceUpdateStatusTest {
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        long before = System.currentTimeMillis();
         ItemDTO result = itemService.updateItemStatus(itemId, true, 123L);
+        long after = System.currentTimeMillis();
 
         assertEquals(true, result.isChecked());
-        assertEquals(123L, result.getLastUpdatedTimestamp());
+        assertTrue(result.getLastUpdatedTimestamp() >= before);
+        assertTrue(result.getLastUpdatedTimestamp() <= after);
+    }
+
+    @Test
+    void updateItemStatusShouldUseCurrentTimeWhenClientTimestampIsNull() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem();
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        long before = System.currentTimeMillis();
+        ItemDTO result = itemService.updateItemStatus(itemId, true, null);
+        long after = System.currentTimeMillis();
+
+        assertEquals(true, result.isChecked());
+        assertTrue(result.getLastUpdatedTimestamp() >= before);
+        assertTrue(result.getLastUpdatedTimestamp() <= after);
     }
 
     @Test

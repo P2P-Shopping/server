@@ -40,9 +40,7 @@ public class DatabaseListSyncStore implements ListSyncStore {
             return payload;
         }
 
-        boolean checked = payload.getChecked() != null
-                ? payload.getChecked()
-                : action == ActionType.CHECK_OFF;
+        boolean checked = payload.getChecked() != null ? payload.getChecked() : true;
 
         UUID uuid;
         try {

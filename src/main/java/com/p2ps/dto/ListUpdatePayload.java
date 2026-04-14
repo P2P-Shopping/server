@@ -85,6 +85,11 @@ public class ListUpdatePayload {
     }
 
     public void setStatus(String status) {
+        if (status != null
+                && !STATUS_SUCCESS.equals(status)
+                && !STATUS_REJECTION.equals(status)) {
+            throw new IllegalArgumentException("Unsupported status: " + status);
+        }
         this.status = status;
     }
 }
