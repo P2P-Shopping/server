@@ -10,6 +10,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -142,5 +144,53 @@ class TelemetryRequestBodyCachingFilterTest {
         filter.doFilter(req, resp, chain);
 
         assertEquals(413, resp.getStatus());
+    }
+
+    @Test
+    void getReader_returnsContent_and_inputStream_behaviour() throws Exception {
+        TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
+        String payload = "こんにちは"; // multi-byte characters
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
+        req.setContentType("application/json");
+        req.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        req.setContent(payload.getBytes(StandardCharsets.UTF_8));
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        AtomicReference<jakarta.servlet.ServletRequest> captured = new AtomicReference<>();
+        FilterChain chain = (request, response) -> captured.set(request);
+
+        filter.doFilter(req, resp, chain);
+
+        jakarta.servlet.http.HttpServletRequest wrapped = (jakarta.servlet.http.HttpServletRequest) captured.get();
+
+        // reader should return the original string
+        String read = wrapped.getReader().lines().collect(Collectors.joining("\n"));
+        assertEquals(payload, read);
+
+        // input stream should be repeatable
+        byte[] first = wrapped.getInputStream().readAllBytes();
+        byte[] second = wrapped.getInputStream().readAllBytes();
+        assertArrayEquals(first, second);
+    }
+
+    @Test
+    void cachedServletInputStream_setReadListener_throwsUnsupported() throws Exception {
+        TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
+        String payload = "ok";
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
+        req.setContent(payload.getBytes(StandardCharsets.UTF_8));
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        AtomicReference<jakarta.servlet.ServletRequest> captured = new AtomicReference<>();
+        FilterChain chain = (request, response) -> captured.set(request);
+
+        filter.doFilter(req, resp, chain);
+
+        jakarta.servlet.http.HttpServletRequest wrapped = (jakarta.servlet.http.HttpServletRequest) captured.get();
+        jakarta.servlet.ServletInputStream in = wrapped.getInputStream();
+
+        assertThrows(UnsupportedOperationException.class, () -> in.setReadListener(null));
     }
 }
