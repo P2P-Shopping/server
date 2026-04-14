@@ -38,3 +38,5 @@ out/
 .vscode/
 pgdata/
 .env
+application-local.properties
+.kilo
