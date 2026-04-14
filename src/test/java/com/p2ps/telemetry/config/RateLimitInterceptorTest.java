@@ -214,6 +214,56 @@ class RateLimitInterceptorTest {
     }
 
     @Test
+    void shouldAllowBatchWithSingleDevice() throws Exception {
+        StringBuilder json = new StringBuilder("{\"pings\":[");
+        for (int i = 0; i < 3; i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("{\"deviceId\":\"device-1\",\"storeId\":\"store-7\",\"itemId\":\"item-")
+                    .append(i)
+                    .append("\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000}");
+        }
+        json.append("]}");
+
+        MockHttpServletRequest telemetryRequest = new MockHttpServletRequest("POST", "/api/v1/telemetry/batch");
+        telemetryRequest.setContentType("application/json");
+        telemetryRequest.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        telemetryRequest.setContent(json.toString().getBytes(StandardCharsets.UTF_8));
+        telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
+
+        Bucket bucket = Bucket.builder().addLimit(io.github.bucket4j.Bandwidth.simple(10, Duration.ofSeconds(1))).build();
+        when(rateLimitingService.resolveBucket("device-1")).thenReturn(bucket);
+
+        assertTrue(interceptor.preHandle(telemetryRequest, new MockHttpServletResponse(), new Object()));
+    }
+
+    @Test
+    void shouldRejectOversizedBatchAsBadRequest() throws Exception {
+        StringBuilder json = new StringBuilder("{\"pings\":[");
+        for (int i = 0; i < RateLimitingService.MAX_BATCH_SIZE + 1; i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("{\"deviceId\":\"device-1\",\"storeId\":\"store-7\",\"itemId\":\"item-")
+                    .append(i)
+                    .append("\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000}");
+        }
+        json.append("]}");
+
+        MockHttpServletRequest telemetryRequest = new MockHttpServletRequest("POST", "/api/v1/telemetry/batch");
+        telemetryRequest.setContentType("application/json");
+        telemetryRequest.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        telemetryRequest.setContent(json.toString().getBytes(StandardCharsets.UTF_8));
+        telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertFalse(interceptor.preHandle(telemetryRequest, resp, new Object()));
+        assertEquals(400, resp.getStatus());
+    }
+
+    @Test
     void shouldRejectMalformedJsonPing() throws Exception {
         MockHttpServletRequest telemetryRequest = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
         telemetryRequest.setContentType("application/json");

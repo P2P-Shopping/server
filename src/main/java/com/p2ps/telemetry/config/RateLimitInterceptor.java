@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -29,8 +30,15 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private final RateLimitingService rateLimitingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${telemetry.api.key}")
+    @Value("${TELEMETRY_API_KEY}")
     private String validApiKey;
+
+    @PostConstruct
+    private void validateApiKey() {
+        if (validApiKey == null || validApiKey.isBlank()) {
+            throw new IllegalStateException("Missing required environment variable TELEMETRY_API_KEY");
+        }
+    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
