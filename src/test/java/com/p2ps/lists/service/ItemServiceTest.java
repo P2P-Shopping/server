@@ -43,9 +43,10 @@ class ItemServiceTest {
     void addItemToListShouldThrowWhenNameIsBlank() {
         ItemRequest request = new ItemRequest();
         request.setName("   ");
+        UUID listId = UUID.randomUUID();
 
         assertThrows(ListValidationException.class,
-                () -> itemService.addItemToList(UUID.randomUUID(), request, "ana@example.com"));
+                () -> itemService.addItemToList(listId, request, "ana@example.com"));
 
         verify(shoppingListRepository, never()).findById(any(UUID.class));
         verify(itemRepository, never()).save(any(Item.class));
@@ -68,9 +69,10 @@ class ItemServiceTest {
     void addItemToListShouldThrowWhenPriceIsNegative() {
         ItemRequest request = buildCreateRequest();
         request.setPrice(new BigDecimal("-1.00"));
+        UUID listId = UUID.randomUUID();
 
         assertThrows(ListValidationException.class,
-                () -> itemService.addItemToList(UUID.randomUUID(), request, "ana@example.com"));
+                () -> itemService.addItemToList(listId, request, "ana@example.com"));
 
         verify(shoppingListRepository, never()).findById(any(UUID.class));
         verify(itemRepository, never()).save(any(Item.class));
@@ -123,22 +125,24 @@ class ItemServiceTest {
     @Test
     void updateItemShouldThrowWhenItemDoesNotExist() {
         UUID itemId = UUID.randomUUID();
+        ItemRequest request = new ItemRequest();
 
         when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
 
         assertThrows(ItemNotFoundException.class,
-                () -> itemService.updateItem(itemId, new ItemRequest(), "ana@example.com"));
+                () -> itemService.updateItem(itemId, request, "ana@example.com"));
     }
 
     @Test
     void updateItemShouldThrowWhenUserDoesNotOwnItem() {
         UUID itemId = UUID.randomUUID();
         Item item = buildItem("owner@example.com");
+        ItemRequest request = new ItemRequest();
 
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
 
         assertThrows(ListAccessDeniedException.class,
-                () -> itemService.updateItem(itemId, new ItemRequest(), "other@example.com"));
+                () -> itemService.updateItem(itemId, request, "other@example.com"));
 
         verify(itemRepository, never()).save(any(Item.class));
     }
