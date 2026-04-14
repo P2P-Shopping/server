@@ -12,6 +12,8 @@ import java.time.Duration;
 @Service
 public class RateLimitingService {
 
+    public static final int MAX_BATCH_SIZE = 1000;
+
     private final Cache<String, Bucket> cache = Caffeine.newBuilder()
             .maximumSize(10_000)
             .expireAfterAccess(Duration.ofMinutes(30))
@@ -22,8 +24,8 @@ public class RateLimitingService {
     }
 
     private Bucket newBucket(String ignoredDeviceId) {
-        // Maximum of 10 requests per second
-        Bandwidth limit = Bandwidth.classic(10, Refill.greedy(10, Duration.ofSeconds(1)));
+        // Maximum requests per second aligned with allowed batch size
+        Bandwidth limit = Bandwidth.classic(MAX_BATCH_SIZE, Refill.greedy(MAX_BATCH_SIZE, Duration.ofSeconds(1)));
         return Bucket.builder().addLimit(limit).build();
     }
 }

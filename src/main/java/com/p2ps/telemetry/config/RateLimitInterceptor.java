@@ -1,6 +1,8 @@
 package com.p2ps.telemetry.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.util.List;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,8 +25,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class RateLimitInterceptor implements HandlerInterceptor {
-
-    private static final int MAX_BATCH_SIZE = 1000;
 
     private final RateLimitingService rateLimitingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -71,21 +71,47 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         int batchSize;
 
         if (requestUri.endsWith("/batch")) {
-            TelemetryBatchDTO batchDTO = objectMapper.readValue(requestBody, TelemetryBatchDTO.class);
-            if (batchDTO.getPings() == null || batchDTO.getPings().isEmpty()) {
+            TelemetryBatchDTO batchDTO;
+            try {
+                batchDTO = objectMapper.readValue(requestBody, TelemetryBatchDTO.class);
+            } catch (IOException ex) {
+                log.warn("[RATE LIMIT] Malformed batch JSON", ex);
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Malformed JSON in request body");
+                return false;
+            } catch (RuntimeException ex) {
+                log.warn("[RATE LIMIT] Error parsing batch payload", ex);
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Invalid batch payload");
+                return false;
+            }
+
+            List<TelemetryPingDTO> pings = batchDTO.getPings();
+            if (pings == null || pings.isEmpty()) {
                 response.sendError(HttpStatus.BAD_REQUEST.value(), "Batch must contain at least one ping");
                 return false;
             }
 
-            batchSize = batchDTO.getPings().size();
-            if (batchSize > MAX_BATCH_SIZE) {
-                response.sendError(HttpStatus.BAD_REQUEST.value(), "Batch exceeds maximum size of " + MAX_BATCH_SIZE);
+            long nonNullPings = pings.stream().filter(Objects::nonNull).count();
+            if (nonNullPings == 0) {
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Batch must contain at least one valid ping");
                 return false;
             }
 
-            Set<String> deviceIds = batchDTO.getPings().stream()
-                    .map(TelemetryPingDTO::getDeviceId)
+            for (TelemetryPingDTO p : pings) {
+                if (p == null || p.getDeviceId() == null || p.getDeviceId().isBlank()) {
+                    response.sendError(HttpStatus.BAD_REQUEST.value(), "Each ping must have a non-null deviceId");
+                    return false;
+                }
+            }
+
+            batchSize = (int) nonNullPings;
+            if (batchSize > RateLimitingService.MAX_BATCH_SIZE) {
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Batch exceeds maximum size of " + RateLimitingService.MAX_BATCH_SIZE);
+                return false;
+            }
+
+            Set<String> deviceIds = pings.stream()
                     .filter(Objects::nonNull)
+                    .map(TelemetryPingDTO::getDeviceId)
                     .collect(Collectors.toSet());
 
             if (deviceIds.size() != 1) {
@@ -95,7 +121,24 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
             deviceId = deviceIds.iterator().next();
         } else {
-            TelemetryPingDTO pingDTO = objectMapper.readValue(requestBody, TelemetryPingDTO.class);
+            TelemetryPingDTO pingDTO;
+            try {
+                pingDTO = objectMapper.readValue(requestBody, TelemetryPingDTO.class);
+            } catch (IOException ex) {
+                log.warn("[RATE LIMIT] Malformed ping JSON", ex);
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Malformed JSON in request body");
+                return false;
+            } catch (RuntimeException ex) {
+                log.warn("[RATE LIMIT] Invalid ping payload", ex);
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Invalid ping payload");
+                return false;
+            }
+
+            if (pingDTO == null || pingDTO.getDeviceId() == null || pingDTO.getDeviceId().isBlank()) {
+                response.sendError(HttpStatus.BAD_REQUEST.value(), "Missing deviceId in request body");
+                return false;
+            }
+
             deviceId = pingDTO.getDeviceId();
             batchSize = 1;
         }
@@ -116,7 +159,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         if (tokenBucket.tryConsume(batchSize)) {
             return true;
         } else {
-            log.warn("[RATE LIMIT] Device {} exceeded 10 req/sec limit for {} pings!", deviceId, batchSize);
+            log.warn("[RATE LIMIT] Device {} exceeded rate limit for {} pings!", deviceId, batchSize);
             response.sendError(HttpStatus.TOO_MANY_REQUESTS.value(), "Rate Limit Exceeded");
             return false;
         }

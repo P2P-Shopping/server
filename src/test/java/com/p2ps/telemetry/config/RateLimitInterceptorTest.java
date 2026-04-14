@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -210,6 +211,35 @@ class RateLimitInterceptorTest {
         telemetryRequest.addHeader("X-Device-Id", "device-2");
 
         assertFalse(interceptor.preHandle(telemetryRequest, new MockHttpServletResponse(), new Object()));
+    }
+
+    @Test
+    void shouldRejectMalformedJsonPing() throws Exception {
+        MockHttpServletRequest telemetryRequest = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
+        telemetryRequest.setContentType("application/json");
+        telemetryRequest.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        telemetryRequest.setContent("{".getBytes(StandardCharsets.UTF_8));
+        telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertFalse(interceptor.preHandle(telemetryRequest, resp, new Object()));
+        assertEquals(400, resp.getStatus());
+    }
+
+    @Test
+    void shouldRejectBatchWithNullPingEntries() throws Exception {
+        String json = "{\"pings\":[null,{\"deviceId\":\"device-1\",\"storeId\":\"store-7\",\"itemId\":\"item-1\",\"lat\":47.151726,\"lng\":27.587914,\"accuracyMeters\":3.5,\"timestamp\":1711888658000}]}";
+        MockHttpServletRequest telemetryRequest = new MockHttpServletRequest("POST", "/api/v1/telemetry/batch");
+        telemetryRequest.setContentType("application/json");
+        telemetryRequest.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        telemetryRequest.setContent(json.getBytes(StandardCharsets.UTF_8));
+        telemetryRequest.addHeader("X-API-Key", "test-telemetry-api-key");
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertFalse(interceptor.preHandle(telemetryRequest, resp, new Object()));
+        assertEquals(400, resp.getStatus());
     }
 
     private RateLimitInterceptor newRateLimitInterceptor(RateLimitingService service) {

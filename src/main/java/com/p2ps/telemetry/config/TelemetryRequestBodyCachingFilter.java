@@ -7,6 +7,7 @@ import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,16 +28,48 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        filterChain.doFilter(new CachedBodyHttpServletRequest(request), response);
+        try {
+            CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(request);
+            filterChain.doFilter(cached, response);
+        } catch (PayloadTooLargeException ex) {
+            response.sendError(HttpStatus.PAYLOAD_TOO_LARGE.value(), "Payload too large");
+        }
     }
 
     private static final class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
+
+        private static final long MAX_BODY_BYTES = 1 * 1024 * 1024L; // 1 MB cap
 
         private final byte[] cachedBody;
 
         private CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
             super(request);
-            this.cachedBody = StreamUtils.copyToByteArray(request.getInputStream());
+            long contentLength = request.getContentLengthLong();
+            if (contentLength > MAX_BODY_BYTES) {
+                throw new PayloadTooLargeException("Declared content-length exceeds limit: " + contentLength);
+            }
+
+            if (contentLength > 0) {
+                byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
+                if (body.length > MAX_BODY_BYTES) {
+                    throw new PayloadTooLargeException("Request body exceeds maximum allowed size");
+                }
+                this.cachedBody = body;
+            } else {
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                ServletInputStream in = request.getInputStream();
+                byte[] buffer = new byte[8192];
+                int read;
+                long total = 0;
+                while ((read = in.read(buffer)) != -1) {
+                    total += read;
+                    if (total > MAX_BODY_BYTES) {
+                        throw new PayloadTooLargeException("Request body exceeds maximum allowed size");
+                    }
+                    baos.write(buffer, 0, read);
+                }
+                this.cachedBody = baos.toByteArray();
+            }
         }
 
         @Override
@@ -77,6 +110,12 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
         @Override
         public void setReadListener(ReadListener readListener) {
             throw new UnsupportedOperationException("Async IO is not supported");
+        }
+    }
+
+    private static final class PayloadTooLargeException extends IOException {
+        public PayloadTooLargeException(String message) {
+            super(message);
         }
     }
 }
