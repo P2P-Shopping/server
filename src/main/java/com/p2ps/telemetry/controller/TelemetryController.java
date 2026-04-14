@@ -20,7 +20,7 @@ public class TelemetryController {
     private final TelemetryService telemetryService;
 
     @PostMapping("/ping")
-    public ResponseEntity<Map<String, String>> receivePing(@RequestBody TelemetryPingDTO pingDTO) {
+    public ResponseEntity<Map<String, String>> receivePing(@Valid @RequestBody TelemetryPingDTO pingDTO) {
         log.info("[API] Ping received for the product: {}", pingDTO.getItemId());
         telemetryService.processPing(pingDTO);
         return ResponseEntity.accepted().body(Map.of("status", "success"));
