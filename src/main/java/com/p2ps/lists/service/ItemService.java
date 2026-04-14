@@ -93,6 +93,17 @@ public class ItemService {
     }
 
     @Transactional
+    public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Item not found"));
+
+        item.setChecked(checked);
+        item.setLastUpdatedTimestamp(clientTimestamp != null ? clientTimestamp : System.currentTimeMillis());
+
+        return mapToDTO(itemRepository.save(item));
+    }
+
+    @Transactional
     public void deleteItem(UUID itemId, String userEmail) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
