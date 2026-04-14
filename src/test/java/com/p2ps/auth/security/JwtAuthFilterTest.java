@@ -1,6 +1,7 @@
 package com.p2ps.auth.security;
 
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -228,6 +229,25 @@ class JwtAuthFilterTest {
 
             assertNotNull(SecurityContextHolder.getContext().getAuthentication());
             assertEquals("test@test.com", SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        }
+
+        @Test
+        void cookieTokenTakesPrecedenceOverHeader() throws Exception {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            request.setCookies(new Cookie("jwt-token", "cookie-token"));
+            request.addHeader("Authorization", "Bearer header-token");
+
+            when(jwtUtil.extractEmail("cookie-token")).thenReturn("cookie@test.com");
+            when(jwtUtil.isTokenExpired("cookie-token")).thenReturn(false);
+
+            jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
+            assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+            assertEquals("cookie@test.com", SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+            verify(jwtUtil, never()).extractEmail("header-token");
+            verify(filterChain).doFilter(request, response);
         }
     }
 }
