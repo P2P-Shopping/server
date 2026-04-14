@@ -2,7 +2,7 @@ package com.p2ps.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -10,7 +10,9 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
+import org.springframework.security.core.Authentication;
 
+import java.security.Principal;
 import java.util.regex.Pattern;
 
 /**
@@ -41,9 +43,14 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
             String destination = accessor.getDestination();
             
             if (destination != null && destination.startsWith("/topic/list/")) {
+                Principal principal = accessor.getUser();
+                if (!(principal instanceof Authentication authentication) || !authentication.isAuthenticated()) {
+                    logger.warn("Security Alert: Blocked subscription attempt without authenticated principal");
+                    return null;
+                }
+
                 String listId = destination.substring("/topic/list/".length());
                 
-                // Security Check: Only allow alphanumeric list IDs (plus hyphens). Prevents directory traversal or wildcard injection.
                 if (!VALID_LIST_ID.matcher(listId).matches()) {
                     logger.warn("Security Alert: Blocked malformed room subscription attempt");
                     return null;

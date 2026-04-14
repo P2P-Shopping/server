@@ -15,13 +15,17 @@ import static org.mockito.Mockito.*;
 
 class WebSocketConfigTest {
 
+    private JwtHandshakeInterceptor handshakeInterceptor;
+    private StompJwtAuthInterceptor stompInterceptor;
     private RoomSubscriptionInterceptor interceptor;
     private WebSocketConfig config;
 
     @BeforeEach
     void setUp() {
+        handshakeInterceptor = mock(JwtHandshakeInterceptor.class);
+        stompInterceptor = mock(StompJwtAuthInterceptor.class);
         interceptor = mock(RoomSubscriptionInterceptor.class);
-        config = new WebSocketConfig(interceptor);
+        config = new WebSocketConfig(handshakeInterceptor, stompInterceptor, interceptor);
     }
 
     @Test
@@ -35,11 +39,13 @@ class WebSocketConfigTest {
         StompWebSocketEndpointRegistration reg = mock(StompWebSocketEndpointRegistration.class);
 
         when(registry.addEndpoint(anyString())).thenReturn(reg);
+        when(reg.addInterceptors(any())).thenReturn(reg);
         when(reg.setAllowedOriginPatterns(any())).thenReturn(reg);
 
         config.registerStompEndpoints(registry);
 
         verify(registry).addEndpoint("/ws");
+        verify(reg).addInterceptors(handshakeInterceptor);
         verify(reg).setAllowedOriginPatterns(allowedOrigins);
         verify(reg).withSockJS();
     }
@@ -60,7 +66,6 @@ class WebSocketConfigTest {
 
         config.configureClientInboundChannel(registration);
 
-        verify(registration).interceptors(interceptor);
+        verify(registration).interceptors(stompInterceptor, interceptor);
     }
 }
-

@@ -1,0 +1,6 @@
+*  @P2P-Shopping/Backend
+
+/env.example @P2P-Shopping/DevOps
+/docs/ @P2P-Shopping/DevOps
+/.github/ @P2P-Shopping/DevOps
+/docker-compose.yml @P2P-Shopping/DevOps

@@ -20,6 +20,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${app.cors.allowed-origins}")
     private String[] allowedOrigins;
 
+    private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
+    private final StompJwtAuthInterceptor stompJwtAuthInterceptor;
     private final RoomSubscriptionInterceptor subscriptionInterceptor;
 
     /**
@@ -27,7 +29,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      * @param subscriptionInterceptor the interceptor validating inbound traffic
      */
     @Autowired
-    public WebSocketConfig(RoomSubscriptionInterceptor subscriptionInterceptor) {
+    public WebSocketConfig(JwtHandshakeInterceptor jwtHandshakeInterceptor,
+                           StompJwtAuthInterceptor stompJwtAuthInterceptor,
+                           RoomSubscriptionInterceptor subscriptionInterceptor) {
+        this.jwtHandshakeInterceptor = jwtHandshakeInterceptor;
+        this.stompJwtAuthInterceptor = stompJwtAuthInterceptor;
         this.subscriptionInterceptor = subscriptionInterceptor;
     }
 
@@ -40,6 +46,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
+                .addInterceptors(jwtHandshakeInterceptor)
                 .setAllowedOriginPatterns(allowedOrigins)
                 .withSockJS();
     }
@@ -62,6 +69,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(subscriptionInterceptor);
+        registration.interceptors(stompJwtAuthInterceptor, subscriptionInterceptor);
     }
 }
