@@ -30,7 +30,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private final RateLimitingService rateLimitingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${TELEMETRY_API_KEY}")
+    @Value("${telemetry.api.key}")
     private String validApiKey;
 
     @PostConstruct
