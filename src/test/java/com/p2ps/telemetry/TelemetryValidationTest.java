@@ -4,20 +4,31 @@ import com.p2ps.telemetry.dto.TelemetryPingDTO;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import jakarta.validation.ConstraintViolation;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryValidationTest {
 
     private Validator validator;
+    private ValidatorFactory factory;
 
     @BeforeEach
     void setUp() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        factory = Validation.buildDefaultValidatorFactory();
         validator = factory.getValidator();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (factory != null) {
+            factory.close();
+        }
     }
 
     @Test
@@ -45,7 +56,8 @@ class TelemetryValidationTest {
         dto.setAccuracyMeters(3.5);
         dto.setTimestamp(1748123456789L);
 
-        assertFalse(validator.validate(dto).isEmpty());
+        Set<ConstraintViolation<TelemetryPingDTO>> violations = validator.validate(dto);
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("lat")), "Expected validation error on property 'lat'");
     }
 
     @Test
@@ -59,7 +71,8 @@ class TelemetryValidationTest {
         dto.setAccuracyMeters(3.5);
         dto.setTimestamp(1748123456789L);
 
-        assertFalse(validator.validate(dto).isEmpty());
+        Set<ConstraintViolation<TelemetryPingDTO>> violations = validator.validate(dto);
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("lng")), "Expected validation error on property 'lng'");
     }
 
     @Test
@@ -73,7 +86,8 @@ class TelemetryValidationTest {
         dto.setAccuracyMeters(3.5);
         dto.setTimestamp(1748123456789L);
 
-        assertFalse(validator.validate(dto).isEmpty());
+        Set<ConstraintViolation<TelemetryPingDTO>> violations = validator.validate(dto);
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("deviceId")), "Expected validation error on property 'deviceId'");
     }
 
     @Test
@@ -87,6 +101,7 @@ class TelemetryValidationTest {
         dto.setAccuracyMeters(3.5);
         dto.setTimestamp(-1L);
 
-        assertFalse(validator.validate(dto).isEmpty());
+        Set<ConstraintViolation<TelemetryPingDTO>> violations = validator.validate(dto);
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("timestamp")), "Expected validation error on property 'timestamp'");
     }
 }
