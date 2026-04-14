@@ -88,4 +88,20 @@ class ShoppingListServiceTest {
         assertTrue(result.stream().map(ShoppingListDTO::getId).toList().contains(firstList.getId()));
         assertTrue(result.stream().map(ShoppingListDTO::getId).toList().contains(secondList.getId()));
     }
+
+    @Test
+    void getUserListsShouldReturnEmptyItemsWhenListHasNoCollection() {
+        String userEmail = "ana@example.com";
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Groceries");
+        list.setItems(null);
+
+        when(shoppingListRepository.findByUser_Email(userEmail)).thenReturn(List.of(list));
+
+        List<ShoppingListDTO> result = shoppingListService.getUserLists(userEmail);
+
+        assertEquals(1, result.size());
+        assertTrue(result.get(0).getItems().isEmpty());
+    }
 }

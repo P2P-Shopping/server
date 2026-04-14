@@ -215,6 +215,43 @@ class ItemServiceTest {
     }
 
     @Test
+    void updateItemShouldAllowNullPriceAndKeepExistingValue() {
+        UUID itemId = UUID.randomUUID();
+        Item existingItem = buildItem("ana@example.com");
+        existingItem.setId(itemId);
+        existingItem.setName("Milk");
+        existingItem.setBrand("Old");
+        existingItem.setPrice(new BigDecimal("3.50"));
+        existingItem.setLastUpdatedTimestamp(10L);
+
+        ItemRequest request = new ItemRequest();
+        request.setBrand("Updated Brand");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(existingItem));
+        when(itemRepository.save(existingItem)).thenReturn(existingItem);
+
+        ItemDTO result = itemService.updateItem(itemId, request, "ana@example.com");
+
+        assertEquals(new BigDecimal("3.50"), result.getPrice());
+        assertEquals("Updated Brand", result.getBrand());
+    }
+
+    @Test
+    void updateItemStatusShouldUseServerTimestampWhenClientTimestampMissing() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem("ana@example.com");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        long beforeUpdate = System.currentTimeMillis();
+        ItemDTO result = itemService.updateItemStatus(itemId, true, null);
+
+        assertTrue(result.isChecked());
+        assertTrue(result.getLastUpdatedTimestamp() >= beforeUpdate);
+    }
+
+    @Test
     void deleteItemShouldThrowWhenItemDoesNotExist() {
         UUID itemId = UUID.randomUUID();
 
