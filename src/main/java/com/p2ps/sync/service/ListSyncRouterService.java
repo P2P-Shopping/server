@@ -18,15 +18,19 @@ public class ListSyncRouterService {
 
     private final ListSyncStore listSyncStore;
 
-    public ListSyncRouterService() {
+    ListSyncRouterService() {
         this(new InMemoryListSyncStore());
     }
 
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
-        this.listSyncStore = new LockingListSyncStore(listSyncStore);
+        this.listSyncStore = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
     }
 
+    /**
+     * Routes list update payloads to the configured store.
+     * Payload is required; listId is optional so blank destinations are ignored and the payload is returned unchanged.
+     */
     public ListUpdatePayload route(String listId, ListUpdatePayload payload) {
         if (payload == null) {
             throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
@@ -63,11 +67,11 @@ public class ListSyncRouterService {
     }
 
     private static final class InMemoryListSyncStore implements ListSyncStore {
-
         @Override
         public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
             return payload;
         }
+
     }
 
     private static final class LockingListSyncStore implements ListSyncStore {
@@ -105,8 +109,7 @@ public class ListSyncRouterService {
                 }
 
                 long currentTime = System.currentTimeMillis();
-                long lockExpiry = System.currentTimeMillis() + LOCK_WINDOW_MILLIS;
-                state.lockedUntilMillis = lockExpiry;
+                state.lockedUntilMillis = currentTime + LOCK_WINDOW_MILLIS;
                 Long timestamp = payload.getTimestamp();
                 if (timestamp != null && timestamp <= state.lastTimestamp) {
                     payload.setChecked(state.checked);

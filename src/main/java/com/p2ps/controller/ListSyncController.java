@@ -4,11 +4,11 @@ import com.p2ps.dto.ListUpdatePayload;
 import com.p2ps.sync.service.ListSyncRouterService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Controller;
-import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * WebSocket controller responsible for routing list-specific synchronization messages.
@@ -20,10 +20,6 @@ public class ListSyncController {
     private static final Logger logger = LoggerFactory.getLogger(ListSyncController.class);
 
     private final ListSyncRouterService listSyncRouterService;
-
-    public ListSyncController() {
-        this(new ListSyncRouterService());
-    }
 
     @Autowired
     public ListSyncController(ListSyncRouterService listSyncRouterService) {
@@ -43,6 +39,7 @@ public class ListSyncController {
             logger.warn("Received null payload for list update on room");
             throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
         }
+
         logger.debug("Routing action for room");
         return listSyncRouterService.route(listId, payload);
     }
