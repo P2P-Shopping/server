@@ -1,33 +1,44 @@
 package com.p2ps.telemetry.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2ps.telemetry.dto.TelemetryPingDTO;
+import com.p2ps.exception.GlobalExceptionHandler;
 import com.p2ps.telemetry.services.TelemetryService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = TelemetryController.class)
 class TelemetryControllerMvcTest {
 
-    @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
+    private TelemetryService telemetryService;
     private ObjectMapper objectMapper;
 
-    @MockBean
-    private TelemetryService telemetryService;
+    @BeforeEach
+    void setUp() {
+        telemetryService = mock(TelemetryService.class);
+        // instantiate controller with mocked service
+        TelemetryController controller = new TelemetryController(telemetryService);
+
+        // configure a Validator so @Valid works in standalone MockMvc
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .setValidator(validator)
+                .build();
+
+        objectMapper = new ObjectMapper();
+    }
 
     @Test
     void shouldReturn400WhenPayloadIsInvalid() throws Exception {
@@ -41,6 +52,6 @@ class TelemetryControllerMvcTest {
                 .andExpect(content().string(containsString("Validation Error")));
 
         // Ensure controller's service is not invoked when validation fails
-        verify(telemetryService, times(0)).processPing((TelemetryPingDTO) org.mockito.Mockito.any());
+        verify(telemetryService, times(0)).processPing(any());
     }
 }
