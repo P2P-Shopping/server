@@ -11,10 +11,15 @@ import com.fasterxml.jackson.annotation.Nulls;
  */
 public class ListUpdatePayload {
 
+    public static final String STATUS_SUCCESS = "Success";
+    public static final String STATUS_REJECTION = "Rejection";
+
     private ActionType action = ActionType.UNKNOWN;
     private String itemId;
     private String content;
     private Boolean checked;
+    private Long timestamp;
+    private String status;
 
     public ListUpdatePayload() {}
 
@@ -74,5 +79,26 @@ public class ListUpdatePayload {
     @JsonAlias({"isChecked", "completed"})
     public void setChecked(Boolean checked) {
         this.checked = checked;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        if (status != null
+                && !STATUS_SUCCESS.equals(status)
+                && !STATUS_REJECTION.equals(status)) {
+            throw new IllegalArgumentException("Unsupported status: " + status);
+        }
+        this.status = status;
     }
 }

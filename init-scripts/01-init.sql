@@ -9,7 +9,10 @@ CREATE TABLE items (
     name        VARCHAR(255) NOT NULL,
     category    VARCHAR(100),
     upc_code    VARCHAR(50),
-    created_at  TIMESTAMP DEFAULT NOW()
+    created_at  TIMESTAMP DEFAULT NOW(),
+    is_checked  BOOLEAN NOT NULL DEFAULT FALSE,
+    last_updated_timestamp BIGINT,
+    version     BIGINT DEFAULT 0
 );
 
 -- ============================================================
@@ -76,20 +79,3 @@ CREATE INDEX idx_store_inventory_map_location
 -- (query-uri de tipul: "produsele din magazinul X cu confidence > 0.7")
 CREATE INDEX idx_store_inventory_map_store_confidence
     ON store_inventory_map (store_id, confidence_score);
-
--- ============================================================
--- ROOM_ITEM_STATES (starea sincronizata a listelor pe room)
--- ============================================================
-CREATE TABLE room_item_states (
-    id              VARCHAR(36) PRIMARY KEY,
-    list_id         VARCHAR(128) NOT NULL,
-    item_id         VARCHAR(128) NOT NULL,
-    content         VARCHAR(512),
-    checked         BOOLEAN NOT NULL DEFAULT FALSE,
-    last_updated    TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    UNIQUE (list_id, item_id)
-);
-
-CREATE INDEX idx_room_item_states_list_id
-    ON room_item_states (list_id);

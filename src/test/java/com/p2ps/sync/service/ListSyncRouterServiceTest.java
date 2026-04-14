@@ -21,6 +21,7 @@ class ListSyncRouterServiceTest {
         payload.setItemId("item-1");
         payload.setContent("Milk");
         payload.setChecked(Boolean.TRUE);
+        payload.setTimestamp(100L);
 
         ListUpdatePayload result = routerService.route("list-1", payload);
 
@@ -96,7 +97,24 @@ class ListSyncRouterServiceTest {
 
         assertSame(payload, result);
         assertNull(payload.getContent());
+        assertNull(payload.getChecked());
         assertEquals(1, store.invocationCount);
+    }
+
+    @Test
+    void rejectsCheckOffWithoutExplicitCheckedValue() {
+        RecordingStore store = new RecordingStore();
+        ListSyncRouterService routerService = new ListSyncRouterService(store);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CHECK_OFF);
+        payload.setItemId("item-1");
+
+        ListUpdatePayload result = routerService.route("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
+        assertEquals(0, store.invocationCount);
     }
 
     @Test
@@ -108,6 +126,7 @@ class ListSyncRouterServiceTest {
         add.setItemId("item-1");
         add.setContent("Milk");
         add.setChecked(Boolean.FALSE);
+        add.setTimestamp(100L);
 
         ListUpdatePayload added = routerService.route("list-1", add);
         assertSame(add, added);
@@ -117,15 +136,18 @@ class ListSyncRouterServiceTest {
         ListUpdatePayload toggle = new ListUpdatePayload();
         toggle.setAction(ActionType.CHECK_OFF);
         toggle.setItemId("item-1");
+        toggle.setChecked(Boolean.TRUE);
+        toggle.setTimestamp(200L);
 
         ListUpdatePayload toggled = routerService.route("list-1", toggle);
         assertSame(toggle, toggled);
-        assertEquals("Milk", toggle.getContent());
         assertEquals(Boolean.TRUE, toggle.getChecked());
 
         ListUpdatePayload delete = new ListUpdatePayload();
         delete.setAction(ActionType.DELETE);
         delete.setItemId("item-1");
+        delete.setChecked(Boolean.TRUE);
+        delete.setTimestamp(300L);
 
         ListUpdatePayload deleted = routerService.route("list-1", delete);
         assertSame(delete, deleted);
@@ -134,6 +156,8 @@ class ListSyncRouterServiceTest {
         update.setAction(ActionType.UPDATE);
         update.setItemId("item-1");
         update.setContent("Bread");
+        update.setChecked(Boolean.FALSE);
+        update.setTimestamp(400L);
 
         ListUpdatePayload updated = routerService.route("list-1", update);
         assertSame(update, updated);
