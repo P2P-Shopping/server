@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ShoppingListService {
@@ -46,7 +45,7 @@ public class ShoppingListService {
         return shoppingListRepository.findByUser_Email(userEmail)
                 .stream()
                 .map(this::mapToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {
