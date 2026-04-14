@@ -28,5 +28,15 @@ public class RoutingRequest {
     private double userLng;
     private List<String> productIds;
 
+    // Provide explicit getters/setters to ensure Lombok-less environments (and IDEs) see them
+    public double getUserLat() { return this.userLat; }
+    public void setUserLat(double userLat) { this.userLat = userLat; }
+
+    public double getUserLng() { return this.userLng; }
+    public void setUserLng(double userLng) { this.userLng = userLng; }
+
+    public List<String> getProductIds() { return this.productIds; }
+    public void setProductIds(List<String> productIds) { this.productIds = productIds; }
+
 
 }
