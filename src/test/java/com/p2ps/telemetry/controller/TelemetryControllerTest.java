@@ -73,7 +73,7 @@ class TelemetryControllerTest {
                 telemetryController.getPings("store-001", "pasta");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assert response.getBody() != null;
+        assertNotNull(response.getBody());
         assertEquals(1, response.getBody().size());
     }
 
