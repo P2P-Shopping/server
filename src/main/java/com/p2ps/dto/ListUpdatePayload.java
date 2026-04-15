@@ -1,5 +1,6 @@
 package com.p2ps.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 
@@ -9,9 +10,15 @@ import com.fasterxml.jackson.annotation.Nulls;
  */
 public class ListUpdatePayload {
 
+    public static final String STATUS_SUCCESS = "Success";
+    public static final String STATUS_REJECTION = "Rejection";
+
     private ActionType action = ActionType.UNKNOWN;
     private String itemId;
     private String content;
+    private Boolean checked;
+    private Long timestamp;
+    private String status;
 
     /**
      * Default constructor required for JSON deserialization by Jackson.
@@ -26,6 +33,7 @@ public class ListUpdatePayload {
         return action;
     }
 
+    @JsonAlias({"actionType", "action_type"})
     @JsonSetter(nulls = Nulls.AS_EMPTY)
     public void setAction(ActionType action) {
         this.action = action == null ? ActionType.UNKNOWN : action;
@@ -53,5 +61,35 @@ public class ListUpdatePayload {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public Boolean getChecked() {
+        return checked;
+    }
+
+    @JsonAlias({"isChecked", "completed"})
+    public void setChecked(Boolean checked) {
+        this.checked = checked;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        if (status != null
+                && !STATUS_SUCCESS.equals(status)
+                && !STATUS_REJECTION.equals(status)) {
+            throw new IllegalArgumentException("Unsupported status: " + status);
+        }
+        this.status = status;
     }
 }

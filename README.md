@@ -11,6 +11,8 @@ To use it, run with the `local` Spring profile:
 SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ```
 
+The local profile uses `spring.jpa.hibernate.ddl-auto=update` so Hibernate can create or adjust the schema during development.
+
 In IntelliJ IDEA, you can set this up by following these steps:
 
 - Click the configurations dropdown
