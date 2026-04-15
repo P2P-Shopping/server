@@ -1,6 +1,7 @@
 package com.p2ps.auth.security;
 
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -228,6 +229,66 @@ class JwtAuthFilterTest {
 
             assertNotNull(SecurityContextHolder.getContext().getAuthentication());
             assertEquals("test@test.com", SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        }
+
+        @Test
+        void cookieTokenTakesPrecedenceOverHeader() throws Exception {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            request.setCookies(new Cookie("jwt-token", "cookie-token"));
+            request.addHeader("Authorization", "Bearer header-token");
+
+            when(jwtUtil.extractEmail("cookie-token")).thenReturn("cookie@test.com");
+            when(jwtUtil.isTokenExpired("cookie-token")).thenReturn(false);
+
+            jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
+            assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+            assertEquals("cookie@test.com", SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+            verify(jwtUtil, never()).extractEmail("header-token");
+            verify(filterChain).doFilter(request, response);
+        }
+    }
+
+    @Nested
+    class ShouldNotFilter {
+
+        @Test
+        void knownWhitelistedPaths_AreSkipped() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+
+            request.setRequestURI("/");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/api/auth/login");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/ws/endpoint");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/swagger-ui/index.html");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/swagger-ui.html");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/v3/api-docs");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/v3/api-docs/openapi");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/api/routing/lookup");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+        }
+
+        @Test
+        void otherPaths_AreNotSkipped() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+
+            request.setRequestURI("/api/products/list");
+            assertFalse(jwtAuthFilter.shouldNotFilter(request));
         }
     }
 }
