@@ -39,6 +39,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +55,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 21
-          distribution: 'temurin'
+          distribution: "temurin"
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -63,6 +72,14 @@ jobs:
       - name: Run tests
         env:
           SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/p2p_shopping_test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/p2p_shopping_test
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.H2Dialect
+          SPRING_TEST_DATABASE_REPLACE: NONE
+          SPRING_DATA_REDIS_HOST: localhost
+          SPRING_DATA_REDIS_PORT: 6379
         run: ./gradlew test --info
 
       - name: Upload test reports
