@@ -63,6 +63,36 @@ class TelemetryControllerTest {
     }
 
     @Test
+    void getPings_shouldReturn200WithRecords() {
+        com.p2ps.telemetry.model.TelemetryRecord telemetryRecord = new com.p2ps.telemetry.model.TelemetryRecord();
+        ReflectionTestUtils.setField(telemetryRecord, "storeId", "store-001");
+        ReflectionTestUtils.setField(telemetryRecord, "itemId", "pasta");
+
+        org.mockito.Mockito.when(telemetryService.getPings("store-001", "pasta"))
+                .thenReturn(java.util.List.of(telemetryRecord));
+
+        ResponseEntity<java.util.List<com.p2ps.telemetry.model.TelemetryRecord>> response =
+                telemetryController.getPings("store-001", "pasta");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().size());
+    }
+
+    @Test
+    void getPings_shouldReturnEmptyListWhenNoRecordsFound() {
+        org.mockito.Mockito.when(telemetryService.getPings("store-999", "unknown"))
+                .thenReturn(java.util.List.of());
+
+        ResponseEntity<java.util.List<com.p2ps.telemetry.model.TelemetryRecord>> response =
+                telemetryController.getPings("store-999", "unknown");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assert response.getBody() != null;
+        assertEquals(0, response.getBody().size());
+    }
+
+    @Test
     void shouldAcceptBatchAndReturnSuccessStatus() {
         TelemetryPingDTO first = new TelemetryPingDTO();
         ReflectionTestUtils.setField(first, "deviceId", "device-1");

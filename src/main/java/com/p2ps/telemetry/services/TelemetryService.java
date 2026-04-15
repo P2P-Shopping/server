@@ -62,4 +62,9 @@ public class TelemetryService {
         telemetryRecord.setServerReceivedTimestamp(Instant.now());
         return telemetryRecord;
     }
+
+    public List<TelemetryRecord> getPings(String storeId, String itemId) {
+        log.info("[SERVICE] Getting pings for storeId: {}, itemId: {}", storeId, itemId);
+        return telemetryRepository.findByStoreIdAndItemId(storeId, itemId);
+    }
 }

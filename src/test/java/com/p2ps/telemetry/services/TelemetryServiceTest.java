@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
+import java.util.List;
+import static org.mockito.Mockito.when;
+
 @ExtendWith(MockitoExtension.class)
 class TelemetryServiceTest {
 
@@ -134,5 +137,20 @@ class TelemetryServiceTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Failed to create TelemetryService", e);
         }
+    }
+
+    @Test
+    void shouldReturnPingsForStoreAndItem() {
+        TelemetryRecord telemetryRecord = new TelemetryRecord();
+        ReflectionTestUtils.setField(telemetryRecord, "storeId", "store-001");
+        ReflectionTestUtils.setField(telemetryRecord, "itemId", "pasta");
+
+        when(telemetryRepository.findByStoreIdAndItemId("store-001", "pasta"))
+                .thenReturn(List.of(telemetryRecord));
+
+        List<TelemetryRecord> result = telemetryService.getPings("store-001", "pasta");
+
+        assertEquals(1, result.size());
+        assertEquals("pasta", ReflectionTestUtils.getField(result.getFirst(), "itemId"));
     }
 }
