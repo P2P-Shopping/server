@@ -88,6 +88,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
+        // avoid NPE when tests (or callers) pass null
+        if (ex == null) {
+            ErrorResponse error = new ErrorResponse(
+                    "Internal Server Error",
+                    "An unexpected error occurred."
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+
         //Log the full error internally (for the backend team to see)
         logger.error("Unhandled exception occurred:", ex);
 
