@@ -6,30 +6,30 @@ import lombok.Data;
 @Data
 public class TelemetryPingDTO {
 
-    @NotBlank(message = "deviceId is required")
+@NotBlank(message = "Device ID is mandatory and cannot be blank")
     private String deviceId;
 
-    @NotBlank(message = "storeId is required")
+    @NotBlank(message = "Store ID is mandatory and cannot be blank")
     private String storeId;
 
-    @NotBlank(message = "itemId is required")
+    @NotBlank(message = "Item ID is mandatory and cannot be blank")
     private String itemId;
 
-    @NotNull(message = "lat is required")
-    @DecimalMin(value = "-90.0", message = "lat must be between -90 and 90")
-    @DecimalMax(value = "90.0", message = "lat must be between -90 and 90")
+    @NotNull(message = "Latitude is mandatory")
+    @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+    @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
     private Double lat;
 
-    @NotNull(message = "lng is required")
-    @DecimalMin(value = "-180.0", message = "lng must be between -180 and 180")
-    @DecimalMax(value = "180.0", message = "lng must be between -180 and 180")
+    @NotNull(message = "Longitude is mandatory")
+    @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+    @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
     private Double lng;
 
-    @NotNull(message = "accuracyMeters is required")
-    @Positive(message = "accuracyMeters must be positive")
+    @NotNull(message = "Accuracy (in meters) is required")
+    @Positive(message = "Accuracy (in meters) must be a positive number")
     private Double accuracyMeters;
 
-    @NotNull(message = "timestamp is required")
-    @Positive(message = "timestamp must be a valid positive number")
+    @NotNull(message = "Timestamp is mandatory")
+    @Positive(message = "Timestamp must be a valid positive number")
     private Long timestamp;
 }
