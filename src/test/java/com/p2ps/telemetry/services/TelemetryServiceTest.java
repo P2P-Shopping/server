@@ -1,6 +1,7 @@
 package com.p2ps.telemetry.services;
 
 import com.p2ps.telemetry.dto.TelemetryPingDTO;
+import com.p2ps.telemetry.dto.TelemetryBatchDTO;
 import com.p2ps.telemetry.model.TelemetryRecord;
 import com.p2ps.telemetry.repository.TelemetryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -81,6 +83,35 @@ class TelemetryServiceTest {
         assertNull(ReflectionTestUtils.getField(saved, "accuracyMeters"));
         assertNull(ReflectionTestUtils.getField(saved, "timestamp"));
         assertNotNull(ReflectionTestUtils.getField(saved, "serverReceivedTimestamp"));
+    }
+
+    @Test
+    void shouldMapIncomingBatchToTelemetryRecordsAndInsertThem() {
+        TelemetryBatchDTO batchDTO = new TelemetryBatchDTO();
+        ReflectionTestUtils.setField(batchDTO, "pings", List.of(buildPingDto(), buildPingDto()));
+
+        telemetryService.processBatch(batchDTO);
+
+        ArgumentCaptor<List<TelemetryRecord>> captor = ArgumentCaptor.forClass(List.class);
+        verify(telemetryRepository).insert(captor.capture());
+
+        java.util.List<TelemetryRecord> records = captor.getValue();
+        assertEquals(2, records.size());
+        assertEquals("device-1", ReflectionTestUtils.getField(records.get(0), "deviceId"));
+        assertEquals("item-101", ReflectionTestUtils.getField(records.get(1), "itemId"));
+        assertNotNull(ReflectionTestUtils.getField(records.get(0), "serverReceivedTimestamp"));
+        assertNotNull(ReflectionTestUtils.getField(records.get(1), "serverReceivedTimestamp"));
+    }
+
+    @Test
+    void shouldHandleBatchRepositoryFailureWithoutThrowing() {
+        TelemetryBatchDTO batchDTO = new TelemetryBatchDTO();
+        ReflectionTestUtils.setField(batchDTO, "pings", List.of(buildPingDto()));
+        doThrow(new RuntimeException("Mongo unavailable")).when(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
+
+        telemetryService.processBatch(batchDTO);
+
+        verify(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
     }
 
     private TelemetryPingDTO buildPingDto() {
