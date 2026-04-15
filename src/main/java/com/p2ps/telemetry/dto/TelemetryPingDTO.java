@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 public class TelemetryPingDTO {
 
-    @NotBlank(message = "Device ID is mandatory and cannot be blank")
+@NotBlank(message = "Device ID is mandatory and cannot be blank")
     private String deviceId;
 
     @NotBlank(message = "Store ID is mandatory and cannot be blank")
@@ -16,18 +16,20 @@ public class TelemetryPingDTO {
     private String itemId;
 
     @NotNull(message = "Latitude is mandatory")
-    @Min(value = -90, message = "Minimum valid latitude is -90")
-    @Max(value = 90, message = "Maximum valid latitude is 90")
+    @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+    @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
     private Double lat;
 
     @NotNull(message = "Longitude is mandatory")
-    @Min(value = -180, message = "Minimum valid longitude is -180")
-    @Max(value = 180, message = "Maximum valid longitude is 180")
+    @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+    @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
     private Double lng;
 
-    @PositiveOrZero(message = "Accuracy (in meters) must be zero or a positive number")
+    @NotNull(message = "Accuracy (in meters) is required")
+    @Positive(message = "Accuracy (in meters) must be a positive number")
     private Double accuracyMeters;
 
     @NotNull(message = "Timestamp is mandatory")
+    @Positive(message = "Timestamp must be a valid positive number")
     private Long timestamp;
 }

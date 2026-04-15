@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import com.p2ps.telemetry.dto.TelemetryPingDTO;
 import com.p2ps.telemetry.dto.TelemetryBatchDTO;
 import com.p2ps.telemetry.services.TelemetryService;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
