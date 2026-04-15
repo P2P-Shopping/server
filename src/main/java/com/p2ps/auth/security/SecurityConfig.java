@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/telemetry/**").permitAll() // exception for hardware devices
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/api/routing/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
