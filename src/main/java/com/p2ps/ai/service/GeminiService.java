@@ -66,26 +66,25 @@ public class GeminiService {
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
         try {
-            // Real HTTP call
             ResponseEntity<String> response = restTemplate.postForEntity(finalUrl, requestEntity, String.class);
-
-            // Get the relevant information from JSON sent by Google
             JsonNode rootNode = objectMapper.readTree(response.getBody());
 
-            // Path in the JSON returned by Gemini: candidates[0].content.parts[0].text
-            String extractedJsonArray = rootNode
-                    .path("candidates")
-                    .get(0)
-                    .path("content")
-                    .path("parts")
-                    .get(0)
-                    .path("text")
-                    .asText();
+            JsonNode candidates = rootNode.path("candidates");
+            if (candidates.isMissingNode() || !candidates.isArray() || candidates.isEmpty()) {
+                throw new AiProcessingException("Google API returned an empty response or blocked the request.");
+            }
 
-            return extractedJsonArray;
+            JsonNode parts = candidates.get(0).path("content").path("parts");
+            if (parts.isMissingNode() || !parts.isArray() || parts.isEmpty()) {
+                throw new AiProcessingException("Google API returned no text parts in the candidate.");
+            }
 
+            return parts.get(0).path("text").asText();
+
+        } catch (AiProcessingException e) {
+            throw e;
         } catch (Exception e) {
-                 throw new AiProcessingException("Could not communicate with Google Gemini API: " + e.getMessage(), e);
+            throw new AiProcessingException("Could not communicate with Google Gemini API: " + e.getMessage(), e);
         }
     }
 }

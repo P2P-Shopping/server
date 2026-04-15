@@ -12,7 +12,7 @@ public class RecipeRequest {
    @Size(max = 255, message = "List title is too long. Maximum permitted number of characters is 255.")
    private String newListTitle;
 
-   @NotBlank(message = "Recipe text cannot be null.")
+   @NotBlank(message = "Recipe text cannot be empty.")
    @Size(max = 5000, message = "Text is too long. Maximum permitted number of characters is 5000.")
    private String text;
 }

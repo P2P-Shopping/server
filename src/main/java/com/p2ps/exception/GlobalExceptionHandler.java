@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.HashMap;
 import java.util.Map;
 
 // Catches all exceptions and returns a clean JSON response
@@ -87,14 +88,13 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AiProcessingException.class)
-    public ResponseEntity<ErrorResponse> handleAiProcessingException(AiProcessingException ex) {
-        // Using ErrorResponse like throughout the app
-        ErrorResponse errorResponse = new ErrorResponse(
-                "AI Processing Failed",
-                ex.getMessage()
-        );
-        //Sends 422 Unprocessable Entity or 400 Bad Request
-        return new ResponseEntity<>(errorResponse, HttpStatus.UNPROCESSABLE_ENTITY);
+    public ResponseEntity<Map<String, String>> handleAiProcessingException(AiProcessingException ex) {
+        logger.error("AI Processing failed: {}", ex.getMessage(), ex);
+
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("message", "AI Processing Failed");
+        errorResponse.put("details", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)
