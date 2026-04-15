@@ -86,6 +86,17 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(AiProcessingException.class)
+    public ResponseEntity<ErrorResponse> handleAiProcessingException(AiProcessingException ex) {
+        // Using ErrorResponse like throughout the app
+        ErrorResponse errorResponse = new ErrorResponse(
+                "AI Processing Failed",
+                ex.getMessage()
+        );
+        //Sends 422 Unprocessable Entity or 400 Bad Request
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
         //Log the full error internally (for the backend team to see)
