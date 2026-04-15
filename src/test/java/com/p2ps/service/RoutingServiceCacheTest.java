@@ -9,8 +9,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.cache.interceptor.SimpleKey;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
@@ -43,8 +43,8 @@ class RoutingServiceCacheTest {
     @Autowired
     private CacheManager cacheManager;
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private org.springframework.core.env.Environment environment;
+    @Autowired
+    private Environment environment;
 
     @Container
     public static GenericContainer<?> redis = new GenericContainer<>("redis:7.2.6").withExposedPorts(6379);

@@ -3,6 +3,8 @@ package com.p2ps.service;
 import com.p2ps.controller.RoutingRequest;
 import com.p2ps.controller.RoutingResponse;
 import com.p2ps.controller.RoutePoint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -12,10 +14,12 @@ import java.util.List;
 @Service
 public class RoutingService {
 
+    private static final Logger logger = LoggerFactory.getLogger(RoutingService.class);
+
     @Cacheable(value = "routes",  key = "#request != null ? #request.hashCode() : 0")
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
         // Dev 1 will put their TSP algorithm logic inside here instead of the mock data.
-        System.out.println(">>> CALCULEZ RUTA ACUM! A DURAT MULT... <<<");
+        logger.info(">>> CALCULEZ RUTA ACUM! A DURAT MULT... <<<");
         double userLat = 47.151726; // sensible default used in tests/fixtures
         double userLng = 27.587914;
 
