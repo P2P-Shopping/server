@@ -6,36 +6,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
-import com.p2ps.lists.dto.ItemRequest;
-import com.p2ps.lists.dto.ShoppingListDTO;
-import com.p2ps.lists.service.ItemService;
-import com.p2ps.lists.service.ShoppingListService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class AiOrchestrationService {
 
     private final GeminiService geminiService;
-    private final ShoppingListService shoppingListService;
-    private final ItemService itemService;
+    private final AiPersistenceService aiPersistenceService;
     private final ObjectMapper objectMapper;
 
-    public AiOrchestrationService(GeminiService geminiService, ShoppingListService shoppingListService, ItemService itemService, java.util.Optional<ObjectMapper> objectMapper) {
+    public AiOrchestrationService(GeminiService geminiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
         this.geminiService = geminiService;
-        this.shoppingListService = shoppingListService;
-        this.itemService = itemService;
-        this.objectMapper = objectMapper.orElseGet(() -> new ObjectMapper());
+        this.aiPersistenceService = aiPersistenceService;
+        this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
 
     public List<ParsedItemResponse> processRecipeAndPopulateList(RecipeRequest request, String userEmail) {
-        UUID targetListId = request.getListId();
-
-        // Perform external call and JSON parsing outside of any DB transaction
         List<ParsedItemResponse> parsedItems = parseIngredientsFromText(request.getText());
 
         List<ParsedItemResponse> validItems = new ArrayList<>();
@@ -47,66 +37,28 @@ public class AiOrchestrationService {
         }
 
         if (validItems.isEmpty()) {
-            throw new AiProcessingException("AI did not return any valid ingredients to add to a list");
+            throw new AiProcessingException("AI did not return any valid ingredients to add to a list", HttpStatus.UNPROCESSABLE_ENTITY);
         }
 
-        // Delegate DB work into a transactional method
-        createListAndPopulateItems(targetListId, request.getNewListTitle(), validItems, userEmail);
+        aiPersistenceService.createListAndPopulateItems(request.getListId(), request.getNewListTitle(), validItems, userEmail);
 
         return validItems;
     }
 
-    /**
-     * Calls the external Gemini API and parses+validates the returned JSON.
-     * This method intentionally does not participate in a transaction.
-     */
     private List<ParsedItemResponse> parseIngredientsFromText(String text) {
         String jsonResult = geminiService.extractIngredientsAsJson(text);
 
         List<ParsedItemResponse> parsedItems;
         try {
-            parsedItems = objectMapper.readValue(
-                    jsonResult,
-                    new TypeReference<List<ParsedItemResponse>>() {}
-            );
+            parsedItems = objectMapper.readValue(jsonResult, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
-            throw new AiProcessingException("AI could not return a correctly structured list", e);
+            throw new AiProcessingException("AI could not return a correctly structured list", e, HttpStatus.UNPROCESSABLE_ENTITY);
         }
 
         if (parsedItems == null) {
-            throw new AiProcessingException("AI returned a null payload instead of a list of items");
+            throw new AiProcessingException("AI returned a null payload instead of a list of items", HttpStatus.UNPROCESSABLE_ENTITY);
         }
 
         return parsedItems;
-    }
-
-    @Transactional
-    public void createListAndPopulateItems(UUID targetListId, String newListTitle, List<ParsedItemResponse> validItems, String userEmail) {
-        // Only create the list if we have valid items and there's no target list yet
-        if (targetListId == null) {
-            String title = (newListTitle != null && !newListTitle.isBlank())
-                    ? newListTitle
-                    : "AI Generated " + java.time.LocalDate.now();
-            ShoppingListDTO newList = shoppingListService.createList(title, userEmail);
-            targetListId = newList.getId();
-        }
-
-        // Build batch of ItemRequest and persist in one call
-        List<ItemRequest> batchItems = new ArrayList<>();
-        for (ParsedItemResponse aiItem : validItems) {
-            ItemRequest newItem = new ItemRequest();
-            newItem.setName(aiItem.getName().trim());
-
-            String quantityStr = (aiItem.getQuantity() != null ? String.valueOf(aiItem.getQuantity()) : "");
-            String unitStr = (aiItem.getUnit() != null ? aiItem.getUnit() : "");
-            newItem.setQuantity((quantityStr + " " + unitStr).trim());
-            newItem.setCategory("AI Generated");
-
-            batchItems.add(newItem);
-        }
-
-        if (!batchItems.isEmpty()) {
-            itemService.addItemsToList(targetListId, batchItems, userEmail);
-        }
     }
 }
