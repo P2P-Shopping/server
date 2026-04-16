@@ -19,8 +19,8 @@ public class DataDecayService {
     public void executeDataDecay() {
         System.out.println(">>> STARTING DATA DECAY CRON JOB <<<");
 
-        // Definim logica: penalizăm cu 10 puncte tot ce e mai vechi de 7 zile
-        Double penalty = 10.0;
+        // Definim logica: penalizăm cu 0.1 puncte tot ce e mai vechi de 7 zile
+        Double penalty = 0.1;
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(7);
 
         int updatedRecords = repository.applyDecayToOldRecords(penalty, cutoffDate);
