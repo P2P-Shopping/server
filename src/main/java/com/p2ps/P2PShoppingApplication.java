@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @SpringBootApplication
 @EnableAsync
 @EnableCaching
+@EnableScheduling
 public class P2PShoppingApplication {
 
     public static void main(String[] args) {
