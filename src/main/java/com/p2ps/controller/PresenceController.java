@@ -37,6 +37,13 @@ public class PresenceController {
      */
     @MessageMapping("/list/{listId}/presence")
     public void handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
+        if (payload == null) {
+            logger.warn("Received null presence payload for room length {}", listId != null ? listId.length() : 0);
+            return;
+        }
+
+        payload.setListId(listId);
+
         if (logger.isDebugEnabled()) {
             logger.debug("Routing presence event type {} for room length {}", 
                 payload.getEventType() != null ? payload.getEventType().name() : "UNKNOWN", 

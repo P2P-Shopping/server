@@ -9,7 +9,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,10 +36,19 @@ class PresenceControllerTest {
     @Test
     void handlePresenceEvent_ShouldRouteCorrectlyWithoutDatabase() {
         String testListId = "1234-abcd";
+        samplePayload.setListId("mismatched-id");
 
         presenceController.handlePresenceEvent(testListId, samplePayload);
 
+        assertEquals(testListId, samplePayload.getListId());
         verify(messagingTemplate).convertAndSend("/topic/list/" + testListId + "/presence", samplePayload);
         verifyNoMoreInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_WithNullPayload_ShouldNotSendMessage() {
+        presenceController.handlePresenceEvent("1234-abcd", null);
+
+        verifyNoInteractions(messagingTemplate);
     }
 }
