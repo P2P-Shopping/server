@@ -14,9 +14,7 @@ public class LocationProcessorWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    // Am schimbat 'fixedRate' cu 'fixedDelay'.
-    // Acum, cronometrul de 5 minute (300.000 ms) pornește abia DUPĂ ce metoda s-a terminat cu succes.
-    @Scheduled(fixedDelay = 300000)
+  
     @Transactional
     public void processAndCalculateCenters() {
         System.out.println("⏳ [Worker] Începem recalcularea centrelor absolute...");
