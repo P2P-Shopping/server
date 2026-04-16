@@ -250,4 +250,45 @@ class JwtAuthFilterTest {
             verify(filterChain).doFilter(request, response);
         }
     }
+
+    @Nested
+    class ShouldNotFilter {
+
+        @Test
+        void knownWhitelistedPaths_AreSkipped() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+
+            request.setRequestURI("/");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/api/auth/login");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/ws/endpoint");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/swagger-ui/index.html");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/swagger-ui.html");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/v3/api-docs");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/v3/api-docs/openapi");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+
+            request.setRequestURI("/api/routing/lookup");
+            assertTrue(jwtAuthFilter.shouldNotFilter(request));
+        }
+
+        @Test
+        void otherPaths_AreNotSkipped() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+
+            request.setRequestURI("/api/products/list");
+            assertFalse(jwtAuthFilter.shouldNotFilter(request));
+        }
+    }
 }
