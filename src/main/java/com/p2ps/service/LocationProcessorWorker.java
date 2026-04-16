@@ -1,4 +1,4 @@
-package org.example;
+package com.p2ps.service;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,21 +14,19 @@ public class LocationProcessorWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    // Alege CÂND vrei să ruleze.
-    // Exemplul acesta rulează la fiecare 5 minute (300.000 milisecunde).
-    // Alternativă: @Scheduled(cron = "0 0 * * * *") pentru "o dată pe oră la fix".
     @Scheduled(fixedRate = 300000)
-    @Transactional // Foarte important pentru a lega TRUNCATE de INSERT
+    @Transactional
     public void processAndCalculateCenters() {
         System.out.println("⏳ [Worker] Începem recalcularea centrelor absolute...");
 
         try {
-            // 1. Golim tabela veche
-            jdbcTemplate.execute("TRUNCATE store_inventory_map");
+            // Ștergem datele vechi (cititorii văd snapshot-ul vechi datorită MVCC)
+            int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
+            System.out.println("ℹ️ [Worker] Am șters " + deletedRows + " locații vechi.");
 
-            // 2. Rulăm algoritmul DBSCAN + Geometric Median
+            // Rulăm algoritmul extrăgând DOAR clusterul principal pentru fiecare produs
             String sql = """
-                INSERT INTO store_inventory_map (store_id, item_id, formatted_cluster_id, estimated_loc_point, confidence_score, ping_count)
+                INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
                     SELECT item_id, store_id, location_point, accuracy_m
                     FROM raw_user_pings
@@ -40,29 +38,37 @@ public class LocationProcessorWorker {
                         ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 10) 
                         OVER (PARTITION BY store_id, item_id) AS cluster_id
                     FROM FilteredPings
+                ),
+                ClusterStats AS (
+                    -- Calculăm statisticile pentru TOATE clusterele găsite
+                    SELECT 
+                        store_id,
+                        item_id,
+                        cluster_id,
+                        ST_GeometricMedian(ST_Collect(location_point)) AS estimated_loc_point,
+                        LEAST(1.0, (COUNT(item_id) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS confidence_score, 
+                        COUNT(item_id) AS ping_count
+                    FROM ClusteredData
+                    WHERE cluster_id IS NOT NULL
+                    GROUP BY store_id, item_id, cluster_id
                 )
-                SELECT 
-                    c.store_id,
-                    c.item_id,
-                    (REPLACE(i.name, 'Produs ', '') || ' - ' || s.name) AS formatted_cluster_id,  
-                    ST_GeometricMedian(ST_Collect(c.location_point)) AS estimated_loc_point,
-                    LEAST(1.0, (COUNT(c.item_id) / 50.0) * (1.0 / GREATEST(1.0, AVG(c.accuracy_m)))) AS confidence_score, 
-                    COUNT(c.item_id) AS ping_count
-                FROM ClusteredData c
-                JOIN store_geofences s ON c.store_id = s.store_id
-                JOIN items i ON c.item_id = i.item_id
-                WHERE c.cluster_id IS NOT NULL
-                GROUP BY c.store_id, c.item_id, c.cluster_id, s.name, i.name
+                -- Selectăm UNIC pe produs/magazin, aducând în față clusterul cu cele mai multe puncte
+                SELECT DISTINCT ON (store_id, item_id)
+                    store_id,
+                    item_id,
+                    estimated_loc_point,
+                    confidence_score,
+                    ping_count
+                FROM ClusterStats
+                ORDER BY store_id, item_id, ping_count DESC
             """;
 
-            // Executăm inserția
-            int rowsAffected = jdbcTemplate.update(sql);
+            int insertedRows = jdbcTemplate.update(sql);
 
-            System.out.println("✅ [Worker] Procesare finalizată cu succes! Au fost actualizate " + rowsAffected + " locații la raft.");
+            System.out.println("✅ [Worker] Tranzacție finalizată! Au fost actualizate atomic " + insertedRows + " locații unice la raft.");
 
         } catch (Exception e) {
             System.err.println("❌ [Worker] Eroare la procesarea locațiilor: " + e.getMessage());
-            // Aruncăm excepția mai departe pentru ca @Transactional să facă rollback automat
             throw e;
         }
     }
