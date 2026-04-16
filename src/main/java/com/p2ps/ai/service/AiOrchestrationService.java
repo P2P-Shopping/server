@@ -36,7 +36,43 @@ public class AiOrchestrationService {
     public List<ParsedItemResponse> processRecipeAndPopulateList(RecipeRequest request, String userEmail) {
         UUID targetListId = request.getListId();
 
-        // List creation if needed
+        // Call Gemini first to get ingredients JSON, then validate before creating any list
+        String jsonResult = geminiService.extractIngredientsAsJson(request.getText());
+
+        List<ParsedItemResponse> parsedItems;
+        try {
+            parsedItems = objectMapper.readValue(
+                    jsonResult,
+                    new TypeReference<List<ParsedItemResponse>>() {}
+            );
+        } catch (JsonProcessingException e) {
+            throw new AiProcessingException("AI could not return a correctly structured list", e);
+        }
+
+        if (parsedItems == null) {
+            throw new AiProcessingException("AI returned a null payload instead of a list of items");
+        }
+
+        List<ParsedItemResponse> validItems = new ArrayList<>();
+
+        for (ParsedItemResponse aiItem : parsedItems) {
+            if (aiItem == null) {
+                continue;
+            }
+
+            String name = aiItem.getName();
+            if (name == null || name.trim().isEmpty()) {
+                continue;
+            }
+
+            validItems.add(aiItem);
+        }
+
+        if (validItems.isEmpty()) {
+            throw new AiProcessingException("AI did not return any valid ingredients to add to a list");
+        }
+
+        // Only create the list if we have valid items and there's no target list yet
         if (targetListId == null) {
             String title = (request.getNewListTitle() != null && !request.getNewListTitle().isBlank())
                     ? request.getNewListTitle()
@@ -45,39 +81,19 @@ public class AiOrchestrationService {
             targetListId = newList.getId();
         }
 
-        // Gemini call
-        String jsonResult = geminiService.extractIngredientsAsJson(request.getText());
+        // Save validated items
+        for (ParsedItemResponse aiItem : validItems) {
+            ItemRequest newItem = new ItemRequest();
+            newItem.setName(aiItem.getName().trim());
 
-       // Save items
-        try {
-            List<ParsedItemResponse> parsedItems = objectMapper.readValue(
-                    jsonResult,
-                    new TypeReference<List<ParsedItemResponse>>() {}
-            );
+            String quantityStr = (aiItem.getQuantity() != null ? String.valueOf(aiItem.getQuantity()) : "");
+            String unitStr = (aiItem.getUnit() != null ? aiItem.getUnit() : "");
+            newItem.setQuantity((quantityStr + " " + unitStr).trim());
+            newItem.setCategory("AI Generated");
 
-            List<ParsedItemResponse> validItems = new ArrayList<>();
-
-            for (ParsedItemResponse aiItem : parsedItems) {
-                if (aiItem.getName() == null || aiItem.getName().trim().isEmpty()) {
-                    continue;
-                }
-
-                ItemRequest newItem = new ItemRequest();
-                newItem.setName(aiItem.getName().trim());
-
-                String quantityStr = (aiItem.getQuantity() != null ? String.valueOf(aiItem.getQuantity()) : "");
-                String unitStr = (aiItem.getUnit() != null ? aiItem.getUnit() : "");
-                newItem.setQuantity((quantityStr + " " + unitStr).trim());
-                newItem.setCategory("AI Generated");
-
-                itemService.addItemToList(targetListId, newItem, userEmail);
-                validItems.add(aiItem);
-            }
-
-            return validItems;
-
-        } catch (JsonProcessingException e) {
-            throw new AiProcessingException("AI could not return a correctly structured list", e);
+            itemService.addItemToList(targetListId, newItem, userEmail);
         }
+
+        return validItems;
     }
 }
