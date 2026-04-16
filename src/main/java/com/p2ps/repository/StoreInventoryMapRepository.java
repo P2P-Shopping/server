@@ -1,0 +1,22 @@
+package com.p2ps.repository;
+
+import com.p2ps.model.StoreInventoryMap;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Repository
+public interface StoreInventoryMapRepository extends JpaRepository<StoreInventoryMap, UUID> {
+
+    // Acest query va scădea scorul cu o valoare anume pentru toate produsele nemișcate de ceva timp
+    @Modifying
+    @Transactional
+    @Query("UPDATE StoreInventoryMap s SET s.confidenceScore = s.confidenceScore - :penalty WHERE s.lastUpdated < :cutoffDate AND s.confidenceScore > 0")
+    int applyDecayToOldRecords(@Param("penalty") Double penalty, @Param("cutoffDate") LocalDateTime cutoffDate);
+}
