@@ -46,6 +46,25 @@ class PresenceControllerTest {
     }
 
     @Test
+    void handlePresenceEvent_WithNullEventType_ShouldRouteCorrectlyWithoutDatabase() {
+        String testListId = "1234-abcd";
+        samplePayload.setEventType(null);
+
+        presenceController.handlePresenceEvent(testListId, samplePayload);
+
+        verify(messagingTemplate).convertAndSend("/topic/list/" + testListId + "/presence", samplePayload);
+        verifyNoMoreInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_WithNullListId_ShouldHandleGracefully() {
+        presenceController.handlePresenceEvent(null, samplePayload);
+
+        verify(messagingTemplate).convertAndSend("/topic/list/null/presence", samplePayload);
+        verifyNoMoreInteractions(messagingTemplate);
+    }
+
+    @Test
     void handlePresenceEvent_WithNullPayload_ShouldNotSendMessage() {
         presenceController.handlePresenceEvent("1234-abcd", null);
 
