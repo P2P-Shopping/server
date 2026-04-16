@@ -43,6 +43,7 @@ public class PresenceEvent {
      * Default no-args constructor required for Jackson deserialization.
      */
     public PresenceEvent() {
+        // Required for Jackson deserialization by Spring internally
     }
 
     /**
