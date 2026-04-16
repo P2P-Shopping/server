@@ -1,6 +1,7 @@
 package com.p2ps.telemetry.services;
 
 import com.p2ps.telemetry.dto.TelemetryPingDTO;
+import com.p2ps.telemetry.dto.TelemetryBatchDTO;
 import com.p2ps.telemetry.model.TelemetryRecord;
 import com.p2ps.telemetry.repository.TelemetryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,12 +13,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+
+import java.util.List;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TelemetryServiceTest {
@@ -83,6 +88,35 @@ class TelemetryServiceTest {
         assertNotNull(ReflectionTestUtils.getField(saved, "serverReceivedTimestamp"));
     }
 
+    @Test
+    void shouldMapIncomingBatchToTelemetryRecordsAndInsertThem() {
+        TelemetryBatchDTO batchDTO = new TelemetryBatchDTO();
+        ReflectionTestUtils.setField(batchDTO, "pings", List.of(buildPingDto(), buildPingDto()));
+
+        telemetryService.processBatch(batchDTO);
+
+        ArgumentCaptor<List<TelemetryRecord>> captor = ArgumentCaptor.forClass(List.class);
+        verify(telemetryRepository).insert(captor.capture());
+
+        java.util.List<TelemetryRecord> records = captor.getValue();
+        assertEquals(2, records.size());
+        assertEquals("device-1", ReflectionTestUtils.getField(records.get(0), "deviceId"));
+        assertEquals("item-101", ReflectionTestUtils.getField(records.get(1), "itemId"));
+        assertNotNull(ReflectionTestUtils.getField(records.get(0), "serverReceivedTimestamp"));
+        assertNotNull(ReflectionTestUtils.getField(records.get(1), "serverReceivedTimestamp"));
+    }
+
+    @Test
+    void shouldHandleBatchRepositoryFailureWithoutThrowing() {
+        TelemetryBatchDTO batchDTO = new TelemetryBatchDTO();
+        ReflectionTestUtils.setField(batchDTO, "pings", List.of(buildPingDto()));
+        doThrow(new RuntimeException("Mongo unavailable")).when(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
+
+        telemetryService.processBatch(batchDTO);
+
+        verify(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
+    }
+
     private TelemetryPingDTO buildPingDto() {
         TelemetryPingDTO dto = new TelemetryPingDTO();
         ReflectionTestUtils.setField(dto, "deviceId", "device-1");
@@ -103,5 +137,20 @@ class TelemetryServiceTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Failed to create TelemetryService", e);
         }
+    }
+
+    @Test
+    void shouldReturnPingsForStoreAndItem() {
+        TelemetryRecord telemetryRecord = new TelemetryRecord();
+        ReflectionTestUtils.setField(telemetryRecord, "storeId", "store-001");
+        ReflectionTestUtils.setField(telemetryRecord, "itemId", "pasta");
+
+        when(telemetryRepository.findByStoreIdAndItemId("store-001", "pasta"))
+                .thenReturn(List.of(telemetryRecord));
+
+        List<TelemetryRecord> result = telemetryService.getPings("store-001", "pasta");
+
+        assertEquals(1, result.size());
+        assertEquals("pasta", ReflectionTestUtils.getField(result.getFirst(), "itemId"));
     }
 }

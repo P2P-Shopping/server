@@ -1,5 +1,6 @@
 package com.p2ps.controller;
 
+import com.p2ps.service.RoutingService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,8 +12,8 @@ class RoutingControllerTest {
 
     @Test
     void shouldReturnSuccessStatusAndMockRouteWhenCalculateRouteIsCalled() {
-        RoutingController controller = new RoutingController();
-        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"));
+        RoutingService routingService = new RoutingService();
+        RoutingController controller = new RoutingController(routingService);        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"));
 
         RoutingResponse response = controller.calculateRoute(request);
 
@@ -26,8 +27,8 @@ class RoutingControllerTest {
 
     @Test
     void shouldReturnMockRouteEvenWhenRequestIsNull() {
-        RoutingController controller = new RoutingController();
-
+        RoutingService routingService = new RoutingService();
+        RoutingController controller = new RoutingController(routingService);
         RoutingResponse response = controller.calculateRoute(null);
 
         assertEquals("success", response.getStatus());
