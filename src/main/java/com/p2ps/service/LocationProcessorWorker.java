@@ -14,17 +14,17 @@ public class LocationProcessorWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @Scheduled(fixedRate = 300000)
+    // Am schimbat 'fixedRate' cu 'fixedDelay'.
+    // Acum, cronometrul de 5 minute (300.000 ms) pornește abia DUPĂ ce metoda s-a terminat cu succes.
+    @Scheduled(fixedDelay = 300000)
     @Transactional
     public void processAndCalculateCenters() {
         System.out.println("⏳ [Worker] Începem recalcularea centrelor absolute...");
 
         try {
-            // Ștergem datele vechi (cititorii văd snapshot-ul vechi datorită MVCC)
             int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
             System.out.println("ℹ️ [Worker] Am șters " + deletedRows + " locații vechi.");
 
-            // Rulăm algoritmul extrăgând DOAR clusterul principal pentru fiecare produs
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -40,7 +40,6 @@ public class LocationProcessorWorker {
                     FROM FilteredPings
                 ),
                 ClusterStats AS (
-                    -- Calculăm statisticile pentru TOATE clusterele găsite
                     SELECT 
                         store_id,
                         item_id,
@@ -52,7 +51,6 @@ public class LocationProcessorWorker {
                     WHERE cluster_id IS NOT NULL
                     GROUP BY store_id, item_id, cluster_id
                 )
-                -- Selectăm UNIC pe produs/magazin, aducând în față clusterul cu cele mai multe puncte
                 SELECT DISTINCT ON (store_id, item_id)
                     store_id,
                     item_id,
