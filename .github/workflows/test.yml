@@ -77,6 +77,7 @@ jobs:
           SPRING_DATASOURCE_PASSWORD: postgres
           SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
           SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.spatial.dialect.postgis.PostgisDialect
+          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.spatial.dialect.postgis.PostgisDialect
           SPRING_TEST_DATABASE_REPLACE: NONE
           SPRING_DATA_REDIS_HOST: localhost
           SPRING_DATA_REDIS_PORT: 6379
