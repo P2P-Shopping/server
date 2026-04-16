@@ -4,18 +4,29 @@ import com.p2ps.lists.exception.ItemNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ListValidationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class GlobalExceptionHandlerTest {
 
+    private GlobalExceptionHandler handler;
+
+    @BeforeEach
+    void setUp() {
+        handler = new GlobalExceptionHandler();
+
+    }
+
     @Test
     void shouldReturnGenericErrorResponseWhenUnhandledExceptionOccurs() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
         Exception simulatedException = new Exception("Database failure!");
 
         ResponseEntity<ErrorResponse> response = handler.handleGlobalException(simulatedException);
@@ -28,8 +39,6 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnSameGenericErrorResponseForNullException() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
-
         ResponseEntity<ErrorResponse> response = handler.handleGlobalException(null);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
@@ -39,8 +48,6 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnBadRequestForListValidationException() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
-
         ResponseEntity<ErrorResponse> response =
                 handler.handleListValidationException(new ListValidationException("Item name cannot be empty"));
 
@@ -52,8 +59,6 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnNotFoundForListResourceExceptions() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
-
         ResponseEntity<ErrorResponse> response =
                 handler.handleNotFoundExceptions(new ItemNotFoundException("Item not found"));
 
@@ -65,8 +70,6 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnForbiddenForListAccessDeniedException() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
-
         ResponseEntity<ErrorResponse> response =
                 handler.handleListAccessDeniedException(
                         new ListAccessDeniedException("You do not have permission to edit this item")
@@ -80,8 +83,6 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnUnauthorizedForMissingListUser() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
-
         ResponseEntity<ErrorResponse> response =
                 handler.handleListUserNotFoundException(new ListUserNotFoundException("User not found"));
 
@@ -89,5 +90,34 @@ class GlobalExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals("Unauthorized", response.getBody().getMessage());
         assertEquals("User not found", response.getBody().getDetails());
+    }
+    @Test
+    void shouldHandleMaxUploadSizeExceededException() {
+        MaxUploadSizeExceededException ex = new MaxUploadSizeExceededException(5 * 1024 * 1024);
+
+        ResponseEntity<Map<String, String>> response =
+                handler.handleMaxUploadSizeExceeded(ex);
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("File Too Large", response.getBody().get("error"));
+
+        String message = response.getBody().get("message");
+        assertNotNull(message);
+        assertTrue(message.contains("5MB") || message.contains("Maximum allowed file size"));
+    }
+
+    @Test
+    void shouldHandleMissingServletRequestPartException() {
+        MissingServletRequestPartException ex =
+                new MissingServletRequestPartException("file");
+
+        ResponseEntity<Map<String, String>> response =
+                handler.handleMissingServletRequestPart(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Bad Request", response.getBody().get("error"));
+        assertEquals("Missing file part", response.getBody().get("message"));
     }
 }
