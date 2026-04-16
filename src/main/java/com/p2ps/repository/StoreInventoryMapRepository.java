@@ -15,8 +15,16 @@ import java.util.UUID;
 public interface StoreInventoryMapRepository extends JpaRepository<StoreInventoryMap, UUID> {
 
     // Acest query va scădea scorul cu o valoare anume pentru toate produsele nemișcate de ceva timp
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
-    @Query("UPDATE StoreInventoryMap s SET s.confidenceScore = s.confidenceScore - :penalty WHERE s.lastUpdated < :cutoffDate AND s.confidenceScore > 0")
+    @Modifying(clearAutomatically = true, flushAutomatically = true)    @Transactional
+    @Query("""
+        UPDATE StoreInventoryMap s
+        SET s.confidenceScore =
+            CASE
+                WHEN s.confidenceScore - :penalty < 0 THEN 0
+                ELSE s.confidenceScore - :penalty
+            END
+        WHERE s.lastUpdated < :cutoffDate
+          AND s.confidenceScore > 0
+    """)
     int applyDecayToOldRecords(@Param("penalty") Double penalty, @Param("cutoffDate") LocalDateTime cutoffDate);
 }
