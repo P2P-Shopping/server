@@ -14,7 +14,7 @@ public class LocationProcessorWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-  
+    @Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
         System.out.println("⏳ [Worker] Începem recalcularea centrelor absolute...");

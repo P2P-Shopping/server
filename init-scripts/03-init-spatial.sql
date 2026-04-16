@@ -1,16 +1,6 @@
 -- Activam extensia PostGIS (adauga suport pentru date geografice)
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- ============================================================
--- ITEMS (produsele din magazin)
--- ============================================================
-CREATE TABLE items (
-    item_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(255) NOT NULL,
-    category    VARCHAR(100),
-    upc_code    VARCHAR(50),
-    created_at  TIMESTAMP DEFAULT NOW()
-);
 
 -- ============================================================
 -- STORE_GEOFENCES (conturul fizic al magazinului)
@@ -34,7 +24,7 @@ CREATE INDEX idx_store_geofences_boundary
 CREATE TABLE raw_user_pings (
     ping_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     store_id        UUID NOT NULL REFERENCES store_geofences(store_id),
-    item_id         UUID NOT NULL REFERENCES items(item_id),
+    item_id         UUID NOT NULL REFERENCES items(id),
     location_point  GEOMETRY(Point, 4326) NOT NULL,  -- coordonatele GPS ale ping-ului
     accuracy_m      FLOAT,                            -- cat de precis e GPS-ul (metri)
     floor_level     INT DEFAULT 0,
@@ -57,7 +47,7 @@ CREATE INDEX idx_raw_user_pings_store_id
 CREATE TABLE store_inventory_map (
     map_id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     store_id                UUID NOT NULL REFERENCES store_geofences(store_id),
-    item_id                 UUID NOT NULL REFERENCES items(item_id),
+    item_id                 UUID NOT NULL REFERENCES items(id),
     estimated_loc_point     GEOMETRY(Point, 4326) NOT NULL,  -- locatia calculata din ping-uri
     confidence_score        FLOAT CHECK (confidence_score BETWEEN 0 AND 1),
     ping_count              INT DEFAULT 0,                   -- cate ping-uri au contribuit
