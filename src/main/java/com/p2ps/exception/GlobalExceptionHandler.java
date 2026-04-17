@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.HashMap;
 import java.util.Map;
 
 // Catches all exceptions and returns a clean JSON response
@@ -84,6 +85,17 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(AiProcessingException.class)
+    public ResponseEntity<Map<String, String>> handleAiProcessingException(AiProcessingException ex) {
+        logger.error("AI Processing failed: {}", ex.getMessage(), ex);
+
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("message", "AI Processing Failed");
+        errorResponse.put("details", ex.getMessage());
+
+        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)
