@@ -46,6 +46,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-test-autoconfigure")
     testImplementation("com.h2database:h2")
+    testImplementation("org.testcontainers:mongodb:${testcontainersVersion}")
 
     runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
