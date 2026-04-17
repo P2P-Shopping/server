@@ -12,6 +12,7 @@ import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,22 +22,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Transactional
 class LocationProcessorWorkerTest {
 
+    static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
+            .asCompatibleSubstituteFor("postgres");
+
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgis/postgis:16-3.4");
+    static PostgreSQLContainer<?> postgresContainer = new PostgreSQLContainer<>(postgisImage)
+            .withDatabaseName("testdb")
+            .withUsername("testuser")
+            .withPassword("testpass");
 
     @Container
     static MongoDBContainer mongoDBContainer = new MongoDBContainer("mongo:latest");
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", postgresContainer::getUsername);
+        registry.add("spring.datasource.password", postgresContainer::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.spatial.dialect.postgis.PostgisDialect");
         registry.add("spring.data.mongodb.uri", mongoDBContainer::getReplicaSetUrl);
-    }
 
+
+    }
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
