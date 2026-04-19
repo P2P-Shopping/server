@@ -48,7 +48,7 @@ class ImageUploadControllerTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "recipe.jpg",
-                "image/jpeg",
+            "application/octet-stream",
                 bytes
         );
 
@@ -68,7 +68,7 @@ class ImageUploadControllerTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "recipe.png",
-                "image/png",
+            "text/plain",
                 bytes
         );
 
@@ -79,6 +79,7 @@ class ImageUploadControllerTest {
         assertEquals("Image uploaded successfully", response.getBody().get("message"));
         assertEquals("recipe.png", response.getBody().get("fileName"));
         assertEquals("image/png", response.getBody().get("contentType"));
+        assertEquals((long) bytes.length, response.getBody().get("size"));
     }
 
     @Test
@@ -95,6 +96,7 @@ class ImageUploadControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("File is empty", response.getBody().get("error"));
+        assertEquals("File is empty", response.getBody().get("message"));
     }
 
     @Test
@@ -111,6 +113,7 @@ class ImageUploadControllerTest {
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Invalid image file", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("message"));
     }
 
     @Test
@@ -127,6 +130,7 @@ class ImageUploadControllerTest {
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Invalid image file", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("message"));
     }
 
     @Test
@@ -160,6 +164,25 @@ class ImageUploadControllerTest {
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Invalid image file", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("message"));
+    }
+
+    @Test
+    void uploadImage_shouldReturnUnsupportedMediaType_forDetectedUnsupportedFormat() throws Exception {
+        byte[] bytes = createImageBytes("bmp");
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "recipe.bmp",
+                "image/bmp",
+                bytes
+        );
+
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("error"));
+        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("message"));
     }
 }
 

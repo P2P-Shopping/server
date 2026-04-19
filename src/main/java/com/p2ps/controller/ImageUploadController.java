@@ -22,27 +22,30 @@ public class ImageUploadController {
     public ResponseEntity<Map<String, Object>> uploadImage(@RequestParam("file") MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "error", "File is empty"
+                    "error", "File is empty",
+                    "message", "File is empty"
             ));
         }
         // Inspect the file contents to determine if it's a real image and its format
         String format = detectImageFormat(file);
         if (format == null) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of(
-                    "error", "Invalid image file"
+                    "error", "Invalid image file",
+                    "message", "Invalid image file"
             ));
         }
 
         String fmtLower = format.toLowerCase();
         if (!fmtLower.equals("jpeg") && !fmtLower.equals("jpg") && !fmtLower.equals("png")) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of(
-                    "error", "Only JPEG and PNG are allowed"
+                    "error", "Only JPEG and PNG are allowed",
+                    "message", "Only JPEG and PNG are allowed"
             ));
         }
 
         String original = file.getOriginalFilename();
         String safeFileName = (original == null || original.isBlank()) ? "unknown" : original;
-        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        String contentType = resolveMimeType(format);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Image uploaded successfully",
@@ -61,11 +64,29 @@ public class ImageUploadController {
                 return null;
             }
             ImageReader reader = readers.next();
-            String format = reader.getFormatName();
-            reader.dispose();
-            return format;
+            try {
+                return reader.getFormatName();
+            } finally {
+                reader.dispose();
+            }
         } catch (IOException e) {
             return null;
         }
+    }
+
+    private String resolveMimeType(String format) {
+        if (format == null || format.isBlank()) {
+            return "application/octet-stream";
+        }
+
+        String normalizedFormat = format.toLowerCase();
+        if ("jpg".equals(normalizedFormat) || "jpeg".equals(normalizedFormat)) {
+            return "image/jpeg";
+        }
+        if ("png".equals(normalizedFormat)) {
+            return "image/png";
+        }
+
+        return "image/" + normalizedFormat;
     }
 }
