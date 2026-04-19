@@ -24,6 +24,9 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String ERR_STR = "error";
+    private static final String MSG_STR = "message";
+
     // Logger used to record internal errors secretly on the server
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -90,10 +93,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
         return ResponseEntity
-                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .status(HttpStatus.CONTENT_TOO_LARGE)
                 .body(Map.of(
-                        "error", "File Too Large",
-                        "message", "Maximum allowed file size is 5MB"
+                        ERR_STR, "File Too Large",
+                        MSG_STR, "Maximum allowed file size is 5MB"
                 ));
     }
 
@@ -102,8 +105,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(Map.of(
-                        "error", "Bad Request",
-                        "message", "Missing file part"
+                        ERR_STR, "Bad Request",
+                        MSG_STR, "Missing file part"
                 ));
     }
     @ExceptionHandler(Exception.class)
@@ -134,8 +137,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED) // Trimitem 401 în loc de 500
                 .body(Map.of(
-                        "error", "Unauthorized",
-                        "message", "Invalid email or password" // Mesaj generic, sigur
+                        ERR_STR, "Unauthorized",
+                        MSG_STR, "Invalid email or password" // Mesaj generic, sigur
                 ));
     }
 
