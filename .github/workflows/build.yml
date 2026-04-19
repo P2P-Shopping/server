@@ -4,41 +4,59 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
 jobs:
   build:
     name: Build and analyze
     runs-on: ubuntu-latest
     services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: p2p_shopping_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d p2p_shopping_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:7.2.6
         ports:
           - 6379:6379
         options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-          --health-start-period=10s
+          --health-cmd="redis-cli ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5 --health-start-period=10s
       mongo:
         image: mongo:7.0.16
+        env:
+          MONGO_INITDB_DATABASE: p2p_shopping_test
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' || mongo --quiet --eval 'db.adminCommand({ ping: 1 })'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' ||
+          mongo --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=10s --health-timeout=5s --health-retries=5
           --health-start-period=20s
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Set up JDK 25
+          fetch-depth: 0
+
+      - name: Initialize PostgreSQL Test Database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/01-users.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/02-shopping-lists-and-items.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/03-init-spatial.sql
+
+      - name: Set up JDK 21 # Changed to 21 to match test.yml, unless 25 is strictly required
         uses: actions/setup-java@v4
         with:
-          java-version: 25
-          distribution: 'temurin'
+          java-version: 21
+          distribution: "temurin"
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
@@ -54,4 +72,14 @@ jobs:
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/p2p_shopping_test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/p2p_shopping_test
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+          SPRING_TEST_DATABASE_REPLACE: NONE
+          SPRING_DATA_REDIS_HOST: localhost
+          SPRING_DATA_REDIS_PORT: 6379
         run: ./gradlew build sonar --info

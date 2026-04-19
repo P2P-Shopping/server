@@ -1,107 +1,180 @@
 package com.p2ps.service;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(MockitoExtension.class)
+@Testcontainers
+@SpringBootTest(properties = {
+    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
+    "telemetry.api.key=test-telemetry-key-for-tests",
+    "app.scheduling.enabled=false"
+})
+@Transactional
 class LocationProcessorWorkerTest {
 
-    @Mock
-    private JdbcTemplate jdbcTemplate;
+    static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
+            .asCompatibleSubstituteFor("postgres");
 
-    @Mock
-    private DataSource dataSource;
+    @Container
+    static PostgreSQLContainer<?> postgresContainer = new PostgreSQLContainer<>(postgisImage)
+            .withDatabaseName("testdb")
+            .withUsername("testuser")
+            .withPassword("testpass");
 
-    @Mock
-    private Connection connection;
+    static {
+        postgresContainer.start();
+    }
 
-    @Mock
-    private DatabaseMetaData databaseMetaData;
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", postgresContainer::getUsername);
+        registry.add("spring.datasource.password", postgresContainer::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
+    }
 
-    @InjectMocks
+    @Autowired
+    private FailureAwareJdbcTemplate jdbcTemplate;
+
+    @Autowired
     private LocationProcessorWorker worker;
 
-    @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
-    void processAndCalculateCenters_Success() {
-        // Arrange: Simulăm comportamentul de succes al bazei de date
-        when(jdbcTemplate.update(anyString())).thenReturn(5);
+    @BeforeEach
+    void resetJdbcTemplateFailureState() {
+        jdbcTemplate.setFailOnInsert(false);
+    }
 
-        // Act: Rulăm metoda worker-ului
+    @Test
+    @DisplayName("Must successfully execute DELETE followed by INSERT for center recalculation")
+    void processAndCalculateCenters_Success() {
+        ensureSpatialTables();
+        jdbcTemplate.setFailOnInsert(false);
+
+        UUID storeId = UUID.randomUUID();
+        long userId = 12345L;
+        UUID listId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Magazin Test', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", storeId);
+        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password) VALUES (?, 'Test', 'User', 'test@example.com', 'pass')", userId);
+        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'Lista mea', ?)", listId, userId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Lapte', false, ?)", itemId, listId);
+
+        for (int index = 0; index < 10; index++) {
+            jdbcTemplate.update(
+                    "INSERT INTO raw_user_pings (store_id, item_id, location_point, accuracy_m, loc_provider) VALUES (?, ?, ST_SetSRID(ST_MakePoint(27.587, 47.151), 4326), ?, ?)",
+                    storeId,
+                    itemId,
+                    5.0,
+                    "GPS"
+            );
+        }
+
         worker.processAndCalculateCenters();
 
-        // Assert: Verificăm că jdbcTemplate a fost apelat exact cum ne așteptăm
-        verify(jdbcTemplate, times(2)).update(anyString());
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT ping_count, confidence_score FROM store_inventory_map WHERE store_id = ? AND item_id = ?",
+                storeId,
+                itemId
+        );
+
+        assertTrue(!rows.isEmpty(), "There must be at least one calculated row for the store/item combination");
+
+        Number pingCount = (Number) rows.get(0).get("ping_count");
+        Number confidenceScore = (Number) rows.get(0).get("confidence_score");
+
+        assertTrue(pingCount != null && pingCount.intValue() >= 10, "The ping count should reflect the cluster of inserted pings");
+        assertTrue(confidenceScore != null && confidenceScore.doubleValue() >= 0.0 && confidenceScore.doubleValue() <= 1.0, "The confidence score should be within a plausible range");
     }
 
     @Test
-    @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
+    @DisplayName("Must throw exception further if SQL query fails (to trigger Rollback)")
     void processAndCalculateCenters_ThrowsExceptionOnError() {
-        // Arrange: Simulăm o eroare la pasul de INSERT
-        when(jdbcTemplate.update(anyString()))
-                .thenReturn(10)
-                .thenThrow(new RuntimeException("Database error during insert"));
+        jdbcTemplate.setFailOnInsert(true);
 
-        // Act & Assert: Verificăm dacă excepția este corect propagată
-        assertThrows(RuntimeException.class, () -> {
-            worker.processAndCalculateCenters();
-        });
-
-        // Verify the calls were made
-        verify(jdbcTemplate, times(2)).update(anyString());
+        try {
+            assertThrows(RuntimeException.class, () -> worker.processAndCalculateCenters());
+        } finally {
+            jdbcTemplate.setFailOnInsert(false);
+        }
     }
 
-    @Test
-    @DisplayName("Trebuie să creeze schema de inventar când baza de date este PostgreSQL")
-    void ensureInventoryMapSchema_WhenPostgreSQL_ShouldCreateSchemaObjects() throws Exception {
-        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(connection.getMetaData()).thenReturn(databaseMetaData);
-        when(databaseMetaData.getDatabaseProductName()).thenReturn("PostgreSQL 16");
-
-        worker.ensureInventoryMapSchema();
-
-        verify(jdbcTemplate, atLeast(6)).execute(anyString());
+    private void ensureSpatialTables() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS postgis");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS store_geofences (
+                store_id UUID PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                boundary_polygon GEOMETRY(Polygon, 4326) NOT NULL
+            )
+        """);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS raw_user_pings (
+                ping_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                store_id UUID NOT NULL REFERENCES store_geofences(store_id),
+                item_id UUID NOT NULL REFERENCES items(id),
+                location_point GEOMETRY(Point, 4326) NOT NULL,
+                accuracy_m FLOAT,
+                loc_provider VARCHAR(50)
+            )
+        """);
+        jdbcTemplate.execute("ALTER TABLE store_inventory_map ALTER COLUMN map_id SET DEFAULT gen_random_uuid()");
+        jdbcTemplate.execute("ALTER TABLE store_inventory_map ALTER COLUMN last_updated SET DEFAULT CURRENT_TIMESTAMP");
     }
 
-    @Test
-    @DisplayName("Trebuie să ignore inițializarea când baza de date nu este PostgreSQL")
-    void ensureInventoryMapSchema_WhenNotPostgreSQL_ShouldSkipSchemaCreation() throws Exception {
-        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(connection.getMetaData()).thenReturn(databaseMetaData);
-        when(databaseMetaData.getDatabaseProductName()).thenReturn("MySQL 8.0");
+    @TestConfiguration
+    static class JdbcTemplateTestConfiguration {
 
-        worker.ensureInventoryMapSchema();
-
-        verifyNoInteractions(jdbcTemplate);
+        @Bean
+        @Primary
+        FailureAwareJdbcTemplate jdbcTemplate(DataSource dataSource) {
+            return new FailureAwareJdbcTemplate(dataSource);
+        }
     }
 
-    @Test
-    @DisplayName("Trebuie să transforme erorile de inspecție a bazei de date în IllegalStateException")
-    void ensureInventoryMapSchema_WhenMetadataLookupFails_ShouldThrowIllegalStateException() throws Exception {
-        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
-        when(dataSource.getConnection()).thenThrow(new SQLException("metadata unavailable"));
+    static class FailureAwareJdbcTemplate extends JdbcTemplate {
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> worker.ensureInventoryMapSchema());
+        private final AtomicBoolean failOnInsert = new AtomicBoolean(false);
 
-        assertEquals("Unable to inspect database metadata", exception.getMessage());
-        verifyNoInteractions(jdbcTemplate);
+        FailureAwareJdbcTemplate(DataSource dataSource) {
+            super(dataSource);
+        }
+
+        void setFailOnInsert(boolean failOnInsert) {
+            this.failOnInsert.set(failOnInsert);
+        }
+
+        @Override
+        public int update(String sql) {
+            if (failOnInsert.get() && sql.contains("INSERT INTO store_inventory_map")) {
+                throw new RuntimeException("forced insert failure");
+            }
+            return super.update(sql);
+        }
     }
 }

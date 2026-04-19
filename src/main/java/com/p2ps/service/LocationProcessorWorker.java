@@ -23,15 +23,7 @@ public class LocationProcessorWorker {
 
     private DataSource dataSource;
 
-    public LocationProcessorWorker(JdbcTemplate jdbcTemplate) {
-        this(jdbcTemplate, null);
-    }
-
-    /**
-     * Constructor allowing optional DataSource injection. Spring will prefer
-     * the two-arg constructor when a DataSource bean is available, otherwise
-     * fall back to the single-arg constructor.
-     */
+    @Autowired
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.jdbcTemplate = jdbcTemplate;
         this.dataSource = dataSource;
