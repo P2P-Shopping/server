@@ -20,17 +20,21 @@ public class LocationProcessorWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * Recalculare globală executată periodic la fiecare 5 minute.
+     * Include DELETE și INSERT separat pentru a respecta testele unitare (times(2)).
+     */
     @Scheduled(fixedDelay = 300000)
     @Transactional
     public void processAndCalculateCenters() {
         log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
 
         try {
-            // Apelul 1: DELETE (Necesar pentru testul times(2))
+            // Apelul 1: Golește datele vechi (Cerut de LocationProcessorWorkerTest)
             int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
             log.info("ℹ️ [Worker] Am șters {} locații vechi.", deletedRows);
 
-            // Apelul 2: INSERT
+            // Apelul 2: Inserează noile calcule folosind clustering PostGIS
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -65,8 +69,8 @@ public class LocationProcessorWorker {
             log.info("✅ [Worker] Recalculare finalizată. {} produse mapate.", insertedRows);
 
         } catch (Exception e) {
-            log.error("❌ [Worker] Eroare la procesarea locațiilor: {}", e.getMessage());
-            // Rezolvare Issue 1: Asigurăm RuntimeException pentru Rollback
+            log.error("❌ [Worker] Eroare critică la procesarea locațiilor: {}", e.getMessage());
+            // Aruncăm RuntimeException pentru a forța @Transactional să facă Rollback
             if (e instanceof RuntimeException) {
                 throw (RuntimeException) e;
             }
@@ -74,10 +78,13 @@ public class LocationProcessorWorker {
         }
     }
 
-    @Async
+    /**
+     * Recalculare rapidă pentru un singur produs, executată asincron.
+     */
+    @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Intervenție pentru produsul: {}", itemId);
+        log.info("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -110,12 +117,12 @@ public class LocationProcessorWorker {
 
             int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
             if (updated > 0) {
-                log.info("🎯 [Rapid-Recalc] Actualizat cu succes: {}", itemId);
+                log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată.", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}. Date insuficiente.", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: {}", itemId, e);
+            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă pentru produsul: {}", itemId, e);
             throw e;
         }
     }

@@ -22,17 +22,17 @@ class LocationProcessorWorkerTest {
     private LocationProcessorWorker worker;
 
     @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT (Issue 2 Fix)")
+    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT")
     void processAndCalculateCenters_Success() {
-        // Arrange
+        // ARRANGE: Îi spunem că primul apel returnează 5, al doilea 10
         when(jdbcTemplate.update(anyString()))
-                .thenReturn(5)    // Primul apel: DELETE
-                .thenReturn(10);  // Al doilea apel: INSERT
+                .thenReturn(5)    // call 1
+                .thenReturn(10);  // call 2
 
-        // Act
+        // ACT
         worker.processAndCalculateCenters();
 
-        // Assert
+        // ASSERT: Verificăm că s-au făcut fix 2 apeluri (Fix Issue 2)
         verify(jdbcTemplate, times(2)).update(anyString());
     }
 
