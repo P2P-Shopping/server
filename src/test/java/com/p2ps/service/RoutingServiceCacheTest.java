@@ -47,6 +47,7 @@ class RoutingServiceCacheTest {
     private Environment environment;
 
     @Container
+    @SuppressWarnings("resource")
     public static GenericContainer<?> redis = new GenericContainer<>("redis:7.2.6").withExposedPorts(6379);
 
     @DynamicPropertySource

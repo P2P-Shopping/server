@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 @Service
 public class ItemService {
@@ -134,5 +137,43 @@ public class ItemService {
         dto.setRecurrent(item.isRecurrent());
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         return dto;
+    }
+
+    @Transactional
+    public List<ItemDTO> addItemsToList(UUID listId, List<ItemRequest> requests, String userEmail) {
+        if (requests == null || requests.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.getUser().getEmail().equals(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to add items to this list");
+        }
+
+        List<Item> items = new ArrayList<>();
+        for (ItemRequest request : requests) {
+            if (request.getName() == null || request.getName().trim().isEmpty()) {
+                throw new ListValidationException("Item name cannot be empty");
+            }
+            validatePrice(request.getPrice());
+
+            Item item = new Item();
+            item.setName(request.getName());
+            item.setShoppingList(list);
+            item.setBrand(request.getBrand());
+            item.setQuantity(request.getQuantity());
+            item.setPrice(request.getPrice());
+            item.setCategory(request.getCategory());
+            item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+            item.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+            items.add(item);
+        }
+
+        List<Item> saved = itemRepository.saveAll(items);
+
+        return saved.stream().map(this::mapToDTO).collect(Collectors.toList());
     }
 }
