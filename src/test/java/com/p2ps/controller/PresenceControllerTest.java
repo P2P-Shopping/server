@@ -1,5 +1,7 @@
 package com.p2ps.controller;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.p2ps.dto.PresenceEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -7,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,5 +72,26 @@ class PresenceControllerTest {
         presenceController.handlePresenceEvent("1234-abcd", null);
 
         verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_WithDebugLoggingEnabled_ShouldStillRouteCorrectly() {
+        Logger controllerLogger = (Logger) LoggerFactory.getLogger(PresenceController.class);
+        Level originalLevel = controllerLogger.getLevel();
+
+        try {
+            controllerLogger.setLevel(Level.DEBUG);
+
+            String testListId = "debug-list";
+            samplePayload.setListId("mismatched-id");
+
+            presenceController.handlePresenceEvent(testListId, samplePayload);
+
+            assertEquals(testListId, samplePayload.getListId());
+            verify(messagingTemplate).convertAndSend("/topic/list/" + testListId + "/presence", samplePayload);
+            verifyNoMoreInteractions(messagingTemplate);
+        } finally {
+            controllerLogger.setLevel(originalLevel);
+        }
     }
 }

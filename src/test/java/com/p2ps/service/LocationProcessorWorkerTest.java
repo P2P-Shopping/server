@@ -7,7 +7,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -17,6 +24,15 @@ class LocationProcessorWorkerTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private DataSource dataSource;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private DatabaseMetaData databaseMetaData;
 
     @InjectMocks
     private LocationProcessorWorker worker;
@@ -49,5 +65,43 @@ class LocationProcessorWorkerTest {
 
         // Verify the calls were made
         verify(jdbcTemplate, times(2)).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să creeze schema de inventar când baza de date este PostgreSQL")
+    void ensureInventoryMapSchema_WhenPostgreSQL_ShouldCreateSchemaObjects() throws Exception {
+        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(databaseMetaData);
+        when(databaseMetaData.getDatabaseProductName()).thenReturn("PostgreSQL 16");
+
+        worker.ensureInventoryMapSchema();
+
+        verify(jdbcTemplate, atLeast(6)).execute(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să ignore inițializarea când baza de date nu este PostgreSQL")
+    void ensureInventoryMapSchema_WhenNotPostgreSQL_ShouldSkipSchemaCreation() throws Exception {
+        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(databaseMetaData);
+        when(databaseMetaData.getDatabaseProductName()).thenReturn("MySQL 8.0");
+
+        worker.ensureInventoryMapSchema();
+
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    @DisplayName("Trebuie să transforme erorile de inspecție a bazei de date în IllegalStateException")
+    void ensureInventoryMapSchema_WhenMetadataLookupFails_ShouldThrowIllegalStateException() throws Exception {
+        ReflectionTestUtils.setField(worker, "dataSource", dataSource);
+        when(dataSource.getConnection()).thenThrow(new SQLException("metadata unavailable"));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> worker.ensureInventoryMapSchema());
+
+        assertEquals("Unable to inspect database metadata", exception.getMessage());
+        verifyNoInteractions(jdbcTemplate);
     }
 }
