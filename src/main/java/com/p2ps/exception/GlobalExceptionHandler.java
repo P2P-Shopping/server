@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
+import java.util.HashMap;
 import java.util.Map;
 
 // Catches all exceptions and returns a clean JSON response
@@ -99,7 +100,6 @@ public class GlobalExceptionHandler {
                         MSG_STR, "Maximum allowed file size is 5MB"
                 ));
     }
-
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<Map<String, String>> handleMissingServletRequestPart(MissingServletRequestPartException ex) {
         return ResponseEntity
@@ -108,6 +108,17 @@ public class GlobalExceptionHandler {
                         ERR_STR, "Bad Request",
                         MSG_STR, "Missing file part"
                 ));
+    }
+
+    @ExceptionHandler(AiProcessingException.class)
+    public ResponseEntity<Map<String, String>> handleAiProcessingException(AiProcessingException ex) {
+        logger.error("AI Processing failed: {}", ex.getMessage(), ex);
+
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("message", "AI Processing Failed");
+        errorResponse.put("details", ex.getMessage());
+
+        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
     }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
