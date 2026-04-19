@@ -50,7 +50,7 @@ class TelemetryControllerTest {
                 .thenReturn(Optional.empty()); // Simulăm că produsul e nou și nu există în hartă
 
         // 2. Act: Rulăm metoda reală
-        ResponseEntity<Void> response = telemetryController.receiveProductScan(request);
+        ResponseEntity<?> response = telemetryController.receiveProductScan(request);
 
         // 3. Assert: Verificăm dacă rezultatul e cel așteptat (Status 200 OK)
         assertEquals(200, response.getStatusCode().value());
