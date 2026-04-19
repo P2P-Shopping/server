@@ -49,9 +49,12 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
                     return null;
                 }
 
-                String listId = destination.substring("/topic/list/".length());
+                String extractedPath = destination.substring("/topic/list/".length());
+                String extractedId = extractedPath.endsWith("/presence") ? 
+                        extractedPath.substring(0, extractedPath.length() - "/presence".length()) : 
+                        extractedPath;
                 
-                if (!VALID_LIST_ID.matcher(listId).matches()) {
+                if (!VALID_LIST_ID.matcher(extractedId).matches()) {
                     logger.warn("Security Alert: Blocked malformed room subscription attempt");
                     return null;
                 }
