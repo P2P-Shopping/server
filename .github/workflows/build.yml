@@ -4,7 +4,7 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
 jobs:
   build:
     name: Build and analyze
@@ -20,19 +20,14 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d p2p_shopping_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:7.2.6
         ports:
           - 6379:6379
         options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-          --health-start-period=10s
+          --health-cmd="redis-cli ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5 --health-start-period=10s
       mongo:
         image: mongo:7.0.16
         env:
@@ -40,10 +35,9 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' || mongo --quiet --eval 'db.adminCommand({ ping: 1 })'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' ||
+          mongo --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=10s --health-timeout=5s --health-retries=5
           --health-start-period=20s
     steps:
       - uses: actions/checkout@v4
@@ -52,17 +46,17 @@ jobs:
 
       - name: Initialize PostgreSQL Test Database
         env:
-            PGPASSWORD: postgres
+          PGPASSWORD: postgres
         run: |
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/01-users.sql
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/02-shopping-lists-and-items.sql
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/03-init-spatial.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/01-users.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/02-shopping-lists-and-items.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/03-init-spatial.sql
 
       - name: Set up JDK 21 # Changed to 21 to match test.yml, unless 25 is strictly required
         uses: actions/setup-java@v4
         with:
           java-version: 21
-          distribution: 'temurin'
+          distribution: "temurin"
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
@@ -83,7 +77,8 @@ jobs:
           SPRING_DATASOURCE_USERNAME: postgres
           SPRING_DATASOURCE_PASSWORD: postgres
           SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.H2Dialect
+          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_TEST_DATABASE_REPLACE: NONE
           SPRING_DATA_REDIS_HOST: localhost
           SPRING_DATA_REDIS_PORT: 6379

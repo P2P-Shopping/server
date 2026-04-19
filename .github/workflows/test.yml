@@ -5,7 +5,7 @@ on:
       - main
       - develop
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
 
 jobs:
   test:
@@ -23,9 +23,7 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d p2p_shopping_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
 
       mongodb:
         image: mongo:7
@@ -35,29 +33,25 @@ jobs:
           - 27017:27017
         options: >-
           --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
 
       redis:
         image: redis:7
         ports:
           - 6379:6379
         options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout
+          5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Initialize PostgreSQL Test Database
         env:
-            PGPASSWORD: postgres
+          PGPASSWORD: postgres
         run: |
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/01-users.sql
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/02-shopping-lists-and-items.sql
-            psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/03-init-spatial.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/01-users.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/02-shopping-lists-and-items.sql
+          psql -h localhost -U postgres -d p2p_shopping_test -f init-scripts/03-init-spatial.sql
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -71,7 +65,8 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*',
+            '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Grant execute permission for gradlew
@@ -84,8 +79,8 @@ jobs:
           SPRING_DATASOURCE_USERNAME: postgres
           SPRING_DATASOURCE_PASSWORD: postgres
           SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.spatial.dialect.postgis.PostgisDialect
-          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.spatial.dialect.postgis.PostgisDialect
+          SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_TEST_DATABASE_REPLACE: NONE
           SPRING_DATA_REDIS_HOST: localhost
           SPRING_DATA_REDIS_PORT: 6379
