@@ -6,6 +6,9 @@ import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ListValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
@@ -14,6 +17,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -78,10 +82,75 @@ class GlobalExceptionHandlerTest {
     void handleAiProcessingException_returnsMap() {
         AiProcessingException ex = new AiProcessingException("ai bad");
         var resp = handler.handleAiProcessingException(ex);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         Map<String,String> body = resp.getBody();
         assertThat(body).containsEntry("message", "AI Processing Failed");
         assertThat(body).containsEntry("details", "ai bad");
+    }
+
+    @Test
+    void shouldReturnGenericErrorResponseWhenUnhandledExceptionOccurs() {
+        Exception simulatedException = new Exception("Database failure!");
+
+        ResponseEntity<ErrorResponse> response = handler.handleGlobalException(simulatedException);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Internal Server Error", response.getBody().getMessage());
+        assertEquals("An unexpected error occurred.", response.getBody().getDetails());
+    }
+
+    @Test
+    void shouldReturnSameGenericErrorResponseForNullException() {
+        ResponseEntity<ErrorResponse> response = handler.handleGlobalException(null);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Internal Server Error", response.getBody().getMessage());
+    }
+
+    @Test
+    void shouldReturnBadRequestForListValidationException() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleListValidationException(new ListValidationException("Item name cannot be empty"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Validation Error", response.getBody().getMessage());
+        assertEquals("Item name cannot be empty", response.getBody().getDetails());
+    }
+
+    @Test
+    void shouldReturnNotFoundForListResourceExceptions() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleNotFoundExceptions(new ItemNotFoundException("Item not found"));
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Resource Not Found", response.getBody().getMessage());
+        assertEquals("Item not found", response.getBody().getDetails());
+    }
+
+    @Test
+    void shouldReturnForbiddenForListAccessDeniedException() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleListAccessDeniedException(
+                        new ListAccessDeniedException("You do not have permission to edit this item")
+                );
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Forbidden", response.getBody().getMessage());
+        assertEquals("You do not have permission to edit this item", response.getBody().getDetails());
+    }
+
+    @Test
+    void shouldReturnUnauthorizedForMissingListUser() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleListUserNotFoundException(new ListUserNotFoundException("User not found"));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
     }
 
     @Test
@@ -104,5 +173,35 @@ class GlobalExceptionHandlerTest {
         Map<String,String> body = resp.getBody();
         assertThat(body).containsEntry("error", "Unauthorized");
         assertThat(body).containsEntry("message", "Invalid email or password");
+    }
+
+    @Test
+    void shouldHandleMaxUploadSizeExceededException() {
+        MaxUploadSizeExceededException ex = new MaxUploadSizeExceededException(5 * 1024 * 1024);
+
+        ResponseEntity<Map<String, String>> response =
+                handler.handleMaxUploadSizeExceeded(ex);
+
+        assertEquals(HttpStatus.CONTENT_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("File Too Large", response.getBody().get("error"));
+
+        String message = response.getBody().get("message");
+        assertNotNull(message);
+        assertTrue(message.contains("5MB") || message.contains("Maximum allowed file size"));
+    }
+
+    @Test
+    void shouldHandleMissingServletRequestPartException() {
+        MissingServletRequestPartException ex =
+                new MissingServletRequestPartException("file");
+
+        ResponseEntity<Map<String, String>> response =
+                handler.handleMissingServletRequestPart(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Bad Request", response.getBody().get("error"));
+        assertEquals("Missing file part", response.getBody().get("message"));
     }
 }

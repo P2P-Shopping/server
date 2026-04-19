@@ -1,7 +1,7 @@
 package com.p2ps.service;
 
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,21 +13,19 @@ import java.util.UUID;
 @Service
 public class LocationProcessorWorker {
 
+    private static final Logger log = LoggerFactory.getLogger(LocationProcessorWorker.class);
+
     private final JdbcTemplate jdbcTemplate;
 
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     @Scheduled(fixedDelay = 300000)
     @Transactional
     public void processAndCalculateCenters() {
-        System.out.println("⏳ [Worker] Începem recalcularea globală a centrelor...");
+        log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
         try {
-            int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
-            System.out.println("ℹ️ [Worker] Am eliminat " + deletedRows + " locații vechi.");
-
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -56,13 +54,19 @@ public class LocationProcessorWorker {
                     store_id, item_id, estimated_loc_point, confidence_score, ping_count
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC, confidence_score DESC, cluster_id ASC
+                
+                ON CONFLICT (store_id, item_id) 
+                DO UPDATE SET 
+                    estimated_loc_point = EXCLUDED.estimated_loc_point,
+                    confidence_score = EXCLUDED.confidence_score,
+                    ping_count = EXCLUDED.ping_count
             """;
 
-            int insertedRows = jdbcTemplate.update(sql);
-            System.out.println("✅ [Worker] Recalculare globală finalizată. " + insertedRows + " produse mapate.");
+            int affectedRows = jdbcTemplate.update(sql);
+            log.info("✅ [Worker] Recalculare globală finalizată. {} produse procesate/actualizate.", affectedRows);
 
         } catch (Exception e) {
-            System.err.println("❌ [Worker] Eroare critică la recalcularea globală: " + e.getMessage());
+            log.error("❌ [Worker] Eroare critică la recalcularea globală", e);
             throw e;
         }
     }
@@ -70,7 +74,7 @@ public class LocationProcessorWorker {
     @Async
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        System.out.println("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: " + itemId);
+        log.info("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -83,25 +87,34 @@ public class LocationProcessorWorker {
                            ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 3) 
                            OVER () AS cluster_id
                     FROM ItemPings
+                ),
+                ValidCluster AS (
+                    SELECT 
+                        ST_GeometricMedian(ST_Collect(location_point)) AS new_loc,
+                        LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS new_conf,
+                        COUNT(*) AS new_count
+                    FROM Clustered 
+                    WHERE cluster_id = 0
+                    HAVING COUNT(*) > 0
                 )
-                UPDATE store_inventory_map
-                SET estimated_loc_point = (
-                        SELECT ST_GeometricMedian(ST_Collect(location_point)) 
-                        FROM Clustered WHERE cluster_id = 0
-                        LIMIT 1
-                    ),
-                    confidence_score = (
-                        SELECT LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m))))
-                        FROM Clustered WHERE cluster_id = 0
-                    ),
-                    ping_count = (SELECT COUNT(*) FROM Clustered WHERE cluster_id = 0)
-                WHERE store_id = ? AND item_id = ?
+                UPDATE store_inventory_map sim
+                SET estimated_loc_point = vc.new_loc,
+                    confidence_score = vc.new_conf,
+                    ping_count = vc.new_count
+                FROM ValidCluster vc
+                WHERE sim.store_id = ? AND sim.item_id = ?
             """;
 
-            jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
-            System.out.println("🎯 [Rapid-Recalc] Poziția produsului " + itemId + " a fost actualizată.");
+            int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
+
+            if (updated > 0) {
+                log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată cu succes.", itemId);
+            } else {
+                log.warn("⚠️ [Rapid-Recalc] Produsul {} nu a putut fi recalculat (insuficiente pings valide sau zgomot prea mare).", itemId);
+            }
         } catch (Exception e) {
-            System.err.println("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: " + e.getMessage());
+            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă pentru produsul: {}", itemId, e);
+            throw e;
         }
     }
 }
