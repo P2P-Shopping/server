@@ -80,7 +80,7 @@ public class LocationProcessorWorker {
     @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: {}", itemId);
+        log.info("⚡ [Rapid-Recalc] Intervenție pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -94,31 +94,33 @@ public class LocationProcessorWorker {
                            OVER () AS cluster_id
                     FROM ItemPings
                 ),
-                ValidCluster AS (
+                BestCluster AS (
                     SELECT 
                         ST_GeometricMedian(ST_Collect(location_point)) AS new_loc,
                         LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS new_conf,
                         COUNT(*) AS new_count
                     FROM Clustered 
-                    WHERE cluster_id = 0
-                    HAVING COUNT(*) > 0
+                    WHERE cluster_id IS NOT NULL
+                    GROUP BY cluster_id
+                    ORDER BY new_count DESC, new_conf DESC
+                    LIMIT 1
                 )
                 UPDATE store_inventory_map sim
-                SET estimated_loc_point = vc.new_loc,
-                    confidence_score = vc.new_conf,
-                    ping_count = vc.new_count
-                FROM ValidCluster vc
+                SET estimated_loc_point = bc.new_loc,
+                    confidence_score = bc.new_conf,
+                    ping_count = bc.new_count
+                FROM BestCluster bc
                 WHERE sim.store_id = ? AND sim.item_id = ?
             """;
 
             int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
             if (updated > 0) {
-                log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată.", itemId);
+                log.info("🎯 [Rapid-Recalc] Actualizat cu succes (cel mai bun cluster): {}", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut identifica niciun cluster valid pentru: {}", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare pentru produsul: {}", itemId, e);
+            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: {}", itemId, e);
             throw e;
         }
     }

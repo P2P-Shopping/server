@@ -5033,9 +5033,13 @@ INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy
 INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy_m, floor_level, loc_provider, marked_at) VALUES ('ed4d43d0-6f65-472a-8e80-03ee8b13d3ce', '11111111-a1b2-c3d4-e5f6-1234567890ab', 'f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', ST_SetSRID(ST_MakePoint(27.605701, 47.150671), 4326), 8.34, 0, 'GPS', '2026-03-17 22:01:32+00');
 INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy_m, floor_level, loc_provider, marked_at) VALUES ('1d7a1921-b7ca-4c5f-b36b-85afb77128ba', '66666666-f6a7-b8c9-d0e1-6789012345f0', 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', ST_SetSRID(ST_MakePoint(27.599880, 47.157702), 4326), 14.90, 0, 'GPS', '2026-04-04 00:01:32+00');
 COMMIT;
--- Adăugăm protecția pentru a nu avea duplicate în calculele de telemetrie
+-- Începem o tranzacție pentru a garanta că tabelul nu rămâne niciun moment fără constrângere
+BEGIN;
+
 ALTER TABLE store_inventory_map
-DROP CONSTRAINT IF EXISTS uk_store_item; -- Prevenim erorile dacă rulăm de 2 ori
+DROP CONSTRAINT IF EXISTS uk_store_item;
 
 ALTER TABLE store_inventory_map
     ADD CONSTRAINT uk_store_item UNIQUE (store_id, item_id);
+
+COMMIT;
