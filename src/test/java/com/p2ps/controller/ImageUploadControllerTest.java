@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -100,6 +102,16 @@ class ImageUploadControllerTest {
     }
 
     @Test
+    void uploadImage_shouldReturnBadRequest_forNullFile() {
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(null);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("File is empty", response.getBody().get("error"));
+        assertEquals("File is empty", response.getBody().get("message"));
+    }
+
+    @Test
     void uploadImage_shouldReturnUnsupportedMediaType_forInvalidType() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -158,6 +170,38 @@ class ImageUploadControllerTest {
                 "image/png",
                 "not-an-image".getBytes()
         );
+
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Invalid image file", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("message"));
+    }
+
+    @Test
+    void uploadImage_shouldReturnUnsupportedMediaType_forSupportedNonAllowedFormat() throws Exception {
+        byte[] bytes = createImageBytes("gif");
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "recipe.gif",
+                "image/gif",
+                bytes
+        );
+
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("error"));
+        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("message"));
+    }
+
+    @Test
+    void uploadImage_shouldReturnUnsupportedMediaType_whenReadingImageFails() throws Exception {
+        MockMultipartFile file = mock(MockMultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getInputStream()).thenThrow(new IOException("boom"));
 
         ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
 
