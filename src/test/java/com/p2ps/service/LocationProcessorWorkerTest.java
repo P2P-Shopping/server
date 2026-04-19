@@ -43,6 +43,10 @@ class LocationProcessorWorkerTest {
             .withUsername("testuser")
             .withPassword("testpass");
 
+    static {
+        postgresContainer.start();
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
@@ -50,9 +54,8 @@ class LocationProcessorWorkerTest {
         registry.add("spring.datasource.password", postgresContainer::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
-
-
     }
+
     @Autowired
     private FailureAwareJdbcTemplate jdbcTemplate;
 
@@ -85,7 +88,6 @@ class LocationProcessorWorkerTest {
             );
         }
 
-        // Act: Rulăm metoda worker-ului
         worker.processAndCalculateCenters();
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
@@ -108,7 +110,6 @@ class LocationProcessorWorkerTest {
     void processAndCalculateCenters_ThrowsExceptionOnError() {
         jdbcTemplate.setFailOnInsert(true);
 
-        // Act & Assert: Verificăm dacă excepția este corect propagată
         assertThrows(RuntimeException.class, () -> worker.processAndCalculateCenters());
     }
 

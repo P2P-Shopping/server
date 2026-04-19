@@ -39,3 +39,8 @@ out/
 pgdata/
 .env
 .kilo
+
+### Node ###
+node_modules/
+dist/
+

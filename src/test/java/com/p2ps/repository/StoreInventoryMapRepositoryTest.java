@@ -38,6 +38,10 @@ class StoreInventoryMapRepositoryTest {
             .withDatabaseName("testdb")
             .withUsername("testuser")
             .withPassword("testpass");
+
+    static {
+        postgresContainer.start();
+    }
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
