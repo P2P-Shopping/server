@@ -22,8 +22,8 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Recalculare globală executată periodic.
-     * Dezactivată în teste prin ConditionalOnProperty pentru a preveni ApplicationContext failure.
+     * Scheduled to run every 5 minutes, but with initial delay to prevent
+     * ApplicationContext startup failures in test environments.
      */
     @Scheduled(fixedDelay = 300000, initialDelay = 300000)
     @ConditionalOnProperty(name = "app.scheduling.enabled", havingValue = "true", matchIfMissing = true)
