@@ -2,10 +2,8 @@ package com.p2ps.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,19 +20,16 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Scheduled to run every 5 minutes, but with initial delay to prevent
-     * ApplicationContext startup failures in test environments.
+     * Metodă de sincronizare globală.
+     * [FIX] Eliminat @Scheduled și DELETE global.
+     * Acum folosește UPSERT pentru a actualiza datele fără a goli tabela.
      */
-    @Scheduled(fixedDelay = 300000, initialDelay = 300000)
-    @ConditionalOnProperty(name = "app.scheduling.enabled", havingValue = "true", matchIfMissing = true)
     @Transactional
     public void processAndCalculateCenters() {
-        log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
+        log.info("⏳ [Admin-Task] Începem sincronizarea globală a centrelor prin UPSERT...");
 
         try {
-            int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
-            log.info("ℹ️ [Worker] Am șters {} locații vechi.", deletedRows);
-
+            // Folosim INSERT ... ON CONFLICT pentru a nu șterge munca proceselor individuale
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -58,29 +53,42 @@ public class LocationProcessorWorker {
                     FROM ClusteredData
                     WHERE cluster_id IS NOT NULL
                     GROUP BY store_id, item_id, cluster_id
+                ),
+                RankedClusters AS (
+                    SELECT DISTINCT ON (store_id, item_id)
+                        store_id, item_id, estimated_loc_point, confidence_score, ping_count
+                    FROM ClusterStats
+                    ORDER BY store_id, item_id, ping_count DESC, confidence_score DESC
                 )
-                SELECT DISTINCT ON (store_id, item_id)
-                    store_id, item_id, estimated_loc_point, confidence_score, ping_count
-                FROM ClusterStats
-                ORDER BY store_id, item_id, ping_count DESC, confidence_score DESC, cluster_id ASC
+                SELECT store_id, item_id, estimated_loc_point, confidence_score, ping_count
+                FROM RankedClusters
+                ON CONFLICT (store_id, item_id) 
+                DO UPDATE SET 
+                    estimated_loc_point = EXCLUDED.estimated_loc_point,
+                    confidence_score = EXCLUDED.confidence_score,
+                    ping_count = EXCLUDED.ping_count;
             """;
 
-            int insertedRows = jdbcTemplate.update(sql);
-            log.info("✅ [Worker] Recalculare finalizată. {} produse mapate.", insertedRows);
+            int processedRows = jdbcTemplate.update(sql);
+            log.info("✅ [Admin-Task] Sincronizare finalizată. {} rânduri actualizate/inserate.", processedRows);
 
         } catch (Exception e) {
-            log.error("❌ [Worker] Eroare critică la procesarea locațiilor: {}", e.getMessage());
+            log.error("❌ [Admin-Task] Eroare la sincronizarea globală: {}", e.getMessage());
             if (e instanceof RuntimeException) {
                 throw (RuntimeException) e;
             }
-            throw new RuntimeException("Failed to process location data", e);
+            throw new RuntimeException("Failed to merge location data", e);
         }
     }
 
+    /**
+     * Recalculare asincronă pentru un singur produs.
+     * Selectează cel mai bun cluster (BestCluster) în loc de cluster_id = 0.
+     */
     @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Intervenție pentru produsul: {}", itemId);
+        log.info("⚡ [Rapid-Recalc] Analiză cele mai bune clustere pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -115,12 +123,12 @@ public class LocationProcessorWorker {
 
             int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
             if (updated > 0) {
-                log.info("🎯 [Rapid-Recalc] Actualizat cu succes (cel mai bun cluster): {}", itemId);
+                log.info("🎯 [Rapid-Recalc] Poziția actualizată (Best Cluster) pentru: {}", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut identifica niciun cluster valid pentru: {}", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid (date insuficiente) pentru: {}", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: {}", itemId, e);
+            log.error("❌ [Rapid-Recalc] Eroare critică pentru produsul {}: {}", itemId, e.getMessage());
             throw e;
         }
     }

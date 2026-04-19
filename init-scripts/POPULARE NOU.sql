@@ -11,7 +11,6 @@ ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156]
  ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
 ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326), 0)
 
--- SCHIMBARE AICI: De la DO NOTHING la UPDATE
     ON CONFLICT (store_id)
 DO UPDATE SET
     boundary_polygon = EXCLUDED.boundary_polygon,
