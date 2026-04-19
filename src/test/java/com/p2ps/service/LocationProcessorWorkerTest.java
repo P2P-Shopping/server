@@ -1,6 +1,7 @@
 package com.p2ps.service;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(properties = {
     "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
     "telemetry.api.key=test-telemetry-key-for-tests",
-    "spring.task.scheduling.enabled=false"
+    "app.scheduling.enabled=false"
 })
 @Transactional
 class LocationProcessorWorkerTest {
@@ -62,8 +63,13 @@ class LocationProcessorWorkerTest {
     @Autowired
     private LocationProcessorWorker worker;
 
+    @BeforeEach
+    void resetJdbcTemplateFailureState() {
+        jdbcTemplate.setFailOnInsert(false);
+    }
+
     @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
+    @DisplayName("Must successfully execute DELETE followed by INSERT for center recalculation")
     void processAndCalculateCenters_Success() {
         ensureSpatialTables();
         jdbcTemplate.setFailOnInsert(false);
@@ -96,21 +102,25 @@ class LocationProcessorWorkerTest {
                 itemId
         );
 
-        assertTrue(!rows.isEmpty(), "Trebuie să existe cel puțin un rând calculat pentru combinația magazin/produs");
+        assertTrue(!rows.isEmpty(), "There must be at least one calculated row for the store/item combination");
 
         Number pingCount = (Number) rows.get(0).get("ping_count");
         Number confidenceScore = (Number) rows.get(0).get("confidence_score");
 
-        assertTrue(pingCount != null && pingCount.intValue() >= 10, "Ping count-ul trebuie să reflecte clusterul de ping-uri inserate");
-        assertTrue(confidenceScore != null && confidenceScore.doubleValue() >= 0.0 && confidenceScore.doubleValue() <= 1.0, "Confidence score trebuie să fie într-un interval plauzibil");
+        assertTrue(pingCount != null && pingCount.intValue() >= 10, "The ping count should reflect the cluster of inserted pings");
+        assertTrue(confidenceScore != null && confidenceScore.doubleValue() >= 0.0 && confidenceScore.doubleValue() <= 1.0, "The confidence score should be within a plausible range");
     }
 
     @Test
-    @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
+    @DisplayName("Must throw exception further if SQL query fails (to trigger Rollback)")
     void processAndCalculateCenters_ThrowsExceptionOnError() {
         jdbcTemplate.setFailOnInsert(true);
 
-        assertThrows(RuntimeException.class, () -> worker.processAndCalculateCenters());
+        try {
+            assertThrows(RuntimeException.class, () -> worker.processAndCalculateCenters());
+        } finally {
+            jdbcTemplate.setFailOnInsert(false);
+        }
     }
 
     private void ensureSpatialTables() {
