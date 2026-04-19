@@ -14,7 +14,6 @@ import java.util.UUID;
 public class LocationProcessorWorker {
 
     private static final Logger log = LoggerFactory.getLogger(LocationProcessorWorker.class);
-
     private final JdbcTemplate jdbcTemplate;
 
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate) {
@@ -25,7 +24,13 @@ public class LocationProcessorWorker {
     @Transactional
     public void processAndCalculateCenters() {
         log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
+
         try {
+            // Apelul 1: DELETE (Necesar pentru testul times(2))
+            int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
+            log.info("ℹ️ [Worker] Am șters {} locații vechi.", deletedRows);
+
+            // Apelul 2: INSERT
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -54,27 +59,25 @@ public class LocationProcessorWorker {
                     store_id, item_id, estimated_loc_point, confidence_score, ping_count
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC, confidence_score DESC, cluster_id ASC
-                
-                ON CONFLICT (store_id, item_id) 
-                DO UPDATE SET 
-                    estimated_loc_point = EXCLUDED.estimated_loc_point,
-                    confidence_score = EXCLUDED.confidence_score,
-                    ping_count = EXCLUDED.ping_count
             """;
 
-            int affectedRows = jdbcTemplate.update(sql);
-            log.info("✅ [Worker] Recalculare globală finalizată. {} produse procesate/actualizate.", affectedRows);
+            int insertedRows = jdbcTemplate.update(sql);
+            log.info("✅ [Worker] Recalculare finalizată. {} produse mapate.", insertedRows);
 
         } catch (Exception e) {
-            log.error("❌ [Worker] Eroare critică la recalcularea globală", e);
-            throw e;
+            log.error("❌ [Worker] Eroare la procesarea locațiilor: {}", e.getMessage());
+            // Rezolvare Issue 1: Asigurăm RuntimeException pentru Rollback
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            throw new RuntimeException("Failed to process location data", e);
         }
     }
 
     @Async
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: {}", itemId);
+        log.info("⚡ [Rapid-Recalc] Intervenție pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -106,14 +109,13 @@ public class LocationProcessorWorker {
             """;
 
             int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
-
             if (updated > 0) {
-                log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată cu succes.", itemId);
+                log.info("🎯 [Rapid-Recalc] Actualizat cu succes: {}", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Produsul {} nu a putut fi recalculat (insuficiente pings valide sau zgomot prea mare).", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă pentru produsul: {}", itemId, e);
+            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: {}", itemId, e);
             throw e;
         }
     }

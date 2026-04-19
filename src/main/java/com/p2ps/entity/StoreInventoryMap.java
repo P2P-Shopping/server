@@ -2,10 +2,19 @@ package com.p2ps.entity;
 
 import jakarta.persistence.*;
 import org.locationtech.jts.geom.Point;
+
 import java.util.UUID;
 
 @Entity
-@Table(name = "store_inventory_map")
+@Table(
+        name = "store_inventory_map",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_store_item",
+                        columnNames = {"store_id", "item_id"}
+                )
+        }
+)
 public class StoreInventoryMap {
 
     @Id

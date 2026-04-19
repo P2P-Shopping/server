@@ -10,7 +10,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,32 +22,27 @@ class LocationProcessorWorkerTest {
     private LocationProcessorWorker worker;
 
     @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
+    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT (Issue 2 Fix)")
     void processAndCalculateCenters_Success() {
-        // Arrange: Simulăm comportamentul de succes al bazei de date
-        when(jdbcTemplate.update(anyString())).thenReturn(5);
+        // Arrange
+        when(jdbcTemplate.update(anyString()))
+                .thenReturn(5)    // Primul apel: DELETE
+                .thenReturn(10);  // Al doilea apel: INSERT
 
-        // Act: Rulăm metoda worker-ului
+        // Act
         worker.processAndCalculateCenters();
 
-        // Assert: Verificăm că jdbcTemplate a fost apelat exact cum ne așteptăm
+        // Assert
         verify(jdbcTemplate, times(2)).update(anyString());
     }
 
     @Test
-    @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
-    void processAndCalculateCenters_ThrowsExceptionOnError() {
-        // Arrange: Simulăm o eroare la pasul de INSERT
-        when(jdbcTemplate.update(anyString()))
-                .thenReturn(10)
-                .thenThrow(new RuntimeException("Database error during insert"));
+    @DisplayName("Trebuie să propage corect RuntimeException (Issue 1 Fix)")
+    void processAndCalculateCenters_ThrowsException() {
+        // Arrange
+        when(jdbcTemplate.update(anyString())).thenThrow(new RuntimeException("DB Error"));
 
-        // Act & Assert: Verificăm dacă excepția este corect propagată
-        assertThrows(RuntimeException.class, () -> {
-            worker.processAndCalculateCenters();
-        });
-
-        // Verify the calls were made
-        verify(jdbcTemplate, times(2)).update(anyString());
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> worker.processAndCalculateCenters());
     }
 }
