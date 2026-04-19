@@ -1,7 +1,9 @@
 package com.p2ps.controller;
 
 import com.p2ps.service.RoutingService;
+import com.p2ps.repository.StoreInventoryMapRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.List;
 
@@ -13,7 +15,9 @@ class RoutingControllerTest {
     @Test
     void shouldReturnSuccessStatusAndMockRouteWhenCalculateRouteIsCalled() {
         RoutingService routingService = new RoutingService();
-        RoutingController controller = new RoutingController(routingService);        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"));
+        StoreInventoryMapRepository inventoryMapRepository = Mockito.mock(StoreInventoryMapRepository.class);
+        RoutingController controller = new RoutingController(routingService, inventoryMapRepository);
+        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"));
 
         RoutingResponse response = controller.calculateRoute(request);
 
@@ -28,7 +32,8 @@ class RoutingControllerTest {
     @Test
     void shouldReturnMockRouteEvenWhenRequestIsNull() {
         RoutingService routingService = new RoutingService();
-        RoutingController controller = new RoutingController(routingService);
+        StoreInventoryMapRepository inventoryMapRepository = Mockito.mock(StoreInventoryMapRepository.class);
+        RoutingController controller = new RoutingController(routingService, inventoryMapRepository);
         RoutingResponse response = controller.calculateRoute(null);
 
         assertEquals("success", response.getStatus());
