@@ -52,7 +52,7 @@ CREATE TABLE store_inventory_map (
     confidence_score        FLOAT CHECK (confidence_score BETWEEN 0 AND 1),
     ping_count              INT DEFAULT 0,                   -- cate ping-uri au contribuit
     last_updated            TIMESTAMP DEFAULT NOW(),
-
+    CONSTRAINT uk_store_item UNIQUE (store_id, item_id)
     -- Un item poate aparea o singura data per magazin
     UNIQUE (store_id, item_id)
 );

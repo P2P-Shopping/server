@@ -11,10 +11,6 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-spring:
-  task:
-    scheduling:
-      enabled: false
 
     services:
       postgres:
@@ -83,6 +79,8 @@ spring:
           SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.H2Dialect
           SPRING_TEST_DATABASE_REPLACE: NONE
           SPRING_DATA_REDIS_HOST: localhost
+          env:
+            SPRING_TASK_SCHEDULING_ENABLED: false
           SPRING_DATA_REDIS_PORT: 6379
         run: ./gradlew test --info
 

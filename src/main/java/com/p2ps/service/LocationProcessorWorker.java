@@ -20,16 +20,16 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Metodă de sincronizare globală.
-     * [FIX] Eliminat @Scheduled și DELETE global.
-     * Acum folosește UPSERT pentru a actualiza datele fără a goli tabela.
+     * Sincronizare globală a centrelor produselor folosind o strategie non-destructivă.
+     * [Fix] Metoda nu mai este @Scheduled pentru a preveni blocajele de context la startup.
+     * [Fix] Folosește UPSERT (ON CONFLICT) în loc de DELETE pentru integritatea datelor.
      */
     @Transactional
     public void processAndCalculateCenters() {
-        log.info("⏳ [Admin-Task] Începem sincronizarea globală a centrelor prin UPSERT...");
+        log.info("⏳ [Admin-Task] Începem sincronizarea globală a centrelor (Strategie UPSERT)...");
 
         try {
-            // Folosim INSERT ... ON CONFLICT pentru a nu șterge munca proceselor individuale
+            // Calculăm centrele noi și le fuzionăm cu cele existente
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -69,26 +69,24 @@ public class LocationProcessorWorker {
                     ping_count = EXCLUDED.ping_count;
             """;
 
-            int processedRows = jdbcTemplate.update(sql);
-            log.info("✅ [Admin-Task] Sincronizare finalizată. {} rânduri actualizate/inserate.", processedRows);
+            int affectedRows = jdbcTemplate.update(sql);
+            log.info("✅ [Admin-Task] Sincronizare finalizată. {} rânduri actualizate/inserate.", affectedRows);
 
         } catch (Exception e) {
-            log.error("❌ [Admin-Task] Eroare la sincronizarea globală: {}", e.getMessage());
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
-            }
-            throw new RuntimeException("Failed to merge location data", e);
+            log.error("❌ [Admin-Task] Eroare critică la sincronizarea globală: ", e);
+            throw e;
         }
     }
 
     /**
-     * Recalculare asincronă pentru un singur produs.
-     * Selectează cel mai bun cluster (BestCluster) în loc de cluster_id = 0.
+     * Recalculare rapidă asincronă pentru un singur produs.
+     * [Fix] Selectează cel mai bun cluster disponibil (nu doar ID 0).
+     * [Fix] Harden: Necesită minim 5 puncte (HAVING COUNT >= 5) pentru validitate.
      */
     @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Analiză cele mai bune clustere pentru produsul: {}", itemId);
+        log.info("⚡ [Rapid-Recalc] Analiză clustere pentru produsul: {}", itemId);
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -110,6 +108,7 @@ public class LocationProcessorWorker {
                     FROM Clustered 
                     WHERE cluster_id IS NOT NULL
                     GROUP BY cluster_id
+                    HAVING COUNT(*) >= 5  -- [Fix] Prag minim de densitate pentru a ignora zgomotul
                     ORDER BY new_count DESC, new_conf DESC
                     LIMIT 1
                 )
@@ -118,17 +117,19 @@ public class LocationProcessorWorker {
                     confidence_score = bc.new_conf,
                     ping_count = bc.new_count
                 FROM BestCluster bc
-                WHERE sim.store_id = ? AND sim.item_id = ?
+                WHERE sim.store_id = ? AND sim.item_id = ?;
             """;
 
+            // Executăm update-ul folosind parametrii de intrare (storeId și itemId repetați pentru JOIN-ul de la final)
             int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
+
             if (updated > 0) {
-                log.info("🎯 [Rapid-Recalc] Poziția actualizată (Best Cluster) pentru: {}", itemId);
+                log.info("🎯 [Rapid-Recalc] Poziție actualizată cu succes pentru: {}", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid (date insuficiente) pentru: {}", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a găsit niciun cluster care să treacă pragul de siguranță (min 5 puncte) pentru: {}", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare critică pentru produsul {}: {}", itemId, e.getMessage());
+            log.error("❌ [Rapid-Recalc] Eroare la recalcularea produsului " + itemId, e);
             throw e;
         }
     }
