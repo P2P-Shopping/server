@@ -114,11 +114,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleAiProcessingException(AiProcessingException ex) {
         logger.error("AI Processing failed: {}", ex.getMessage(), ex);
 
-        Map<String, String> errorResponse = new HashMap<>();
-        errorResponse.put("message", "AI Processing Failed");
-        errorResponse.put("details", ex.getMessage());
+                Map<String, String> errorResponse = new HashMap<>();
+                // Use the same keys as ErrorResponse (`message` and `details`) so callers
+                // receive a consistent shape for structured errors.
+                errorResponse.put(MSG_STR, "AI Processing Failed");
+                errorResponse.put("details", ex.getMessage());
 
-        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
+                return ResponseEntity.status(ex.getStatus()).body(errorResponse);
     }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {

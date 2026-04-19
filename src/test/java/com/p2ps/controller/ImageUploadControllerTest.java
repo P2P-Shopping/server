@@ -5,10 +5,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class ImageUploadControllerTest {
 
@@ -19,13 +30,26 @@ class ImageUploadControllerTest {
         controller = new ImageUploadController();
     }
 
+    public static byte[] createImageBytes(String formatName) throws IOException {
+        BufferedImage img = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setColor(Color.RED);
+        g.fillRect(0, 0, 10, 10);
+        g.dispose();
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            ImageIO.write(img, formatName, baos);
+            return baos.toByteArray();
+        }
+    }
+
     @Test
-    void uploadImage_shouldReturnOk_forValidJpeg() {
+    void uploadImage_shouldReturnOk_forValidJpeg() throws Exception {
+        byte[] bytes = createImageBytes("jpg");
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "recipe.jpg",
                 "image/jpeg",
-                "fake-image-content".getBytes()
+                bytes
         );
 
         ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
@@ -35,16 +59,17 @@ class ImageUploadControllerTest {
         assertEquals("Image uploaded successfully", response.getBody().get("message"));
         assertEquals("recipe.jpg", response.getBody().get("fileName"));
         assertEquals("image/jpeg", response.getBody().get("contentType"));
-        assertEquals((long) "fake-image-content".getBytes().length, response.getBody().get("size"));
+        assertEquals((long) bytes.length, response.getBody().get("size"));
     }
 
     @Test
-    void uploadImage_shouldReturnOk_forValidPng() {
+    void uploadImage_shouldReturnOk_forValidPng() throws Exception {
+        byte[] bytes = createImageBytes("png");
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "recipe.png",
                 "image/png",
-                "fake-png-content".getBytes()
+                bytes
         );
 
         ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
@@ -85,7 +110,7 @@ class ImageUploadControllerTest {
 
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("error"));
     }
 
     @Test
@@ -101,6 +126,63 @@ class ImageUploadControllerTest {
 
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals("Only JPEG and PNG are allowed", response.getBody().get("error"));
+        assertEquals("Invalid image file", response.getBody().get("error"));
+    }
+
+    @Test
+    void uploadImage_shouldUseUnknown_whenOriginalFilenameIsNull() throws Exception {
+        byte[] bytes = createImageBytes("jpg");
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                null,
+                "image/jpeg",
+                bytes
+        );
+
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("unknown", response.getBody().get("fileName"));
+    }
+
+    @Test
+    void uploadImage_shouldReturnUnsupportedMediaType_forInvalidImageBytesEvenIfContentTypeImage() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "notimage.png",
+                "image/png",
+                "not-an-image".getBytes()
+        );
+
+        ResponseEntity<Map<String, Object>> response = controller.uploadImage(file);
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Invalid image file", response.getBody().get("error"));
+    }
+}
+
+class ImageUploadControllerMvcTest {
+
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUpMvc() {
+        mockMvc = MockMvcBuilders.standaloneSetup(new ImageUploadController()).build();
+    }
+
+    @Test
+    void multipartEndpoint_shouldAcceptImage() throws Exception {
+        MockMultipartFile multipartFile = new MockMultipartFile(
+                "file",
+                "upload.png",
+                "image/png",
+                ImageUploadControllerTest.createImageBytes("png")
+        );
+
+        mockMvc.perform(multipart("/api/images/upload").file(multipartFile))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fileName").value("upload.png"));
     }
 }
