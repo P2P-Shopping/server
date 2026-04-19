@@ -2,6 +2,7 @@ package com.p2ps.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,20 +22,19 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Recalculare globală executată la fiecare 5 minute.
-     * Am adăugat initialDelay pentru a preveni eșecul ApplicationContext la startup în teste.
+     * Recalculare globală executată periodic.
+     * Dezactivată în teste prin ConditionalOnProperty pentru a preveni ApplicationContext failure.
      */
     @Scheduled(fixedDelay = 300000, initialDelay = 300000)
+    @ConditionalOnProperty(name = "app.scheduling.enabled", havingValue = "true", matchIfMissing = true)
     @Transactional
     public void processAndCalculateCenters() {
         log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
 
         try {
-            // Apelul 1: Golește datele vechi (Necesar pentru LocationProcessorWorkerTest)
             int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
             log.info("ℹ️ [Worker] Am șters {} locații vechi.", deletedRows);
 
-            // Apelul 2: Inserează noile calcule
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -115,7 +115,7 @@ public class LocationProcessorWorker {
             if (updated > 0) {
                 log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată.", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Date insuficiente pentru: {}.", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}", itemId);
             }
         } catch (Exception e) {
             log.error("❌ [Rapid-Recalc] Eroare pentru produsul: {}", itemId, e);

@@ -11,7 +11,7 @@ ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156]
 ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
 ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326), 0)
     ON CONFLICT DO NOTHING;
-ON CONFLICT DO NOTHING;
+
 -- INSERĂM TOATE PRODUSELE GENERATE PENTRU A RESPECTA FOREIGN KEY
 INSERT INTO items (item_id, name, category, upc_code) VALUES ('11111111-a1b2-c3d4-e5f6-1234567890ab', 'Produs 1', 'Categoria A', '10001') ON CONFLICT DO NOTHING;
 INSERT INTO items (item_id, name, category, upc_code) VALUES ('22222222-b2c3-d4e5-f6a7-2345678901bc', 'Produs 2', 'Categoria B', '10002') ON CONFLICT DO NOTHING;
