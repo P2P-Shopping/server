@@ -2,15 +2,21 @@
 TRUNCATE raw_user_pings;
 
 INSERT INTO store_geofences (store_id, name, boundary_polygon, floor_level) VALUES
-('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas',
- ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 4326), 0),
+ ('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas',
+ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 4326), 0),
 
- ('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall',
+('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall',
 ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156],[27.601,47.156],[27.601,47.158],[27.599,47.158],[27.599,47.156]]]}'), 4326), 0),
 
-('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
+ ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
 ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326), 0)
-    ON CONFLICT DO NOTHING;
+
+-- SCHIMBARE AICI: De la DO NOTHING la UPDATE
+    ON CONFLICT (store_id)
+DO UPDATE SET
+    boundary_polygon = EXCLUDED.boundary_polygon,
+           name = EXCLUDED.name,
+           floor_level = EXCLUDED.floor_level;
 
 -- INSERĂM TOATE PRODUSELE GENERATE PENTRU A RESPECTA FOREIGN KEY
 INSERT INTO items (item_id, name, category, upc_code) VALUES ('11111111-a1b2-c3d4-e5f6-1234567890ab', 'Produs 1', 'Categoria A', '10001') ON CONFLICT DO NOTHING;
