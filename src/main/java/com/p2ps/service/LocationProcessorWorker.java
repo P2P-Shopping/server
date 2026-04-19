@@ -21,20 +21,20 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Recalculare globală executată periodic la fiecare 5 minute.
-     * Include DELETE și INSERT separat pentru a respecta testele unitare (times(2)).
+     * Recalculare globală executată la fiecare 5 minute.
+     * Am adăugat initialDelay pentru a preveni eșecul ApplicationContext la startup în teste.
      */
-    @Scheduled(fixedDelay = 300000)
+    @Scheduled(fixedDelay = 300000, initialDelay = 300000)
     @Transactional
     public void processAndCalculateCenters() {
         log.info("⏳ [Worker] Începem recalcularea globală a centrelor...");
 
         try {
-            // Apelul 1: Golește datele vechi (Cerut de LocationProcessorWorkerTest)
+            // Apelul 1: Golește datele vechi (Necesar pentru LocationProcessorWorkerTest)
             int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
             log.info("ℹ️ [Worker] Am șters {} locații vechi.", deletedRows);
 
-            // Apelul 2: Inserează noile calcule folosind clustering PostGIS
+            // Apelul 2: Inserează noile calcule
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
@@ -70,7 +70,6 @@ public class LocationProcessorWorker {
 
         } catch (Exception e) {
             log.error("❌ [Worker] Eroare critică la procesarea locațiilor: {}", e.getMessage());
-            // Aruncăm RuntimeException pentru a forța @Transactional să facă Rollback
             if (e instanceof RuntimeException) {
                 throw (RuntimeException) e;
             }
@@ -78,9 +77,6 @@ public class LocationProcessorWorker {
         }
     }
 
-    /**
-     * Recalculare rapidă pentru un singur produs, executată asincron.
-     */
     @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
@@ -119,10 +115,10 @@ public class LocationProcessorWorker {
             if (updated > 0) {
                 log.info("🎯 [Rapid-Recalc] Poziția produsului {} a fost actualizată.", itemId);
             } else {
-                log.warn("⚠️ [Rapid-Recalc] Nu s-a putut genera un cluster valid pentru: {}. Date insuficiente.", itemId);
+                log.warn("⚠️ [Rapid-Recalc] Date insuficiente pentru: {}.", itemId);
             }
         } catch (Exception e) {
-            log.error("❌ [Rapid-Recalc] Eroare la recalcularea rapidă pentru produsul: {}", itemId, e);
+            log.error("❌ [Rapid-Recalc] Eroare pentru produsul: {}", itemId, e);
             throw e;
         }
     }
