@@ -200,28 +200,28 @@ public class RoutingService {
 
     List<RoutePoint> threeOptImprove(List<RoutePoint> route) {
         List<RoutePoint> current = new ArrayList<>(route);
-        boolean improved = true;
+        List<RoutePoint> improved = tryImproveOnce(current);
+        while (improved != null) {
+            current = improved;
+            improved = tryImproveOnce(current);
+        }
+        return current;
+    }
 
-        while (improved) {
-            improved = false;
-            int n = current.size();
-            double currentDist = routeDistance(current);
-
-            for (int i = 0; i < n - 2 && !improved; i++) {
-                for (int j = i + 1; j < n - 1 && !improved; j++) {
-                    for (int k = j + 1; k < n - 1 && !improved; k++) {
-                        List<RoutePoint> best = findBestReconnect(current, i, j, k, currentDist);
-                        if (best != null) {
-                            current = best;
-                            currentDist = routeDistance(current);
-                            improved = true;
-                        }
+    private List<RoutePoint> tryImproveOnce(List<RoutePoint> route) {
+        int n = route.size();
+        double currentDist = routeDistance(route);
+        for (int i = 0; i < n - 2; i++) {
+            for (int j = i + 1; j < n - 1; j++) {
+                for (int k = j + 1; k < n - 1; k++) {
+                    List<RoutePoint> best = findBestReconnect(route, i, j, k, currentDist);
+                    if (best != null) {
+                        return best;
                     }
                 }
             }
         }
-
-        return current;
+        return null;
     }
 
     private List<RoutePoint> findBestReconnect(List<RoutePoint> route, int i, int j, int k, double currentDist) {
