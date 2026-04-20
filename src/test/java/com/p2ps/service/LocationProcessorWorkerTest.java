@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -31,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "telemetry.api.key=test-telemetry-key-for-tests",
         "app.scheduling.enabled=false"
 })
-@Transactional
 class LocationProcessorWorkerTest {
 
     static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
@@ -43,10 +41,6 @@ class LocationProcessorWorkerTest {
             .withDatabaseName("testdb")
             .withUsername("testuser")
             .withPassword("testpass");
-
-    static {
-        postgresContainer.start();
-    }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
