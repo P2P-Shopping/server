@@ -1,6 +1,6 @@
 package com.p2ps.repository;
 
-import com.p2ps.entity.StoreInventoryMap;
+import com.p2ps.model.StoreInventoryMap;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
