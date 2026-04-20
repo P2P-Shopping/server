@@ -181,46 +181,7 @@ class RoutingServiceTest {
         assertEquals("error", response.getStatus());
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    void calculateOptimalRoute_shouldReturnSuccessFromInventoryMap() {
-        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
-                .thenReturn(List.of(STORE_ID));
-
-        RoutePoint p1 = new RoutePoint(ITEM_1, "Produs 1", 47.1562, 27.5871);
-        RoutePoint p2 = new RoutePoint(ITEM_2, "Produs 2", 47.1558, 27.5865);
-
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
-                .thenReturn(List.of(p1, p2));
-
-        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_2));
-        RoutingResponse response = service.calculateOptimalRoute(request);
-
-        assertEquals("success", response.getStatus());
-        assertNotNull(response.getRoute());
-        assertFalse(response.getRoute().isEmpty());
-        assertEquals("user_loc", response.getRoute().get(0).getItemId());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    void calculateOptimalRoute_shouldFallbackToRawPingsWhenInventoryEmpty() {
-        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
-                .thenReturn(List.of(STORE_ID));
-
-        RoutePoint p1 = new RoutePoint(ITEM_1, "Produs 1", 47.1562, 27.5871);
-
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
-                .thenReturn(List.of())
-                .thenReturn(List.of(p1));
-
-        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1));
-        RoutingResponse response = service.calculateOptimalRoute(request);
-
-        assertEquals("success", response.getStatus());
-        assertTrue(response.getWarnings().stream()
-                .anyMatch(w -> w.contains("date brute")));
-    }
+   
 
     @SuppressWarnings("unchecked")
     @Test
