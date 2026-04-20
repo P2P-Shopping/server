@@ -289,5 +289,5 @@ public class RoutingService {
                 .toList();
     }
 
-    record ProductLocation(String itemId, String name, double lat, double lng, double confidenceScore) {}
+    public record ProductLocation(String itemId, String name, double lat, double lng, double confidenceScore) {}
 }
