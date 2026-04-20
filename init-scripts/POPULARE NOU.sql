@@ -1,25 +1,33 @@
-
+BEGIN;
 TRUNCATE raw_user_pings;
 
 INSERT INTO store_geofences (store_id, name, boundary_polygon, floor_level) VALUES
-  ('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas',
-   ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 0),
-  ('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall',
-   ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156],[27.601,47.156],[27.601,47.158],[27.599,47.158],[27.599,47.156]]]}'), 0),
-  ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
-   ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 0)
-ON CONFLICT DO NOTHING;
--- INSERĂM TOATE PRODUSELE GENERATE PENTRU A RESPECTA FOREIGN KEY
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('11111111-a1b2-c3d4-e5f6-1234567890ab', 'Produs 1', 'Categoria A', '10001') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('22222222-b2c3-d4e5-f6a7-2345678901bc', 'Produs 2', 'Categoria B', '10002') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('33333333-c3d4-e5f6-a7b8-3456789012cd', 'Produs 3', 'Categoria C', '10003') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('44444444-d4e5-f6a7-b8c9-4567890123de', 'Produs 4', 'Categoria D', '10004') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('55555555-e5f6-a7b8-c9d0-5678901234ef', 'Produs 5', 'Categoria E', '10005') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('66666666-f6a7-b8c9-d0e1-6789012345f0', 'Produs 6', 'Categoria F', '10006') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('77777777-a7b8-c9d0-e1f2-789012345601', 'Produs 7', 'Categoria G', '10007') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('88888888-b8c9-d0e1-f2a3-890123456712', 'Produs 8', 'Categoria H', '10008') ON CONFLICT DO NOTHING;
-INSERT INTO items (item_id, name, category, upc_code) VALUES ('99999999-c9d0-e1f2-a3b4-901234567823', 'Produs 9', 'Categoria I', '10009') ON CONFLICT DO NOTHING;
+ ('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas',
+ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 4326), 0),
+
+('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall',
+ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156],[27.601,47.156],[27.601,47.158],[27.599,47.158],[27.599,47.156]]]}'), 4326), 0),
+
+ ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
+ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326), 0)
+
+    ON CONFLICT (store_id)
+DO UPDATE SET
+    boundary_polygon = EXCLUDED.boundary_polygon,
+           name = EXCLUDED.name,
+           floor_level = EXCLUDED.floor_level;
 BEGIN;
+-- INSERĂM TOATE PRODUSELE GENERATE PENTRU A RESPECTA FOREIGN KEY
+INSERT INTO items (item_id, name, category, list_id)VALUES ('11111111-a1b2-c3d4-e5f6-1234567890ab', 'Produs 1', 'Categoria A', '10001') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('22222222-b2c3-d4e5-f6a7-2345678901bc', 'Produs 2', 'Categoria B', '10002') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('33333333-c3d4-e5f6-a7b8-3456789012cd', 'Produs 3', 'Categoria C', '10003') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('44444444-d4e5-f6a7-b8c9-4567890123de', 'Produs 4', 'Categoria D', '10004') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('55555555-e5f6-a7b8-c9d0-5678901234ef', 'Produs 5', 'Categoria E', '10005') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('66666666-f6a7-b8c9-d0e1-6789012345f0', 'Produs 6', 'Categoria F', '10006') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('77777777-a7b8-c9d0-e1f2-789012345601', 'Produs 7', 'Categoria G', '10007') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('88888888-b8c9-d0e1-f2a3-890123456712', 'Produs 8', 'Categoria H', '10008') ON CONFLICT DO NOTHING;
+INSERT INTO items (item_id, name, category, list_id) VALUES ('99999999-c9d0-e1f2-a3b4-901234567823', 'Produs 9', 'Categoria I', '10009') ON CONFLICT DO NOTHING;
+ON  CONFLICT (id) DO NOTHING;
 
 BEGIN;
 -- Seeder: Generare 5000 Raw_User_Pings distribuite pe 3 magazine si 9 produse
@@ -5023,4 +5031,5 @@ INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy
 INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy_m, floor_level, loc_provider, marked_at) VALUES ('2966bbcd-e554-48e4-a551-2d58237b85c1', '88888888-b8c9-d0e1-f2a3-890123456712', '8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', ST_SetSRID(ST_MakePoint(27.587144, 47.156757), 4326), 12.47, 0, 'GPS', '2026-03-20 02:01:32+00');
 INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy_m, floor_level, loc_provider, marked_at) VALUES ('ed4d43d0-6f65-472a-8e80-03ee8b13d3ce', '11111111-a1b2-c3d4-e5f6-1234567890ab', 'f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', ST_SetSRID(ST_MakePoint(27.605701, 47.150671), 4326), 8.34, 0, 'GPS', '2026-03-17 22:01:32+00');
 INSERT INTO raw_user_pings (ping_id, item_id, store_id, location_point, accuracy_m, floor_level, loc_provider, marked_at) VALUES ('1d7a1921-b7ca-4c5f-b36b-85afb77128ba', '66666666-f6a7-b8c9-d0e1-6789012345f0', 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', ST_SetSRID(ST_MakePoint(27.599880, 47.157702), 4326), 14.90, 0, 'GPS', '2026-04-04 00:01:32+00');
+ON CONFLICT (ping_id) DO NOTHING
 COMMIT;
