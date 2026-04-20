@@ -2,6 +2,8 @@ package com.p2ps.telemetry.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.exception.GlobalExceptionHandler;
+import com.p2ps.repository.StoreInventoryMapRepository;
+import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.telemetry.services.TelemetryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,10 +27,16 @@ class TelemetryControllerMvcTest {
     @BeforeEach
     void setUp() {
         telemetryService = mock(TelemetryService.class);
-        // instantiate controller with mocked service
-        TelemetryController controller = new TelemetryController(telemetryService);
+        LocationProcessorWorker locationProcessorWorker = mock(LocationProcessorWorker.class);
+        StoreInventoryMapRepository mapRepository = mock(StoreInventoryMapRepository.class);
 
-        // configure a Validator so @Valid works in standalone MockMvc
+        // Instantiate controller with all required dependencies
+        TelemetryController controller = new TelemetryController(
+                telemetryService,
+                locationProcessorWorker,
+                mapRepository
+        );
+
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
