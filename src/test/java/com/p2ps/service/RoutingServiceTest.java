@@ -1,53 +1,70 @@
 package com.p2ps.service;
 
 import com.p2ps.controller.RoutePoint;
-import com.p2ps.controller.RoutingRequest;
-import com.p2ps.controller.RoutingResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@ExtendWith(MockitoExtension.class)
 class RoutingServiceTest {
 
-    private final RoutingService routingService = new RoutingService();
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @Test
-    void calculateOptimalRoute_shouldReturnMockRouteUsingDefaultCoordinatesWhenRequestIsNull() {
-        RoutingResponse response = routingService.calculateOptimalRoute(null);
-
-        assertNotNull(response);
-        assertEquals("success", response.getStatus());
-        assertNotNull(response.getRoute());
-        assertEquals(4, response.getRoute().size());
-
-        RoutePoint userPoint = response.getRoute().get(0);
-        assertEquals("user_loc", userPoint.getItemId());
-        assertEquals("Punctul Albastru (Tu)", userPoint.getName());
-        assertEquals(47.151726, userPoint.getLat(), 0.000001);
-        assertEquals(27.587914, userPoint.getLng(), 0.000001);
-
-        RoutePoint lastPoint = response.getRoute().get(3);
-        assertEquals("item_103", lastPoint.getItemId());
-        assertEquals("Mere", lastPoint.getName());
+    void haversine_shouldReturnZeroForSameCoordinates() {
+        RoutingService service = new RoutingService(jdbcTemplate);
+        double dist = service.haversine(47.156, 27.587, 47.156, 27.587);
+        assertEquals(0.0, dist, 0.001);
     }
 
     @Test
-    void calculateOptimalRoute_shouldUseRequestCoordinatesWhenRequestIsProvided() {
-        RoutingRequest request = new RoutingRequest(10.5, 20.5, List.of("item_101", "item_102"));
+    void haversine_shouldReturnPositiveDistanceForDifferentCoordinates() {
+        RoutingService service = new RoutingService(jdbcTemplate);
+        double dist = service.haversine(47.156, 27.587, 47.157, 27.588);
+        assertTrue(dist > 0);
+    }
 
-        RoutingResponse response = routingService.calculateOptimalRoute(request);
+    @Test
+    void nearestNeighborTSP_shouldReturnAllPoints() {
+        RoutingService service = new RoutingService(jdbcTemplate);
+        RoutePoint start = new RoutePoint("user", "Tu", 47.156, 27.587);
+        List<RoutePoint> points = List.of(
+                new RoutePoint("A", "Produs A", 47.157, 27.588),
+                new RoutePoint("B", "Produs B", 47.158, 27.589),
+                new RoutePoint("C", "Produs C", 47.155, 27.586)
+        );
 
-        assertNotNull(response);
-        assertEquals("success", response.getStatus());
-        assertNotNull(response.getRoute());
-        assertEquals(4, response.getRoute().size());
+        List<RoutePoint> route = service.nearestNeighborTSP(start, points);
 
-        RoutePoint userPoint = response.getRoute().get(0);
-        assertEquals("user_loc", userPoint.getItemId());
-        assertEquals("Punctul Albastru (Tu)", userPoint.getName());
-        assertEquals(10.5, userPoint.getLat(), 0.000001);
-        assertEquals(20.5, userPoint.getLng(), 0.000001);
+        assertEquals(3, route.size());
+        assertTrue(route.stream().anyMatch(p -> p.getItemId().equals("A")));
+        assertTrue(route.stream().anyMatch(p -> p.getItemId().equals("B")));
+        assertTrue(route.stream().anyMatch(p -> p.getItemId().equals("C")));
+    }
+
+    @Test
+    void threeOptImprove_shouldNotIncreaseTotalDistance() {
+        RoutingService service = new RoutingService(jdbcTemplate);
+        List<RoutePoint> route = List.of(
+                new RoutePoint("user", "Tu", 47.156, 27.587),
+                new RoutePoint("A", "Produs A", 47.158, 27.590),
+                new RoutePoint("B", "Produs B", 47.155, 27.584),
+                new RoutePoint("C", "Produs C", 47.160, 27.592)
+        );
+
+        double before = service.routeDistance(route);
+        List<RoutePoint> optimized = service.threeOptImprove(new ArrayList<>(route));
+        double after = service.routeDistance(optimized);
+
+        assertTrue(after <= before + 0.001);
+        assertEquals(route.size(), optimized.size());
     }
 }
