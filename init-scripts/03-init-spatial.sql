@@ -46,16 +46,16 @@ CREATE INDEX idx_raw_user_pings_store_id
 -- STORE_INVENTORY_MAP (harta agregata - unde e fiecare produs)
 -- ============================================================
 CREATE TABLE store_inventory_map (
-    map_id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    store_id                UUID NOT NULL REFERENCES store_geofences(store_id),
-    item_id                 UUID NOT NULL REFERENCES items(id),
-    estimated_loc_point     GEOMETRY(Point, 4326) NOT NULL,  -- locatia calculata din ping-uri
-    confidence_score        FLOAT CHECK (confidence_score BETWEEN 0 AND 1),
-    ping_count              INT DEFAULT 0,                   -- cate ping-uri au contribuit
-    last_updated            TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT uk_store_item UNIQUE (store_id, item_id)
-    -- Un item poate aparea o singura data per magazin
-    UNIQUE (store_id, item_id)
+                                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                     store_id UUID NOT NULL,
+                                     item_id UUID NOT NULL,
+                                     estimated_loc_point GEOMETRY(Point, 4326),
+                                     confidence_score DOUBLE PRECISION,
+                                     ping_count INTEGER DEFAULT 0,
+    -- Păstrăm doar constrângerea numită (necesară pentru UPSERT)
+                                     CONSTRAINT uk_store_item UNIQUE (store_id, item_id)
+    -- [FIX] Am eliminat linia duplicat UNIQUE (store_id, item_id)
+    -- [FIX] Asigură-te că NU există virgulă după ultima constrângere înainte de închiderea parantezei
 );
 
 -- Index spatial pe locatia estimata
