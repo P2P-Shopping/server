@@ -1,6 +1,8 @@
 package com.p2ps.telemetry.dto;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
@@ -27,8 +29,8 @@ public class TelemetryRequest {
     private Double lon;
 
     @NotNull(message = "Accuracy is required")
-    @Min(value = 0, message = "Accuracy cannot be negative")
-    @Max(value = 100, message = "Accuracy above 100m is discarded as noise")
+    @DecimalMin(value = "0", message = "Accuracy cannot be negative")
+    @DecimalMax(value = "100", message = "Accuracy above 100m is discarded as noise")
     private Double accuracy;
 
     public UUID getStoreId() {

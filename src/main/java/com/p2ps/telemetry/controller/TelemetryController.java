@@ -10,6 +10,7 @@ import com.p2ps.telemetry.services.TelemetryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,26 +43,12 @@ public class TelemetryController {
         telemetryService.processPing(pingDTO);
 
         try {
-            UUID storeUuid = UUID.fromString(pingDTO.getStoreId());
-            UUID itemUuid = UUID.fromString(pingDTO.getItemId());
-
-            mapRepository.findByStoreIdAndItemId(storeUuid, itemUuid).ifPresent(map -> {
-                if (map.getEstimatedLocPoint() != null) {
-                    double distance = calculateHaversineDistance(
-                            pingDTO.getLat(), pingDTO.getLng(),
-                            map.getEstimatedLocPoint().getY(), map.getEstimatedLocPoint().getX()
-                    );
-
-                    if (distance > 15.0) {
-                        log.warn(" Produs mutat detectat ({}m). Item: {}", (int) distance, itemUuid);
-                        try {
-                            locationProcessorWorker.recalculateSingleItem(storeUuid, itemUuid);
-                        } catch (TaskRejectedException e) {
-                            log.error(" Coada de procesare este plină pentru item-ul: {}", itemUuid);
-                        }
-                    }
-                }
-            });
+            maybeTriggerRapidRecalc(
+                    UUID.fromString(pingDTO.getStoreId()),
+                    UUID.fromString(pingDTO.getItemId()),
+                    pingDTO.getLat(),
+                    pingDTO.getLng()
+            );
         } catch (IllegalArgumentException e) {
             log.error(" ID-uri invalide primite: Store={}, Item={}", pingDTO.getStoreId(), pingDTO.getItemId());
         } catch (Exception e) {
@@ -104,33 +91,43 @@ public class TelemetryController {
             return ResponseEntity.internalServerError().body("Eroare la procesarea datelor.");
         }
 
-        mapRepository.findByStoreIdAndItemId(request.getStoreId(), request.getItemId()).ifPresent(map -> {
-            if (map.getEstimatedLocPoint() != null) {
-                double distance = calculateHaversineDistance(
-                        request.getLat(), request.getLon(),
-                        map.getEstimatedLocPoint().getY(), map.getEstimatedLocPoint().getX()
-                );
-
-                if (distance > 15.0) {
-                    log.warn("⚠️ Produs mutat detectat ({}m). Declanșăm recalcularea pentru: {}", (int) distance, request.getItemId());
-
-                    try {
-                        locationProcessorWorker.recalculateSingleItem(request.getStoreId(), request.getItemId());
-                    } catch (TaskRejectedException e) {
-                        log.error("🚫 Coada de execuție asincronă este plină. Recalcularea pentru {} a fost amânată.", request.getItemId());
-                    }
-                }
-            }
-        });
+        try {
+            maybeTriggerRapidRecalc(request.getStoreId(), request.getItemId(), request.getLat(), request.getLon());
+        } catch (Exception e) {
+            log.error(" Eroare la procesarea distanței pentru scan-ul produsului {}: {}", request.getItemId(), e.getMessage());
+        }
 
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/recalculate-all")
     public ResponseEntity<String> triggerGlobalRecalculation() {
         log.info(" [Admin] Declanșare manuală sincronizare globală.");
         locationProcessorWorker.processAndCalculateCenters();
         return ResponseEntity.ok("Procesul de sincronizare globală a fost pornit.");
+    }
+
+    private void maybeTriggerRapidRecalc(UUID storeUuid, UUID itemUuid, double lat, double lon) {
+        mapRepository.findByStoreIdAndItemId(storeUuid, itemUuid).ifPresent(map -> {
+            if (map.getEstimatedLocPoint() == null) {
+                return;
+            }
+
+            double distance = calculateHaversineDistance(
+                    lat, lon,
+                    map.getEstimatedLocPoint().getY(), map.getEstimatedLocPoint().getX()
+            );
+
+            if (distance > 15.0) {
+                log.warn(" Produs mutat detectat ({}m). Item: {}", (int) distance, itemUuid);
+                try {
+                    locationProcessorWorker.recalculateSingleItem(storeUuid, itemUuid);
+                } catch (TaskRejectedException e) {
+                    log.error(" Coada de procesare este plină pentru item-ul: {}", itemUuid);
+                }
+            }
+        });
     }
 
     private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {

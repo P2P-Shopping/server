@@ -174,7 +174,9 @@ public class LocationProcessorWorker {
             WITH ItemPings AS (
                 SELECT location_point, accuracy_m
                 FROM raw_user_pings
-                WHERE store_id = ? AND item_id = ? AND accuracy_m < 12.0
+                WHERE store_id = ? AND item_id = ?
+                  AND loc_provider IN ('WIFI_RTT', 'GPS')
+                  AND accuracy_m < 12.0
             ),
             Clustered AS (
                 SELECT location_point, accuracy_m,
@@ -194,17 +196,19 @@ public class LocationProcessorWorker {
                 ORDER BY new_count DESC, new_conf DESC
                 LIMIT 1
             )
-            UPDATE store_inventory_map sim
-            SET estimated_loc_point = bc.new_loc,
-                confidence_score = bc.new_conf,
-                ping_count = bc.new_count,
-                last_updated = NOW()
+            INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated)
+            SELECT ?, ?, bc.new_loc, bc.new_conf, bc.new_count, NOW()
             FROM BestCluster bc
-            WHERE sim.store_id = ? AND sim.item_id = ?;
+            ON CONFLICT (store_id, item_id)
+            DO UPDATE SET
+                estimated_loc_point = EXCLUDED.estimated_loc_point,
+                confidence_score = EXCLUDED.confidence_score,
+                ping_count = EXCLUDED.ping_count,
+                last_updated = NOW();
         """;
 
         try {
-            int updated = jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
+            int updated = jdbcTemplate.update(sql, storeId, itemId);
             if (updated > 0) {
                 log.info(" [Rapid-Recalc] Poziție actualizată pentru: {}", itemId);
             } else {

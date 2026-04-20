@@ -83,8 +83,7 @@ jobs:
           SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_TEST_DATABASE_REPLACE: NONE
           SPRING_DATA_REDIS_HOST: localhost
-          env:
-            SPRING_TASK_SCHEDULING_ENABLED: false
+          SPRING_TASK_SCHEDULING_ENABLED: false
           SPRING_DATA_REDIS_PORT: 6379
         run: ./gradlew test --info
 
