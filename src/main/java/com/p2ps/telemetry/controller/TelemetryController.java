@@ -38,7 +38,7 @@ public class TelemetryController {
 
     @PostMapping("/ping")
     public ResponseEntity<Map<String, String>> receivePing(@Valid @RequestBody TelemetryPingDTO pingDTO) {
-        log.info("[API] Ping primit pentru produsul: {}", pingDTO.getItemId());
+        log.info("[API] Received ping for item: {}", pingDTO.getItemId());
 
         telemetryService.processPing(pingDTO);
 
@@ -50,9 +50,9 @@ public class TelemetryController {
                     pingDTO.getLng()
             );
         } catch (IllegalArgumentException e) {
-            log.error(" ID-uri invalide primite: Store={}, Item={}", pingDTO.getStoreId(), pingDTO.getItemId());
+            log.error("[API] Invalid IDs received: store={}, item={}", pingDTO.getStoreId(), pingDTO.getItemId());
         } catch (Exception e) {
-            log.error(" Eroare la procesarea distanței: {}", e.getMessage());
+            log.error("[API] Error processing distance: {}", e.getMessage());
         }
 
         return ResponseEntity.accepted().body(Map.of("status", "success"));
@@ -60,7 +60,7 @@ public class TelemetryController {
 
     @PostMapping("/batch")
     public ResponseEntity<Map<String, String>> receiveBatch(@Valid @RequestBody TelemetryBatchDTO batchDTO) {
-        log.info("[API] Batch primit cu {} pings", batchDTO.getPings().size());
+        log.info("[API] Received batch with {} pings", batchDTO.getPings().size());
         telemetryService.processBatch(batchDTO);
         return ResponseEntity.accepted().body(Map.of("status", "success"));
     }
@@ -87,14 +87,14 @@ public class TelemetryController {
                     request.getAccuracy()
             );
         } catch (Exception e) {
-            log.error("❌ Eroare la salvarea ping-ului brut pentru item {}: {}", request.getItemId(), e.getMessage());
-            return ResponseEntity.internalServerError().body("Eroare la procesarea datelor.");
+            log.error("[API] Error saving raw ping for item {}: {}", request.getItemId(), e.getMessage());
+            return ResponseEntity.internalServerError().body("Error processing data.");
         }
 
         try {
             maybeTriggerRapidRecalc(request.getStoreId(), request.getItemId(), request.getLat(), request.getLon());
         } catch (Exception e) {
-            log.error(" Eroare la procesarea distanței pentru scan-ul produsului {}: {}", request.getItemId(), e.getMessage());
+            log.error("[API] Error processing distance for product scan {}: {}", request.getItemId(), e.getMessage());
         }
 
         return ResponseEntity.ok().build();
@@ -103,9 +103,9 @@ public class TelemetryController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/recalculate-all")
     public ResponseEntity<String> triggerGlobalRecalculation() {
-        log.info(" [Admin] Declanșare manuală sincronizare globală.");
+        log.info("[Admin] Manually triggering global synchronization.");
         locationProcessorWorker.processAndCalculateCenters();
-        return ResponseEntity.ok("Procesul de sincronizare globală a fost pornit.");
+        return ResponseEntity.ok("The global synchronization process has started.");
     }
 
     private void maybeTriggerRapidRecalc(UUID storeUuid, UUID itemUuid, double lat, double lon) {
@@ -120,11 +120,11 @@ public class TelemetryController {
             );
 
             if (distance > 15.0) {
-                log.warn(" Produs mutat detectat ({}m). Item: {}", (int) distance, itemUuid);
+                log.warn("[API] Moved product detected ({}m). Item: {}", (int) distance, itemUuid);
                 try {
                     locationProcessorWorker.recalculateSingleItem(storeUuid, itemUuid);
                 } catch (TaskRejectedException e) {
-                    log.error(" Coada de procesare este plină pentru item-ul: {}", itemUuid);
+                    log.error("[API] Processing queue is full for item: {}", itemUuid);
                 }
             }
         });

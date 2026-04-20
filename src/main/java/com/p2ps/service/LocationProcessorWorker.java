@@ -30,7 +30,7 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Se asigură că extensiile PostGIS și tabelele există la startup.
+     * Ensures the PostGIS extensions and tables exist at startup.
      */
     @PostConstruct
     public void ensureInventoryMapSchema() {
@@ -106,12 +106,12 @@ public class LocationProcessorWorker {
     }
 
     /**
-     * Sincronizare globală a centrelor (Admin Task).
-     * Folosește UPSERT și actualizează last_updated.
+     * Global center synchronization (admin task).
+     * Uses UPSERT and updates last_updated.
      */
     @Transactional
     public void processAndCalculateCenters() {
-        log.info(" [Admin-Task] Începem sincronizarea globală a centrelor (Strategie UPSERT)...");
+        log.info("[Admin-Task] Starting global center synchronization (UPSERT strategy)...");
 
         String sql = """
             INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated)
@@ -155,21 +155,21 @@ public class LocationProcessorWorker {
 
         try {
             int affectedRows = jdbcTemplate.update(sql);
-            log.info(" [Admin-Task] Sincronizare finalizată. {} rânduri procesate.", affectedRows);
+            log.info("[Admin-Task] Synchronization completed. {} rows processed.", affectedRows);
         } catch (Exception e) {
-            log.error(" [Admin-Task] Eroare critică la sincronizarea globală", e);
+            log.error("[Admin-Task] Critical error during global synchronization", e);
             throw e;
         }
     }
 
     /**
-     * Recalculare asincronă pentru un singur produs.
-     * Harden: min 5 puncte. Actualizează last_updated.
+     * Asynchronous recalculation for a single item.
+     * Hardened: minimum 5 points. Updates last_updated.
      */
     @Async("telemetryExecutor")
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        log.info("⚡ [Rapid-Recalc] Analiză clustere pentru produsul: {}", itemId);
+        log.info("[Rapid-Recalc] Analyzing clusters for item: {}", itemId);
         String sql = """
             WITH ItemPings AS (
                 SELECT location_point, accuracy_m
@@ -210,37 +210,37 @@ public class LocationProcessorWorker {
         try {
             int updated = jdbcTemplate.update(sql, storeId, itemId);
             if (updated > 0) {
-                log.info(" [Rapid-Recalc] Poziție actualizată pentru: {}", itemId);
+                log.info("[Rapid-Recalc] Position updated for item: {}", itemId);
             } else {
-                log.warn(" [Rapid-Recalc] Date insuficiente pentru item: {}", itemId);
+                log.warn("[Rapid-Recalc] Insufficient data for item: {}", itemId);
             }
         } catch (Exception e) {
-            log.error(" [Rapid-Recalc] Eroare la item " + itemId, e);
+            log.error("[Rapid-Recalc] Error processing item {}", itemId, e);
             throw e;
         }
     }
 
     /**
-     * Data Decay Task: Curăță locațiile fantomă.
-     * Rulează în fiecare noapte la ora 03:00.
-     * Șterge produsele care nu au mai fost scanate/actualizate de mai mult de 7 zile.
+     * Data decay task: cleans stale locations.
+     * Runs every night at 03:00.
+     * Deletes items that have not been scanned or updated for more than 7 days.
      */
     @Scheduled(cron = "0 0 3 * * ?")
     @Transactional
     public void removeStaleLocations() {
-        log.info(" [Data-Decay] Începem curățarea locațiilor învechite (neactualizate > 7 zile)...");
+        log.info("[Data-Decay] Starting cleanup of stale locations (not updated for more than 7 days)...");
 
         try {
             String sql = "DELETE FROM store_inventory_map WHERE last_updated < NOW() - INTERVAL '7 days'";
 
             int deletedRows = jdbcTemplate.update(sql);
             if (deletedRows > 0) {
-                log.info(" [Data-Decay] Am curățat {} locații inactive de pe hartă.", deletedRows);
+                log.info("[Data-Decay] Cleaned up {} inactive locations from the map.", deletedRows);
             } else {
-                log.info(" [Data-Decay] Nu s-au găsit date învechite. Harta este curată.");
+                log.info("[Data-Decay] No stale data found. The map is clean.");
             }
         } catch (Exception e) {
-            log.error(" [Data-Decay] Eroare la ștergerea datelor vechi: ", e);
+            log.error("[Data-Decay] Error while deleting stale data", e);
         }
     }
 

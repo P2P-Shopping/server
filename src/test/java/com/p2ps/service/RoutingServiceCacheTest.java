@@ -10,7 +10,6 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
@@ -43,9 +42,6 @@ class RoutingServiceCacheTest {
     @Autowired
     private CacheManager cacheManager;
 
-    @Autowired
-    private Environment environment;
-
     @Container
     @SuppressWarnings("resource")
     public static GenericContainer<?> redis = new GenericContainer<>("redis:7.2.6").withExposedPorts(6379);
@@ -61,10 +57,6 @@ class RoutingServiceCacheTest {
 
     @Test
     void calculateOptimalRoute_shouldStoreResultInCacheUsingRequestHashCode() {
-        // expose container info for debugging if something goes wrong
-        System.out.println("[TEST] redis container host=" + redis.getHost() + " port=" + redis.getMappedPort(6379));
-        System.out.println("[TEST] env spring.redis.host=" + environment.getProperty("spring.redis.host") + " port=" + environment.getProperty("spring.redis.port"));
-
         RoutingRequest request = new RoutingRequest();
         request.setUserLat(10.5);
         request.setUserLng(20.5);
