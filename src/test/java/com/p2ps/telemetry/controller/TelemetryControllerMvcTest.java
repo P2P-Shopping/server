@@ -26,15 +26,16 @@ class TelemetryControllerMvcTest {
     @BeforeEach
     void setUp() {
         telemetryService = mock(TelemetryService.class);
-        // instantiate controller with mocked service
+        LocationProcessorWorker locationProcessorWorker = mock(LocationProcessorWorker.class);
+        StoreInventoryMapRepository mapRepository = mock(StoreInventoryMapRepository.class);
+
         TelemetryController controller = new TelemetryController(
-            telemetryService,
-            mock(JdbcTemplate.class),
-            mock(StoreInventoryMapRepository.class),
-            mock(LocationProcessorWorker.class)
+                telemetryService,
+                locationProcessorWorker,
+                mapRepository,
+                mock(JdbcTemplate.class)
         );
 
-        // configure a Validator so @Valid works in standalone MockMvc
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
@@ -46,7 +47,6 @@ class TelemetryControllerMvcTest {
 
     @Test
     void shouldReturn400WhenPayloadIsInvalid() throws Exception {
-        // Build a JSON payload missing required fields (deviceId and lat/lng)
         String invalidJson = "{\"storeId\": \"store-1\", \"itemId\": \"item-1\"}";
 
         mockMvc.perform(post("/api/v1/telemetry/ping")
@@ -55,7 +55,6 @@ class TelemetryControllerMvcTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(containsString("Validation Error")));
 
-        // Ensure controller's service is not invoked when validation fails
         verify(telemetryService, times(0)).processPing(any());
     }
 }

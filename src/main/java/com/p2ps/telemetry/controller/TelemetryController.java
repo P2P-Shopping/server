@@ -2,22 +2,27 @@ package com.p2ps.telemetry.controller;
 
 import com.p2ps.repository.StoreInventoryMapRepository;
 import com.p2ps.service.LocationProcessorWorker;
+import com.p2ps.telemetry.dto.TelemetryBatchDTO;
+import com.p2ps.telemetry.dto.TelemetryPingDTO;
 import com.p2ps.telemetry.dto.TelemetryRequest;
 import com.p2ps.telemetry.model.TelemetryRecord;
+import com.p2ps.telemetry.services.TelemetryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import com.p2ps.telemetry.dto.TelemetryPingDTO;
-import com.p2ps.telemetry.dto.TelemetryBatchDTO;
-import com.p2ps.telemetry.services.TelemetryService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/telemetry")
@@ -26,20 +31,49 @@ import java.util.Map;
 public class TelemetryController {
 
     private final TelemetryService telemetryService;
-    private final JdbcTemplate jdbcTemplate;
-    private final StoreInventoryMapRepository mapRepository;
     private final LocationProcessorWorker locationProcessorWorker;
+    private final StoreInventoryMapRepository mapRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @PostMapping("/ping")
     public ResponseEntity<Map<String, String>> receivePing(@Valid @RequestBody TelemetryPingDTO pingDTO) {
-        log.info("[API] Ping received for the product: {}", pingDTO.getItemId());
+        log.info("[API] Ping primit pentru produsul: {}", pingDTO.getItemId());
+
         telemetryService.processPing(pingDTO);
+
+        try {
+            UUID storeUuid = UUID.fromString(pingDTO.getStoreId());
+            UUID itemUuid = UUID.fromString(pingDTO.getItemId());
+
+            mapRepository.findByStoreIdAndItemId(storeUuid, itemUuid).ifPresent(map -> {
+                if (map.getEstimatedLocPoint() != null) {
+                    double distance = calculateHaversineDistance(
+                            pingDTO.getLat(), pingDTO.getLng(),
+                            map.getEstimatedLocPoint().getY(), map.getEstimatedLocPoint().getX()
+                    );
+
+                    if (distance > 15.0) {
+                        log.warn(" Produs mutat detectat ({}m). Item: {}", (int) distance, itemUuid);
+                        try {
+                            locationProcessorWorker.recalculateSingleItem(storeUuid, itemUuid);
+                        } catch (TaskRejectedException e) {
+                            log.error(" Coada de procesare este plină pentru item-ul: {}", itemUuid);
+                        }
+                    }
+                }
+            });
+        } catch (IllegalArgumentException e) {
+            log.error(" ID-uri invalide primite: Store={}, Item={}", pingDTO.getStoreId(), pingDTO.getItemId());
+        } catch (Exception e) {
+            log.error(" Eroare la procesarea distanței: {}", e.getMessage());
+        }
+
         return ResponseEntity.accepted().body(Map.of("status", "success"));
     }
 
     @PostMapping("/batch")
     public ResponseEntity<Map<String, String>> receiveBatch(@Valid @RequestBody TelemetryBatchDTO batchDTO) {
-        log.info("[API] Batch received with {} pings", batchDTO.getPings().size());
+        log.info("[API] Batch primit cu {} pings", batchDTO.getPings().size());
         telemetryService.processBatch(batchDTO);
         return ResponseEntity.accepted().body(Map.of("status", "success"));
     }
@@ -48,7 +82,6 @@ public class TelemetryController {
     public ResponseEntity<List<TelemetryRecord>> getPings(
             @RequestParam String storeId,
             @RequestParam String itemId) {
-        log.info("[API] GET pings for storeId: {}, itemId: {}", storeId, itemId);
         List<TelemetryRecord> records = telemetryService.getPings(storeId, itemId);
         return ResponseEntity.ok(records);
     }
@@ -93,20 +126,15 @@ public class TelemetryController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/admin/sync-centers")
-    public ResponseEntity<String> triggerGlobalSync() {
-        log.info("🚀 [Admin] Pornire manuală a sincronizării globale a centrelor.");
-        try {
-            locationProcessorWorker.processAndCalculateCenters();
-            return ResponseEntity.ok("Sincronizarea globală a fost pornită cu succes.");
-        } catch (Exception e) {
-            log.error("❌ Eroare la sincronizarea globală: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Eroare la sincronizare.");
-        }
+    @PostMapping("/admin/recalculate-all")
+    public ResponseEntity<String> triggerGlobalRecalculation() {
+        log.info(" [Admin] Declanșare manuală sincronizare globală.");
+        locationProcessorWorker.processAndCalculateCenters();
+        return ResponseEntity.ok("Procesul de sincronizare globală a fost pornit.");
     }
 
     private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371000;
+        final int R = 6371000; // Raza Pământului în metri
         double latDistance = Math.toRadians(lat2 - lat1);
         double lonDistance = Math.toRadians(lon2 - lon1);
         double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
