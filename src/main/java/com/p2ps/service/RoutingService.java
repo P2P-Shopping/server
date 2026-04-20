@@ -207,28 +207,14 @@ public class RoutingService {
             int n = current.size();
             double currentDist = routeDistance(current);
 
-            outer:
-            for (int i = 0; i < n - 2; i++) {
-                for (int j = i + 1; j < n - 1; j++) {
-                    for (int k = j + 1; k < n - 1; k++) {
-
-                        List<RoutePoint> best = null;
-                        double bestDist = currentDist;
-
-                        for (int variant = 1; variant < 8; variant++) {
-                            List<RoutePoint> candidate = reconnect(current, i, j, k, variant);
-                            double candidateDist = routeDistance(candidate);
-                            if (candidateDist < bestDist - 1e-10) {
-                                bestDist = candidateDist;
-                                best = candidate;
-                            }
-                        }
-
+            for (int i = 0; i < n - 2 && !improved; i++) {
+                for (int j = i + 1; j < n - 1 && !improved; j++) {
+                    for (int k = j + 1; k < n - 1 && !improved; k++) {
+                        List<RoutePoint> best = findBestReconnect(current, i, j, k, currentDist);
                         if (best != null) {
                             current = best;
-                            currentDist = bestDist;
+                            currentDist = routeDistance(current);
                             improved = true;
-                            break outer;
                         }
                     }
                 }
@@ -238,23 +224,39 @@ public class RoutingService {
         return current;
     }
 
-    private List<RoutePoint> reconnect(List<RoutePoint> route, int i, int j, int k, int variant) {
-        List<RoutePoint> A  = new ArrayList<>(route.subList(0, i + 1));
-        List<RoutePoint> B  = new ArrayList<>(route.subList(i + 1, j + 1));
-        List<RoutePoint> C  = new ArrayList<>(route.subList(j + 1, k + 1));
-        List<RoutePoint> D  = new ArrayList<>(route.subList(k + 1, route.size()));
-        List<RoutePoint> Br = reversed(B);
-        List<RoutePoint> Cr = reversed(C);
+    private List<RoutePoint> findBestReconnect(List<RoutePoint> route, int i, int j, int k, double currentDist) {
+        List<RoutePoint> best = null;
+        double bestDist = currentDist;
 
-        List<RoutePoint> result = new ArrayList<>(A);
+        for (int variant = 1; variant < 8; variant++) {
+            List<RoutePoint> candidate = reconnect(route, i, j, k, variant);
+            double candidateDist = routeDistance(candidate);
+            if (candidateDist < bestDist - 1e-10) {
+                bestDist = candidateDist;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private List<RoutePoint> reconnect(List<RoutePoint> route, int i, int j, int k, int variant) {
+        List<RoutePoint> segA = new ArrayList<>(route.subList(0, i + 1));
+        List<RoutePoint> segB = new ArrayList<>(route.subList(i + 1, j + 1));
+        List<RoutePoint> segC = new ArrayList<>(route.subList(j + 1, k + 1));
+        List<RoutePoint> segD = new ArrayList<>(route.subList(k + 1, route.size()));
+        List<RoutePoint> segBr = reversed(segB);
+        List<RoutePoint> segCr = reversed(segC);
+
+        List<RoutePoint> result = new ArrayList<>(segA);
         switch (variant) {
-            case 1 -> { result.addAll(Br); result.addAll(C);  result.addAll(D); }
-            case 2 -> { result.addAll(B);  result.addAll(Cr); result.addAll(D); }
-            case 3 -> { result.addAll(Br); result.addAll(Cr); result.addAll(D); }
-            case 4 -> { result.addAll(C);  result.addAll(B);  result.addAll(D); }
-            case 5 -> { result.addAll(C);  result.addAll(Br); result.addAll(D); }
-            case 6 -> { result.addAll(Cr); result.addAll(B);  result.addAll(D); }
-            case 7 -> { result.addAll(Cr); result.addAll(Br); result.addAll(D); }
+            case 1 -> { result.addAll(segBr); result.addAll(segC);  result.addAll(segD); }
+            case 2 -> { result.addAll(segB);  result.addAll(segCr); result.addAll(segD); }
+            case 3 -> { result.addAll(segBr); result.addAll(segCr); result.addAll(segD); }
+            case 4 -> { result.addAll(segC);  result.addAll(segB);  result.addAll(segD); }
+            case 5 -> { result.addAll(segC);  result.addAll(segBr); result.addAll(segD); }
+            case 6 -> { result.addAll(segCr); result.addAll(segB);  result.addAll(segD); }
+            case 7 -> { result.addAll(segCr); result.addAll(segBr); result.addAll(segD); }
             default -> throw new IllegalArgumentException("variant trebuie sa fie intre 1 si 7");
         }
         return result;
