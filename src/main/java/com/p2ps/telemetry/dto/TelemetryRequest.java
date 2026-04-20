@@ -1,6 +1,7 @@
-package com.p2ps.dto;
+package com.p2ps.telemetry.dto;
 
 import jakarta.validation.constraints.*;
+
 import java.util.UUID;
 
 /**
@@ -29,8 +30,6 @@ public class TelemetryRequest {
     @Min(value = 0, message = "Accuracy cannot be negative")
     @Max(value = 100, message = "Accuracy above 100m is discarded as noise")
     private Double accuracy;
-
-    // --- Getters și Setters ---
 
     public UUID getStoreId() {
         return storeId;
@@ -63,6 +62,7 @@ public class TelemetryRequest {
     public void setLon(Double lon) {
         this.lon = lon;
     }
+
     public Double getAccuracy() {
         return accuracy;
     }

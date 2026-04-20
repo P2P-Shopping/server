@@ -66,6 +66,41 @@ public class LocationProcessorWorker {
             )
         """);
 
+        int removedDuplicates = jdbcTemplate.update("""
+            WITH ranked_rows AS (
+                SELECT ctid,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY store_id, item_id
+                           ORDER BY last_updated DESC NULLS LAST, ctid DESC
+                       ) AS row_num
+                FROM store_inventory_map
+            )
+            DELETE FROM store_inventory_map sim
+            USING ranked_rows
+            WHERE sim.ctid = ranked_rows.ctid
+              AND ranked_rows.row_num > 1
+        """);
+
+        if (removedDuplicates > 0) {
+            log.warn("Removed {} duplicate store_inventory_map rows before enforcing the unique constraint.", removedDuplicates);
+        }
+
+        Boolean uniqueConstraintExists = jdbcTemplate.queryForObject("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'uk_store_item'
+                  AND conrelid = 'store_inventory_map'::regclass
+            )
+        """, Boolean.class);
+
+        if (Boolean.FALSE.equals(uniqueConstraintExists)) {
+            jdbcTemplate.execute("""
+                ALTER TABLE store_inventory_map
+                ADD CONSTRAINT uk_store_item UNIQUE (store_id, item_id)
+            """);
+        }
+
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_store_inventory_map_location ON store_inventory_map USING GIST (estimated_loc_point)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_store_inventory_map_store_confidence ON store_inventory_map (store_id, confidence_score)");
     }

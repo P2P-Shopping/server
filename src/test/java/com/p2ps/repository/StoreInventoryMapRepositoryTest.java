@@ -23,7 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers
 @SpringBootTest(properties = {
-        "app.scheduling.enabled=false"
+    "app.scheduling.enabled=false",
+    "telemetry.api.key=test-telemetry-key-for-tests"
 })
 @Transactional
 class StoreInventoryMapRepositoryTest {
