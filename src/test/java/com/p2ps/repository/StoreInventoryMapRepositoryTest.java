@@ -1,6 +1,6 @@
 package com.p2ps.repository;
 
-import com.p2ps.model.StoreInventoryMap;
+import com.p2ps.entity.StoreInventoryMap;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -16,7 +16,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -24,12 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers
 @SpringBootTest(properties = {
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
-    "telemetry.api.key=test-telemetry-key-for-tests",
-    "app.scheduling.enabled=false"
+        "app.scheduling.enabled=false"
 })
 @Transactional
 class StoreInventoryMapRepositoryTest {
+
     static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
             .asCompatibleSubstituteFor("postgres");
 
@@ -42,6 +40,7 @@ class StoreInventoryMapRepositoryTest {
     static {
         postgresContainer.start();
     }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
@@ -66,6 +65,7 @@ class StoreInventoryMapRepositoryTest {
 
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS postgis");
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS store_geofences (
                 store_id UUID PRIMARY KEY,
@@ -73,6 +73,7 @@ class StoreInventoryMapRepositoryTest {
                 boundary_polygon GEOMETRY(Polygon, 4326) NOT NULL
             )
         """);
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS raw_user_pings (
                 ping_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -93,7 +94,7 @@ class StoreInventoryMapRepositoryTest {
         // C. Inserăm lista de cumpărături
         jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'Lista mea', 999)", listId);
 
-        // D. Inserăm produsul
+        // D. Inserăm produsul principal
         jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Lapte', false, ?)", itemId, listId);
 
         UUID lowConfidenceItemId = UUID.randomUUID();
@@ -111,16 +112,12 @@ class StoreInventoryMapRepositoryTest {
         dummyPoint.setSRID(4326);
 
         StoreInventoryMap oldProduct = new StoreInventoryMap();
-
-        // FOLOSIM ID-urile generate mai sus
         oldProduct.setStoreId(storeId);
         oldProduct.setItemId(itemId);
-
         oldProduct.setEstimatedLocPoint(dummyPoint);
         oldProduct.setConfidenceScore(0.8);
         oldProduct.setPingCount(10);
         oldProduct.setLastUpdated(LocalDateTime.now().minusDays(10));
-
         repository.save(oldProduct);
 
         StoreInventoryMap lowConfidenceProduct = new StoreInventoryMap();
@@ -130,7 +127,6 @@ class StoreInventoryMapRepositoryTest {
         lowConfidenceProduct.setConfidenceScore(0.05);
         lowConfidenceProduct.setPingCount(10);
         lowConfidenceProduct.setLastUpdated(LocalDateTime.now().minusDays(10));
-
         repository.save(lowConfidenceProduct);
 
         StoreInventoryMap exactCutoffProduct = new StoreInventoryMap();
@@ -141,7 +137,6 @@ class StoreInventoryMapRepositoryTest {
         exactCutoffProduct.setPingCount(10);
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(7);
         exactCutoffProduct.setLastUpdated(cutoffDate);
-
         repository.save(exactCutoffProduct);
 
         StoreInventoryMap zeroConfidenceProduct = new StoreInventoryMap();
@@ -151,9 +146,9 @@ class StoreInventoryMapRepositoryTest {
         zeroConfidenceProduct.setConfidenceScore(0.0);
         zeroConfidenceProduct.setPingCount(10);
         zeroConfidenceProduct.setLastUpdated(LocalDateTime.now().minusDays(10));
-
         repository.save(zeroConfidenceProduct);
 
+        // --- Verificarea Logicii ---
         int rowsUpdated = repository.applyDecayToOldRecords(0.1, cutoffDate);
 
         assertEquals(2, rowsUpdated, "Ar fi trebuit să se actualizeze exact două rânduri");
