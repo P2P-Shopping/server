@@ -1,6 +1,6 @@
 package com.p2ps.telemetry.controller;
 
-import com.p2ps.entity.StoreInventoryMap;
+import com.p2ps.model.StoreInventoryMap;
 import com.p2ps.repository.StoreInventoryMapRepository;
 import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.telemetry.dto.TelemetryRequest;
