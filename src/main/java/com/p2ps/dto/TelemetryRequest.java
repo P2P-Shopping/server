@@ -63,7 +63,6 @@ public class TelemetryRequest {
     public void setLon(Double lon) {
         this.lon = lon;
     }
-
     public Double getAccuracy() {
         return accuracy;
     }
