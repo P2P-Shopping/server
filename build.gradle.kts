@@ -65,10 +65,6 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-tasks.test {
-    exclude("**/AllTestSuite.class")
-}
-
 sonar {
     properties {
         property("sonar.projectKey", "P2P-Shopping_P2P-Shopping")
