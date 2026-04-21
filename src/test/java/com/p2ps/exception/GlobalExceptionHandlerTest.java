@@ -111,7 +111,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleMaxUploadSizeExceededException() {
-        var resp = handler.handleMaxUploadSizeExceeded(new MaxUploadSizeExceededException(5 * 1024 * 1024));
+        var resp = handler.handleMaxUploadSizeExceeded(new MaxUploadSizeExceededException(5L * 1024 * 1024));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
         assertThat(resp.getBody()).containsEntry("error", "File Too Large");
         assertThat(resp.getBody()).containsEntry("message", "Maximum allowed file size is 5MB");
