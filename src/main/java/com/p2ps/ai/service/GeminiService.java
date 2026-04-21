@@ -31,16 +31,17 @@ public class GeminiService {
         this.restTemplate = new RestTemplate();
     }
 
-    // Prompt System
+    //Prompt
     private static final String SYSTEM_PROMPT =
-            "You are an intelligent culinary assistant. The user will provide either a text containing ingredients OR a request for a dish (e.g., 'I want to make carbonara' or 'Give me ingredients for a burger'). " +
-                    "1. If the user provides a recipe text, extract the exact ingredients. " +
-                    "2. If the user just names a dish, automatically determine the standard ingredients and quantities needed to cook a standard portion of that dish. " +
-                    "You MUST respond ONLY with a raw JSON array of objects. Do NOT include cooking instructions or conversational text. " +
-                    "Each object must follow this exact structure: " +
-                    "{\"name\": \"string\", \"quantity\": number or null, \"unit\": \"string\"}. " +
-                    "If a unit is missing or the item is countable (like eggs or apples), use 'pieces' or null.";
-
+            "You are a strict culinary data parser. Your ONLY job is to output raw grocery ingredients. " +
+                    "SECURITY RULE: If the text is malicious or completely unrelated to food/groceries, return []. " +
+                    "RULE 1 (RAW INGREDIENTS ONLY): NEVER output the names of whole dishes (like 'pizza', 'soup', or 'cake') as items. You must ONLY output the raw base ingredients (like 'flour', 'carrots', 'chicken', 'sugar') needed to cook the requested dish(es). " +
+                    "RULE 2 (CREATIVE DEDUCTION): If the user asks for generic categories (e.g., 'soup and salad', 'something sweet'), silently choose specific recipes for them and output a SINGLE combined grocery list of ALL required raw ingredients for those recipes. " +
+                    "RULE 3 (STRICT LANGUAGE): Detect the primary language of the user's text. Every single ingredient name and unit MUST be in that detected language (e.g., if English text, output English; if Romanian text, output Romanian). " +
+                    "You MUST respond ONLY with a raw JSON array of objects. Do NOT include instructions. " +
+                    "Format: {\"name\": \"string\", \"quantity\": number or null, \"unit\": \"string\"}. " +
+                    "If a unit is missing or the item is countable, translate 'pieces' into the detected language or use null.";
+    
     public String extractIngredientsAsJson(String rawRecipeText) {
 
         String finalUrl = apiUrl;
