@@ -63,14 +63,23 @@ class LocationProcessorWorkerTest {
     }
 
     @Test
+    @DisplayName("Trebuie să trateze valorile lipsă ca low confidence")
+    void isLowConfidence_ShouldTreatNullsAsLowConfidence() {
+        assertTrue(worker.isLowConfidence(null, null));
+        assertTrue(worker.isLowConfidence(null, 10));
+        assertTrue(worker.isLowConfidence(0.8d, null));
+    }
+
+    @Test
     @DisplayName("Trebuie să execute rapid recalculation pentru un item")
-    void recalculateSingleItem_ShouldExecuteUpdate() {
+    void recalculateSingleItem_ShouldPropagateFailure() {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
-        when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId))).thenReturn(1);
+        when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
+                .thenThrow(new RuntimeException("Database error during update"));
 
-        worker.recalculateSingleItem(storeId, itemId);
+        assertThrows(RuntimeException.class, () -> worker.recalculateSingleItem(storeId, itemId));
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
     }
