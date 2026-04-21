@@ -9,13 +9,16 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface StoreInventoryMapRepository extends JpaRepository<StoreInventoryMap, UUID> {
 
-    // Acest query va scădea scorul cu o valoare anume pentru toate produsele nemișcate de ceva timp
-    @Modifying(clearAutomatically = true, flushAutomatically = true)    @Transactional
+    Optional<StoreInventoryMap> findByStoreIdAndItemId(UUID storeId, UUID itemId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("""
         UPDATE StoreInventoryMap s
         SET s.confidenceScore =
