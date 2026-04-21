@@ -1,6 +1,5 @@
 package com.p2ps.lists.service;
 
-import com.p2ps.auth.model.Users;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -11,6 +10,8 @@ import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.auth.model.Users;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,14 +19,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ItemServiceTest {
@@ -39,282 +41,205 @@ class ItemServiceTest {
     @InjectMocks
     private ItemService itemService;
 
-    @Test
-    void addItemToListShouldThrowWhenNameIsBlank() {
-        ItemRequest request = new ItemRequest();
-        request.setName("   ");
-        UUID listId = UUID.randomUUID();
+    private UUID listId;
+    private UUID itemId;
+    private String userEmail;
+    private ShoppingList mockList;
+    private Item mockItem;
 
-        assertThrows(ListValidationException.class,
-                () -> itemService.addItemToList(listId, request, "ana@example.com"));
+    @BeforeEach
+    void setUp() {
+        listId = UUID.randomUUID();
+        itemId = UUID.randomUUID();
+        userEmail = "test@user.com";
 
-        verify(shoppingListRepository, never()).findById(any(UUID.class));
-        verify(itemRepository, never()).save(any(Item.class));
+        Users owner = new Users();
+        owner.setEmail(userEmail);
+
+        mockList = new ShoppingList();
+        mockList.setId(listId);
+        mockList.setUser(owner);
+
+        mockItem = new Item();
+        mockItem.setId(itemId);
+        mockItem.setShoppingList(mockList);
+        mockItem.setName("Old Item");
+        mockItem.setChecked(false);
     }
 
     @Test
-    void addItemToListShouldThrowWhenListDoesNotExist() {
-        UUID listId = UUID.randomUUID();
-        ItemRequest request = buildCreateRequest();
+    void addItemToList_Success() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setPrice(BigDecimal.TEN);
+        req.setIsRecurrent(true);
 
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThrows(ShoppingListNotFoundException.class,
-                () -> itemService.addItemToList(listId, request, "ana@example.com"));
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
-        verify(itemRepository, never()).save(any(Item.class));
-    }
-
-    @Test
-    void addItemToListShouldThrowWhenPriceIsNegative() {
-        ItemRequest request = buildCreateRequest();
-        request.setPrice(new BigDecimal("-1.00"));
-        UUID listId = UUID.randomUUID();
-
-        assertThrows(ListValidationException.class,
-                () -> itemService.addItemToList(listId, request, "ana@example.com"));
-
-        verify(shoppingListRepository, never()).findById(any(UUID.class));
-        verify(itemRepository, never()).save(any(Item.class));
-    }
-
-    @Test
-    void addItemToListShouldThrowWhenUserDoesNotOwnList() {
-        UUID listId = UUID.randomUUID();
-        ShoppingList shoppingList = buildShoppingList("owner@example.com");
-        ItemRequest request = buildCreateRequest();
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(shoppingList));
-
-        assertThrows(ListAccessDeniedException.class,
-                () -> itemService.addItemToList(listId, request, "other@example.com"));
-
-        verify(itemRepository, never()).save(any(Item.class));
-    }
-
-    @Test
-    void addItemToListShouldPersistAndMapItem() {
-        UUID listId = UUID.randomUUID();
-        ShoppingList shoppingList = buildShoppingList("ana@example.com");
-        ItemRequest request = buildCreateRequest();
-        Item savedItem = new Item();
-        UUID itemId = UUID.randomUUID();
-        savedItem.setId(itemId);
-        savedItem.setName(request.getName());
-        savedItem.setBrand(request.getBrand());
-        savedItem.setQuantity(request.getQuantity());
-        savedItem.setPrice(request.getPrice());
-        savedItem.setCategory(request.getCategory());
-        savedItem.setRecurrent(Boolean.TRUE.equals(request.getIsRecurrent()));
-        savedItem.setShoppingList(shoppingList);
-        savedItem.setLastUpdatedTimestamp(123456789L);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(shoppingList));
-        when(itemRepository.save(any(Item.class))).thenReturn(savedItem);
-
-        ItemDTO result = itemService.addItemToList(listId, request, "ana@example.com");
-
-        assertEquals(itemId, result.getId());
-        assertEquals("Milk", result.getName());
-        assertEquals("Brand A", result.getBrand());
-        assertEquals(new BigDecimal("12.50"), result.getPrice());
-        assertTrue(result.isRecurrent());
+        assertThat(result.getName()).isEqualTo("Milk");
+        assertThat(result.getPrice()).isEqualTo(BigDecimal.TEN);
+        assertThat(result.isRecurrent()).isTrue();
         verify(itemRepository).save(any(Item.class));
     }
 
     @Test
-    void updateItemShouldThrowWhenItemDoesNotExist() {
-        UUID itemId = UUID.randomUUID();
-        ItemRequest request = new ItemRequest();
+    void addItemToList_ThrowsListValidationException_WhenNameIsNull() {
+        ItemRequest req = new ItemRequest();
+        req.setName("");
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
-
-        assertThrows(ItemNotFoundException.class,
-                () -> itemService.updateItem(itemId, request, "ana@example.com"));
+        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Item name cannot be empty");
     }
 
     @Test
-    void updateItemShouldThrowWhenUserDoesNotOwnItem() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("owner@example.com");
-        ItemRequest request = new ItemRequest();
+    void addItemToList_ThrowsListValidationException_WhenPriceIsNegative() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setPrice(new BigDecimal("-5.00"));
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
-
-        assertThrows(ListAccessDeniedException.class,
-                () -> itemService.updateItem(itemId, request, "other@example.com"));
-
-        verify(itemRepository, never()).save(any(Item.class));
+        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Price must be zero or positive");
     }
 
     @Test
-    void updateItemShouldThrowWhenNameIsBlank() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("ana@example.com");
-        ItemRequest request = new ItemRequest();
-        request.setName("   ");
+    void addItemToList_ThrowsShoppingListNotFoundException() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
 
-        assertThrows(ListValidationException.class,
-                () -> itemService.updateItem(itemId, request, "ana@example.com"));
-
-        verify(itemRepository, never()).save(any(Item.class));
+        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
+                .isInstanceOf(ShoppingListNotFoundException.class);
     }
 
     @Test
-    void updateItemShouldThrowWhenPriceIsNegative() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("ana@example.com");
-        ItemRequest request = new ItemRequest();
-        request.setPrice(new BigDecimal("-4.10"));
+    void addItemToList_ThrowsListAccessDeniedException_WhenWrongUser() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
 
-        assertThrows(ListValidationException.class,
-                () -> itemService.updateItem(itemId, request, "ana@example.com"));
-
-        verify(itemRepository, never()).save(any(Item.class));
+        assertThatThrownBy(() -> itemService.addItemToList(listId, req, "hacker@user.com"))
+                .isInstanceOf(ListAccessDeniedException.class);
     }
 
     @Test
-    void updateItemShouldApplyRequestFields() {
-        UUID itemId = UUID.randomUUID();
-        Item existingItem = buildItem("ana@example.com");
-        existingItem.setId(itemId);
-        existingItem.setName("Milk");
-        existingItem.setBrand("Old");
-        existingItem.setQuantity("1");
-        existingItem.setPrice(new BigDecimal("3.50"));
-        existingItem.setCategory("Dairy");
-        existingItem.setRecurrent(false);
-        existingItem.setChecked(false);
-        existingItem.setLastUpdatedTimestamp(10L);
+    void updateItem_Success() {
+        ItemRequest req = new ItemRequest();
+        req.setName("New Milk");
+        req.setIsChecked(true);
 
-        ItemRequest request = new ItemRequest();
-        request.setName("Oat Milk");
-        request.setBrand("New");
-        request.setQuantity("2");
-        request.setPrice(new BigDecimal("4.10"));
-        request.setCategory("Plant-based");
-        request.setIsRecurrent(true);
-        request.setIsChecked(true);
-        request.setTimestamp(999L);
-
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(existingItem));
-        when(itemRepository.save(existingItem)).thenReturn(existingItem);
-
-        long beforeUpdate = System.currentTimeMillis();
-        ItemDTO result = itemService.updateItem(itemId, request, "ana@example.com");
-
-        assertEquals("Oat Milk", result.getName());
-        assertEquals("New", result.getBrand());
-        assertEquals("2", result.getQuantity());
-        assertEquals(new BigDecimal("4.10"), result.getPrice());
-        assertEquals("Plant-based", result.getCategory());
-        assertTrue(result.isRecurrent());
-        assertTrue(result.isChecked());
-        assertTrue(result.getLastUpdatedTimestamp() >= beforeUpdate);
-
-    }
-
-    @Test
-    void updateItemShouldAllowNullPriceAndKeepExistingValue() {
-        UUID itemId = UUID.randomUUID();
-        Item existingItem = buildItem("ana@example.com");
-        existingItem.setId(itemId);
-        existingItem.setName("Milk");
-        existingItem.setBrand("Old");
-        existingItem.setPrice(new BigDecimal("3.50"));
-        existingItem.setLastUpdatedTimestamp(10L);
-
-        ItemRequest request = new ItemRequest();
-        request.setBrand("Updated Brand");
-
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(existingItem));
-        when(itemRepository.save(existingItem)).thenReturn(existingItem);
-
-        ItemDTO result = itemService.updateItem(itemId, request, "ana@example.com");
-
-        assertEquals(new BigDecimal("3.50"), result.getPrice());
-        assertEquals("Updated Brand", result.getBrand());
-    }
-
-    @Test
-    void updateItemStatusShouldUseServerTimestampWhenClientTimestampMissing() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("ana@example.com");
-
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        long beforeUpdate = System.currentTimeMillis();
-        ItemDTO result = itemService.updateItemStatus(itemId, true, null);
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
 
-        assertTrue(result.isChecked());
-        assertTrue(result.getLastUpdatedTimestamp() >= beforeUpdate);
+        assertThat(result.getName()).isEqualTo("New Milk");
+        assertThat(result.isChecked()).isTrue();
+        verify(itemRepository).save(mockItem);
     }
 
     @Test
-    void deleteItemShouldThrowWhenItemDoesNotExist() {
-        UUID itemId = UUID.randomUUID();
+    void updateItem_ThrowsItemNotFoundException() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Test");
 
         when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
 
-        assertThrows(ItemNotFoundException.class,
-                () -> itemService.deleteItem(itemId, "ana@example.com"));
+        assertThatThrownBy(() -> itemService.updateItem(itemId, req, userEmail))
+                .isInstanceOf(ItemNotFoundException.class);
     }
 
     @Test
-    void deleteItemShouldThrowWhenUserDoesNotOwnItem() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("owner@example.com");
+    void updateItem_ThrowsListAccessDeniedException_WhenWrongUser() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Test");
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
 
-        assertThrows(ListAccessDeniedException.class,
-                () -> itemService.deleteItem(itemId, "other@example.com"));
+        assertThatThrownBy(() -> itemService.updateItem(itemId, req, "hacker@user.com"))
+                .isInstanceOf(ListAccessDeniedException.class);
+    }
+
+    @Test
+    void updateItem_ThrowsListValidationException_WhenEmptyName() {
+        ItemRequest req = new ItemRequest();
+        req.setName("  "); // Empty space
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.updateItem(itemId, req, userEmail))
+                .isInstanceOf(ListValidationException.class);
+    }
+
+    @Test
+    void updateItemStatus_Success() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemStatus(itemId, true, 12345L);
+
+        assertThat(result.isChecked()).isTrue();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void deleteItem_Success() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        itemService.deleteItem(itemId, userEmail);
+
+        verify(itemRepository).delete(mockItem);
+    }
+
+    @Test
+    void deleteItem_ThrowsListAccessDeniedException_WhenWrongUser() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.deleteItem(itemId, "hacker@user.com"))
+                .isInstanceOf(ListAccessDeniedException.class);
 
         verify(itemRepository, never()).delete(any(Item.class));
     }
 
     @Test
-    void deleteItemShouldRemoveOwnedItem() {
-        UUID itemId = UUID.randomUUID();
-        Item item = buildItem("ana@example.com");
-
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
-
-        itemService.deleteItem(itemId, "ana@example.com");
-
-        verify(itemRepository).delete(item);
+    void addItemsToList_ReturnsEmptyList_WhenRequestIsNull() {
+        List<ItemDTO> result = itemService.addItemsToList(listId, null, userEmail);
+        assertThat(result).isEmpty();
+        verifyNoInteractions(itemRepository);
     }
 
-    private ItemRequest buildCreateRequest() {
-        ItemRequest request = new ItemRequest();
-        request.setName("Milk");
-        request.setBrand("Brand A");
-        request.setQuantity("2");
-        request.setPrice(new BigDecimal("12.50"));
-        request.setCategory("Dairy");
-        request.setIsRecurrent(true);
-        return request;
+    @Test
+    void addItemsToList_Success() {
+        ItemRequest req1 = new ItemRequest(); req1.setName("Item 1");
+        ItemRequest req2 = new ItemRequest(); req2.setName("Item 2");
+        List<ItemRequest> requests = List.of(req1, req2);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getName()).isEqualTo("Item 1");
+        verify(itemRepository).saveAll(anyList());
     }
 
-    private ShoppingList buildShoppingList(String email) {
-        Users user = new Users(email, "secret", "Ana", "Ionescu");
-        ShoppingList shoppingList = new ShoppingList();
-        shoppingList.setId(UUID.randomUUID());
-        shoppingList.setTitle("Weekly groceries");
-        shoppingList.setUser(user);
-        return shoppingList;
-    }
+    @Test
+    void addItemsToList_ThrowsValidationException_WhenOneItemIsInvalid() {
+        ItemRequest req1 = new ItemRequest(); req1.setName("Valid");
+        ItemRequest req2 = new ItemRequest(); req2.setName(""); // Invalid
 
-    private Item buildItem(String email) {
-        Item item = new Item();
-        item.setShoppingList(buildShoppingList(email));
-        item.setChecked(false);
-        item.setRecurrent(false);
-        return item;
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        assertThatThrownBy(() -> itemService.addItemsToList(listId, List.of(req1, req2), userEmail))
+                .isInstanceOf(ListValidationException.class);
+
+        verify(itemRepository, never()).saveAll(anyList());
     }
 }

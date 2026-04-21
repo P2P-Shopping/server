@@ -15,12 +15,18 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
+import java.util.HashMap;
 import java.util.Map;
 
 // Catches all exceptions and returns a clean JSON response
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String ERR_STR = "error";
+    private static final String MSG_STR = "message";
 
     // Logger used to record internal errors secretly on the server
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -86,6 +92,37 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(Map.of(
+                        ERR_STR, "File Too Large",
+                        MSG_STR, "Maximum allowed file size is 5MB"
+                ));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, String>> handleMissingServletRequestPart(MissingServletRequestPartException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        ERR_STR, "Bad Request",
+                        MSG_STR, "Missing file part"
+                ));
+    }
+
+    @ExceptionHandler(AiProcessingException.class)
+    public ResponseEntity<Map<String, String>> handleAiProcessingException(AiProcessingException ex) {
+        logger.error("AI Processing failed: {}", ex.getMessage(), ex);
+
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put(MSG_STR, "AI Processing Failed");
+        errorResponse.put("details", ex.getMessage());
+
+        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
         // avoid NPE when tests (or callers) pass null
@@ -114,8 +151,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED) // Trimitem 401 în loc de 500
                 .body(Map.of(
-                        "error", "Unauthorized",
-                        "message", "Invalid email or password" // Mesaj generic, sigur
+                        ERR_STR, "Unauthorized",
+                        MSG_STR, "Invalid email or password" // Mesaj generic, sigur
                 ));
     }
+
 }
