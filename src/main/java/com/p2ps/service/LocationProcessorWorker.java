@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
+import com.p2ps.exception.RapidRecalculationException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Locale;
@@ -191,7 +192,7 @@ public class LocationProcessorWorker {
         } catch (Exception e) {
             RAPID_RECALCULATION_FAILURES.incrementAndGet();
             logger.error("Rapid recalculation failed for item {}.", itemId, e);
-            throw new RuntimeException("Rapid recalculation failed for item " + itemId, e);
+            throw new RapidRecalculationException("Rapid recalculation failed for item " + itemId, e);
         }
     }
 
