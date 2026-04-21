@@ -1,5 +1,6 @@
 -- Activam extensia PostGIS (adauga suport pentru date geografice)
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 
 -- ============================================================

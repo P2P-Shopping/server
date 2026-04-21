@@ -1,32 +1,91 @@
 package com.p2ps.service;
 
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Locale;
 import java.util.UUID;
 
-@Service
+@Component
 public class LocationProcessorWorker {
 
-    private final JdbcTemplate jdbcTemplate;
+    private static final Logger logger = LoggerFactory.getLogger(LocationProcessorWorker.class);
 
-    public LocationProcessorWorker(JdbcTemplate jdbcTemplate) {
+    private final JdbcTemplate jdbcTemplate;
+    private final DataSource dataSource;
+
+    public LocationProcessorWorker(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.jdbcTemplate = jdbcTemplate;
+        this.dataSource = dataSource;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Scheduled(fixedDelay = 300000)
+    @PostConstruct
+    public void ensureInventoryMapSchema() {
+        if (dataSource == null || !isPostgreSQL()) {
+            return;
+        }
+
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS postgis");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS raw_user_pings (
+                ping_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                store_id        UUID NOT NULL,
+                item_id         UUID NOT NULL,
+                location_point  GEOMETRY(Point, 4326) NOT NULL,
+                accuracy_m      DOUBLE PRECISION,
+                floor_level     INT DEFAULT 0,
+                loc_provider    VARCHAR(50),
+                marked_at       TIMESTAMP DEFAULT NOW()
+            )
+        """);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS store_inventory_map (
+                map_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                store_id            UUID NOT NULL,
+                item_id             UUID NOT NULL,
+                estimated_loc_point GEOMETRY(Point, 4326) NOT NULL,
+                confidence_score    FLOAT CHECK (confidence_score BETWEEN 0 AND 1),
+                ping_count          INT DEFAULT 0,
+                last_updated        TIMESTAMP DEFAULT NOW(),
+                UNIQUE (store_id, item_id)
+            )
+        """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_store_inventory_map_location
+                ON store_inventory_map USING GIST (estimated_loc_point)
+        """);
+        jdbcTemplate.execute("""
+            CREATE INDEX IF NOT EXISTS idx_store_inventory_map_store_confidence
+                ON store_inventory_map (store_id, confidence_score)
+        """);
+    }
+
+    private boolean isPostgreSQL() {
+        try (Connection connection = dataSource.getConnection()) {
+            return connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgres");
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to inspect database metadata", exception);
+        }
+    }
+
+    @Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
-        System.out.println("⏳ [Worker] Începem recalcularea globală a centrelor...");
+        logger.info("Starting location centroid recalculation.");
+
         try {
             int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
-            System.out.println("ℹ️ [Worker] Am eliminat " + deletedRows + " locații vechi.");
+            logger.info("Deleted {} stale inventory map rows.", deletedRows);
 
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
@@ -44,7 +103,9 @@ public class LocationProcessorWorker {
                 ),
                 ClusterStats AS (
                     SELECT 
-                        store_id, item_id, cluster_id,
+                        store_id,
+                        item_id,
+                        cluster_id,
                         ST_GeometricMedian(ST_Collect(location_point)) AS estimated_loc_point,
                         LEAST(1.0, (COUNT(item_id) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS confidence_score, 
                         COUNT(item_id) AS ping_count
@@ -53,16 +114,21 @@ public class LocationProcessorWorker {
                     GROUP BY store_id, item_id, cluster_id
                 )
                 SELECT DISTINCT ON (store_id, item_id)
-                    store_id, item_id, estimated_loc_point, confidence_score, ping_count
+                    store_id,
+                    item_id,
+                    estimated_loc_point,
+                    confidence_score,
+                    ping_count
                 FROM ClusterStats
-                ORDER BY store_id, item_id, ping_count DESC, confidence_score DESC, cluster_id ASC
+                ORDER BY store_id, item_id, ping_count DESC
             """;
 
             int insertedRows = jdbcTemplate.update(sql);
-            System.out.println("✅ [Worker] Recalculare globală finalizată. " + insertedRows + " produse mapate.");
+
+            logger.info("Location recalculation finished successfully. Updated {} unique shelf locations.", insertedRows);
 
         } catch (Exception e) {
-            System.err.println("❌ [Worker] Eroare critică la recalcularea globală: " + e.getMessage());
+            logger.error("Failed to process location updates.", e);
             throw e;
         }
     }
@@ -70,7 +136,8 @@ public class LocationProcessorWorker {
     @Async
     @Transactional
     public void recalculateSingleItem(UUID storeId, UUID itemId) {
-        System.out.println("⚡ [Rapid-Recalc] Intervenție de urgență pentru produsul: " + itemId);
+        logger.info("Starting rapid recalculation for item {} in store {}.", itemId, storeId);
+
         try {
             String sql = """
                 WITH ItemPings AS (
@@ -80,13 +147,13 @@ public class LocationProcessorWorker {
                 ),
                 Clustered AS (
                     SELECT location_point, accuracy_m,
-                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 3) 
+                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 3)
                            OVER () AS cluster_id
                     FROM ItemPings
                 )
                 UPDATE store_inventory_map
                 SET estimated_loc_point = (
-                        SELECT ST_GeometricMedian(ST_Collect(location_point)) 
+                        SELECT ST_GeometricMedian(ST_Collect(location_point))
                         FROM Clustered WHERE cluster_id = 0
                         LIMIT 1
                     ),
@@ -99,9 +166,9 @@ public class LocationProcessorWorker {
             """;
 
             jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
-            System.out.println("🎯 [Rapid-Recalc] Poziția produsului " + itemId + " a fost actualizată.");
+            logger.info("Rapid recalculation finished for item {}.", itemId);
         } catch (Exception e) {
-            System.err.println("❌ [Rapid-Recalc] Eroare la recalcularea rapidă: " + e.getMessage());
+            logger.error("Rapid recalculation failed for item {}.", itemId, e);
         }
     }
 }

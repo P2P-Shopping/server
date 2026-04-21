@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -46,6 +47,39 @@ class AiOrchestrationServiceTest {
         assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI did not return any valid ingredients");
+    }
+
+    @Test
+    void nullPayload_throwsAiProcessingException() {
+        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
+
+        RecipeRequest req = new RecipeRequest();
+        req.setText("text");
+
+        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("null payload");
+    }
+
+    @Test
+    void success_filtersInvalidItemsBeforePersisting() {
+        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+        String json = "[null,{\"name\":\"   \",\"quantity\":1,\"unit\":\"pieces\"},{\"name\":\"Tomato\",\"quantity\":2,\"unit\":\"pieces\"}]";
+        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn(json);
+
+        RecipeRequest req = new RecipeRequest();
+        req.setText("text");
+        req.setNewListTitle("New List");
+        UUID listId = UUID.randomUUID();
+        req.setListId(listId);
+
+        var result = svc.processRecipeAndPopulateList(req, "u@e");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("Tomato");
+
+        verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), eq(List.of(result.get(0))), eq("u@e"));
     }
 
     @Test

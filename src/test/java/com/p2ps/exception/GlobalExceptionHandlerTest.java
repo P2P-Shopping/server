@@ -6,16 +6,19 @@ import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ListValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class GlobalExceptionHandlerTest {
 
@@ -78,8 +81,8 @@ class GlobalExceptionHandlerTest {
     void handleAiProcessingException_returnsMap() {
         AiProcessingException ex = new AiProcessingException("ai bad");
         var resp = handler.handleAiProcessingException(ex);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        Map<String,String> body = resp.getBody();
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        Map<String, String> body = resp.getBody();
         assertThat(body).containsEntry("message", "AI Processing Failed");
         assertThat(body).containsEntry("details", "ai bad");
     }
@@ -101,8 +104,24 @@ class GlobalExceptionHandlerTest {
         BadCredentialsException ex = new BadCredentialsException("x");
         var resp = handler.handleAuthenticationError(ex);
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        Map<String,String> body = resp.getBody();
+        Map<String, String> body = resp.getBody();
         assertThat(body).containsEntry("error", "Unauthorized");
         assertThat(body).containsEntry("message", "Invalid email or password");
+    }
+
+    @Test
+    void handleMaxUploadSizeExceededException() {
+        var resp = handler.handleMaxUploadSizeExceeded(new MaxUploadSizeExceededException(5L * 1024 * 1024));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+        assertThat(resp.getBody()).containsEntry("error", "File Too Large");
+        assertThat(resp.getBody()).containsEntry("message", "Maximum allowed file size is 5MB");
+    }
+
+    @Test
+    void handleMissingServletRequestPartException() {
+        var resp = handler.handleMissingServletRequestPart(new MissingServletRequestPartException("file"));
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody()).containsEntry("error", "Bad Request");
+        assertThat(resp.getBody()).containsEntry("message", "Missing file part");
     }
 }

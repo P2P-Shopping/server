@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 
 public class AiProcessingException extends RuntimeException {
 
-  private HttpStatus status = HttpStatus.UNPROCESSABLE_ENTITY;
+  private HttpStatus status = HttpStatus.UNPROCESSABLE_CONTENT;
 
   public AiProcessingException(String message) {
     super(message);

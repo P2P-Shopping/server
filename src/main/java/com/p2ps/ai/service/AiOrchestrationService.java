@@ -37,7 +37,7 @@ public class AiOrchestrationService {
         }
 
         if (validItems.isEmpty()) {
-            throw new AiProcessingException("AI did not return any valid ingredients to add to a list", HttpStatus.UNPROCESSABLE_ENTITY);
+            throw new AiProcessingException("AI did not return any valid ingredients to add to a list", HttpStatus.UNPROCESSABLE_CONTENT);
         }
 
         aiPersistenceService.createListAndPopulateItems(request.getListId(), request.getNewListTitle(), validItems, userEmail);
@@ -52,11 +52,11 @@ public class AiOrchestrationService {
         try {
             parsedItems = objectMapper.readValue(jsonResult, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
-            throw new AiProcessingException("AI could not return a correctly structured list", e, HttpStatus.UNPROCESSABLE_ENTITY);
+            throw new AiProcessingException("AI could not return a correctly structured list", e, HttpStatus.UNPROCESSABLE_CONTENT);
         }
 
         if (parsedItems == null) {
-            throw new AiProcessingException("AI returned a null payload instead of a list of items", HttpStatus.UNPROCESSABLE_ENTITY);
+            throw new AiProcessingException("AI returned a null payload instead of a list of items", HttpStatus.UNPROCESSABLE_CONTENT);
         }
 
         return parsedItems;
