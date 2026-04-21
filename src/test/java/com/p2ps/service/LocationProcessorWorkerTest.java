@@ -9,9 +9,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,5 +52,26 @@ class LocationProcessorWorkerTest {
         assertThrows(RuntimeException.class, worker::processAndCalculateCenters);
 
         verify(jdbcTemplate, times(2)).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să marcheze corect produsele cu confidence scăzut")
+    void isLowConfidence_ShouldReflectThresholds() {
+        assertTrue(worker.isLowConfidence(0.39d, 10));
+        assertTrue(worker.isLowConfidence(0.8d, 4));
+        assertFalse(worker.isLowConfidence(0.8d, 6));
+    }
+
+    @Test
+    @DisplayName("Trebuie să execute rapid recalculation pentru un item")
+    void recalculateSingleItem_ShouldExecuteUpdate() {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId))).thenReturn(1);
+
+        worker.recalculateSingleItem(storeId, itemId);
+
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
     }
 }

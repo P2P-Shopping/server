@@ -19,6 +19,8 @@ import java.util.UUID;
 public class LocationProcessorWorker {
 
     private static final Logger logger = LoggerFactory.getLogger(LocationProcessorWorker.class);
+    private static final double LOW_CONFIDENCE_THRESHOLD = 0.4d;
+    private static final int MIN_PING_COUNT_FOR_CONFIDENCE = 5;
 
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
@@ -76,6 +78,12 @@ public class LocationProcessorWorker {
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to inspect database metadata", exception);
         }
+    }
+
+    public boolean isLowConfidence(Double confidenceScore, Integer pingCount) {
+        boolean confidenceTooLow = confidenceScore != null && confidenceScore < LOW_CONFIDENCE_THRESHOLD;
+        boolean insufficientSignals = pingCount != null && pingCount < MIN_PING_COUNT_FOR_CONFIDENCE;
+        return confidenceTooLow || insufficientSignals;
     }
 
     @Scheduled(fixedDelay = 30000)
@@ -150,19 +158,22 @@ public class LocationProcessorWorker {
                            ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 3)
                            OVER () AS cluster_id
                     FROM ItemPings
+                ),
+                ClusterStats AS (
+                    SELECT
+                        ST_GeometricMedian(ST_Collect(location_point)) AS estimated_loc_point,
+                        LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS confidence_score,
+                        COUNT(*) AS ping_count
+                    FROM Clustered
+                    WHERE cluster_id = 0
                 )
-                UPDATE store_inventory_map
-                SET estimated_loc_point = (
-                        SELECT ST_GeometricMedian(ST_Collect(location_point))
-                        FROM Clustered WHERE cluster_id = 0
-                        LIMIT 1
-                    ),
-                    confidence_score = (
-                        SELECT LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m))))
-                        FROM Clustered WHERE cluster_id = 0
-                    ),
-                    ping_count = (SELECT COUNT(*) FROM Clustered WHERE cluster_id = 0)
-                WHERE store_id = ? AND item_id = ?
+                UPDATE store_inventory_map inventory
+                SET estimated_loc_point = COALESCE(stats.estimated_loc_point, inventory.estimated_loc_point),
+                    confidence_score = COALESCE(stats.confidence_score, inventory.confidence_score),
+                    ping_count = COALESCE(stats.ping_count, inventory.ping_count),
+                    last_updated = NOW()
+                FROM ClusterStats stats
+                WHERE inventory.store_id = ? AND inventory.item_id = ?
             """;
 
             jdbcTemplate.update(sql, storeId, itemId, storeId, itemId);
