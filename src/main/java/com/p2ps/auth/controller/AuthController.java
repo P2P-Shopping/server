@@ -58,6 +58,10 @@ public class AuthController { // Acolada clasei deschisă aici
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(Map.of("message", "Login successful", "email", request.getEmail()));
+                .body(Map.of(
+                        "message", "Login successful",
+                        "email", request.getEmail(),
+                        "token", token
+                ));
     }
 }
