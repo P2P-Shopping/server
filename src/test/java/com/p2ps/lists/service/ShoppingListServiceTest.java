@@ -3,7 +3,9 @@ package com.p2ps.lists.service;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
+import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -103,5 +106,54 @@ class ShoppingListServiceTest {
 
         assertEquals(1, result.size());
         assertTrue(result.get(0).getItems().isEmpty());
+    }
+
+    @Test
+    void deleteListShouldRemoveOwnedList() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        shoppingListService.deleteList(listId, userEmail);
+
+        verify(shoppingListRepository).delete(same(list));
+    }
+
+    @Test
+    void deleteListShouldThrowWhenListDoesNotExist() {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        ShoppingListNotFoundException exception = assertThrows(
+                ShoppingListNotFoundException.class,
+                () -> shoppingListService.deleteList(listId, "ana@example.com")
+        );
+
+        assertEquals("Shopping list not found", exception.getMessage());
+        verify(shoppingListRepository, never()).delete(any(ShoppingList.class));
+    }
+
+    @Test
+    void deleteListShouldThrowWhenUserDoesNotOwnList() {
+        UUID listId = UUID.randomUUID();
+        Users owner = new Users("owner@example.com", "secret", "Owner", "User");
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        ListAccessDeniedException exception = assertThrows(
+                ListAccessDeniedException.class,
+                () -> shoppingListService.deleteList(listId, "ana@example.com")
+        );
+
+        assertEquals("You do not have permission to delete this list", exception.getMessage());
+        verify(shoppingListRepository, never()).delete(any(ShoppingList.class));
     }
 }
