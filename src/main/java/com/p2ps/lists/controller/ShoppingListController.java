@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/lists")
@@ -37,5 +38,13 @@ public class ShoppingListController {
         List<ShoppingListDTO> myLists = shoppingListService.getUserLists(userEmail);
 
         return ResponseEntity.ok(myLists);
+    }
+
+    @DeleteMapping("/{listId}")
+    public ResponseEntity<Void> deleteList(
+            @PathVariable UUID listId,
+            Authentication authentication) {
+        shoppingListService.deleteList(listId, authentication.getName());
+        return ResponseEntity.noContent().build();
     }
 }

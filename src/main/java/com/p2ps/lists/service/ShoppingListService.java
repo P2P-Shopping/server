@@ -5,7 +5,9 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
+import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,18 @@ public class ShoppingListService {
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
+    }
+
+    @Transactional
+    public void deleteList(java.util.UUID listId, String userEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.getUser().getEmail().equals(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to delete this list");
+        }
+
+        shoppingListRepository.delete(list);
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {
