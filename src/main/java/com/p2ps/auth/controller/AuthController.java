@@ -16,12 +16,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
-public class AuthController { // Acolada clasei deschisă aici
+public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
@@ -37,19 +43,24 @@ public class AuthController { // Acolada clasei deschisă aici
     }
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, String>> me() {
+    public ResponseEntity<?> me() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String email = auth.getName();
         return userService.findByEmail(email)
-                .map(user -> ResponseEntity.ok(Map.of(
-                        "email", user.getEmail(),
-                        "firstName", user.getFirstName(),
-                        "userId", user.getId().toString()
-                )))
-                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                .map(user -> {
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("email", user.getEmail());
+                    data.put("firstName", user.getFirstName());
+                    data.put("userId", user.getId().toString());
+                    return ResponseEntity.ok(data);
+                })
+                .orElseGet(() -> {
+                    logger.warn("Authenticated user {} not found in database.", email);
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                });
     }
 
     @PostMapping("/register")
@@ -64,7 +75,7 @@ public class AuthController { // Acolada clasei deschisă aici
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
@@ -72,38 +83,41 @@ public class AuthController { // Acolada clasei deschisă aici
         String email = request.getEmail();
         String token = jwtUtil.generateToken(email);
 
-        ResponseCookie cookie = ResponseCookie.from("jwt-token", token)
-                .httpOnly(true)
-                .secure(isCookieSecure)
-                .path("/")
-                .maxAge(24L * 60 * 60) // 24h
-                .sameSite("Lax")
-                .build();
+        ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
 
         return userService.findByEmail(email)
-                .map(user -> ResponseEntity.ok()
-                        .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                        .body(Map.of(
-                                "message", "Login successful",
-                                "email", user.getEmail(),
-                                "firstName", user.getFirstName(),
-                                "userId", user.getId().toString(),
-                                "token", token
-                        )))
-                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                .map(user -> {
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("message", "Login successful");
+                    data.put("email", user.getEmail());
+                    data.put("firstName", user.getFirstName());
+                    data.put("userId", user.getId().toString());
+                    return ResponseEntity.ok()
+                            .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                            .body(data);
+                })
+                .orElseGet(() -> {
+                    logger.error("User {} authenticated successfully but record is missing in database.", email);
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .body(Map.of("error", "User record missing after authentication"));
+                });
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        ResponseCookie cookie = ResponseCookie.from("jwt-token", "")
-                .httpOnly(true)
-                .secure(isCookieSecure)
-                .path("/")
-                .maxAge(0)
-                .sameSite("Lax")
-                .build();
+    public ResponseEntity<Void> logout(HttpServletRequest servletRequest) {
+        ResponseCookie cookie = createJwtCookie("", 0, servletRequest.isSecure());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
+    }
+
+    private ResponseCookie createJwtCookie(String token, long maxAge, boolean requestIsSecure) {
+        return ResponseCookie.from("jwt-token", token)
+                .httpOnly(true)
+                .secure(isCookieSecure || requestIsSecure)
+                .path("/")
+                .maxAge(maxAge)
+                .sameSite("Lax")
                 .build();
     }
 }

@@ -82,10 +82,6 @@ public class LocationProcessorWorker {
         }
 
         try (Connection connection = dataSource.getConnection()) {
-            if (connection == null) {
-                return false;
-            }
-
             String productName = connection.getMetaData().getDatabaseProductName();
             return productName != null
                     && productName.toLowerCase(Locale.ROOT).contains("postgres");
@@ -164,6 +160,7 @@ public class LocationProcessorWorker {
     @Transactional
     public CompletableFuture<Void> recalculateSingleItem(UUID storeId, UUID itemId) {
         if (!isPostgreSQL()) {
+            logger.debug("Skipping rapid recalculation for item {} in store {} because database is not PostgreSQL.", itemId, storeId);
             return CompletableFuture.completedFuture(null);
         }
         logger.info("Starting rapid recalculation for item {} in store {}.", itemId, storeId);

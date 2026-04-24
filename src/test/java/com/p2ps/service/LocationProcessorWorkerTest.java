@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -101,9 +102,10 @@ class LocationProcessorWorkerTest {
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Database error during update"));
 
+        CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
         CompletionException ex = assertThrows(
                 CompletionException.class,
-                () -> worker.recalculateSingleItem(storeId, itemId).join()
+                future::join
         );
 
         assertInstanceOf(com.p2ps.exception.RapidRecalculationException.class, ex.getCause());
@@ -115,19 +117,9 @@ class LocationProcessorWorkerTest {
     @DisplayName("Trebuie să returneze false dacă DataSource este null")
     void isPostgreSQL_NullDataSource() {
         LocationProcessorWorker workerNull = new LocationProcessorWorker(jdbcTemplate, null);
-        assertFalse(workerNull.isLowConfidence(0.8d, 6)); // Just checking it doesn't crash
-        // Wait, I want to test isPostgreSQL which is private.
-        // But I can test it through processAndCalculateCenters() or ensureInventoryMapSchema()
         workerNull.processAndCalculateCenters();
         verify(jdbcTemplate, never()).update(anyString());
-    }
-
-    @Test
-    @DisplayName("Trebuie să returneze false dacă Connection este null")
-    void isPostgreSQL_NullConnection() throws Exception {
-        when(dataSource.getConnection()).thenReturn(null);
-        worker.processAndCalculateCenters();
-        verify(jdbcTemplate, never()).update(anyString());
+        verify(jdbcTemplate, never()).execute(anyString());
     }
 
     @Test
@@ -197,10 +189,12 @@ class LocationProcessorWorkerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
-        when(jdbcTemplate.update(anyString(), any(), any(), any(), any())).thenThrow(new RuntimeException("Fail"));
+        when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
+                .thenThrow(new RuntimeException("Fail"));
 
         long before = LocationProcessorWorker.getRapidRecalculationFailures();
-        assertThrows(CompletionException.class, () -> worker.recalculateSingleItem(storeId, itemId).join());
+        CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
+        assertThrows(CompletionException.class, future::join);
         assertEquals(before + 1, LocationProcessorWorker.getRapidRecalculationFailures());
     }
 }

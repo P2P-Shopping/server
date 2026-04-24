@@ -3,6 +3,7 @@ package com.p2ps.auth.service;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.exception.UserAlreadyExistsException;
+import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -23,7 +24,7 @@ public class UserService implements UserDetailsService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public java.util.Optional<Users> findByEmail(String email) {
+    public Optional<Users> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
