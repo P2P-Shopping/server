@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -25,6 +26,9 @@ public class AuthController { // Acolada clasei deschisă aici
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
+
+    @Value("${app.security.cookie-secure-flag:true}")
+    private boolean isCookieSecure;
 
     public AuthController(UserService userService, AuthenticationManager authenticationManager, JwtUtil jwtUtil) {
         this.userService = userService;
@@ -70,7 +74,7 @@ public class AuthController { // Acolada clasei deschisă aici
 
         ResponseCookie cookie = ResponseCookie.from("jwt-token", token)
                 .httpOnly(true)
-                .secure(false) // trebuie mutat pe true cand vom trece la https
+                .secure(isCookieSecure)
                 .path("/")
                 .maxAge(24L * 60 * 60) // 24h
                 .sameSite("Lax")
@@ -93,7 +97,7 @@ public class AuthController { // Acolada clasei deschisă aici
     public ResponseEntity<Void> logout() {
         ResponseCookie cookie = ResponseCookie.from("jwt-token", "")
                 .httpOnly(true)
-                .secure(false)
+                .secure(isCookieSecure)
                 .path("/")
                 .maxAge(0)
                 .sameSite("Lax")
