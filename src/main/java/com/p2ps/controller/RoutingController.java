@@ -63,7 +63,12 @@ public class RoutingController {
 
         if (isLowConfidence && shouldTriggerRecalculation(storeId, itemId, map.getLastUpdated())) {
             try {
-                locationProcessorWorker.recalculateSingleItem(storeId, itemId);
+                locationProcessorWorker.recalculateSingleItem(storeId, itemId)
+                        .whenComplete((ignored, ex) -> {
+                            if (ex != null) {
+                                log.warn("Rapid recalculation completed exceptionally for storeId={} itemId={}", storeId, itemId, ex);
+                            }
+                        });
             } catch (RuntimeException ex) {
                 log.warn("Failed to enqueue location recalculation for storeId={} itemId={}", storeId, itemId, ex);
             }
@@ -88,11 +93,7 @@ public class RoutingController {
         LocalDateTime cutoff = LocalDateTime.now().minus(recalculationCooldown);
         AtomicBoolean shouldTrigger = new AtomicBoolean(false);
 
-        recalculationGuard.asMap().compute(guardKey, (key, previous) -> {
-            if (previous != null) {
-                return previous;
-            }
-
+        recalculationGuard.asMap().computeIfAbsent(guardKey, key -> {
             if (lastUpdated != null && !lastUpdated.isBefore(cutoff)) {
                 return null;
             }
