@@ -38,7 +38,14 @@ public class AuthController { // Acolada clasei deschisă aici
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(Map.of("email", auth.getName()));
+        String email = auth.getName();
+        return userService.findByEmail(email)
+                .map(user -> ResponseEntity.ok(Map.of(
+                        "email", user.getEmail(),
+                        "firstName", user.getFirstName(),
+                        "userId", user.getId().toString()
+                )))
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 
     @PostMapping("/register")
@@ -58,8 +65,8 @@ public class AuthController { // Acolada clasei deschisă aici
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
-        String token = jwtUtil.generateToken(request.getEmail());
-
+        String email = request.getEmail();
+        String token = jwtUtil.generateToken(email);
 
         ResponseCookie cookie = ResponseCookie.from("jwt-token", token)
                 .httpOnly(true)
@@ -69,13 +76,17 @@ public class AuthController { // Acolada clasei deschisă aici
                 .sameSite("Lax")
                 .build();
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(Map.of(
-                        "message", "Login successful",
-                        "email", request.getEmail(),
-                        "token", token
-                ));
+        return userService.findByEmail(email)
+                .map(user -> ResponseEntity.ok()
+                        .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                        .body(Map.of(
+                                "message", "Login successful",
+                                "email", user.getEmail(),
+                                "firstName", user.getFirstName(),
+                                "userId", user.getId().toString(),
+                                "token", token
+                        )))
+                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
     }
 
     @PostMapping("/logout")
