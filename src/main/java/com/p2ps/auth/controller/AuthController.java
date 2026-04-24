@@ -66,7 +66,7 @@ public class AuthController { // Acolada clasei deschisă aici
                 .secure(false) // trebuie mutat pe true cand vom trece la https
                 .path("/")
                 .maxAge(24L * 60 * 60) // 24h
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .build();
 
         return ResponseEntity.ok()
@@ -76,5 +76,19 @@ public class AuthController { // Acolada clasei deschisă aici
                         "email", request.getEmail(),
                         "token", token
                 ));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        ResponseCookie cookie = ResponseCookie.from("jwt-token", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
     }
 }
