@@ -93,6 +93,9 @@ public class LocationProcessorWorker {
     @Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
+        if (!isPostgreSQL()) {
+            return;
+        }
         logger.info("Starting location centroid recalculation.");
 
         try {
@@ -148,6 +151,9 @@ public class LocationProcessorWorker {
     @Async("locationProcessorExecutor")
     @Transactional
     public CompletableFuture<Void> recalculateSingleItem(UUID storeId, UUID itemId) {
+        if (!isPostgreSQL()) {
+            return CompletableFuture.completedFuture(null);
+        }
         logger.info("Starting rapid recalculation for item {} in store {}.", itemId, storeId);
 
         try {

@@ -90,8 +90,14 @@ class AuthControllerTest {
 
         Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
 
+        Users mockUser = new Users();
+        mockUser.setEmail(request.getEmail());
+        mockUser.setFirstName("John");
+        mockUser.setId(1);
+
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
         when(jwtUtil.generateToken(anyString())).thenReturn("mocked-jwt-token-123");
+        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,6 +107,8 @@ class AuthControllerTest {
                         {
                           "message": "Login successful",
                           "email": "test@example.com",
+                          "firstName": "John",
+                          "userId": "1",
                           "token": "mocked-jwt-token-123"
                         }
                         """));
