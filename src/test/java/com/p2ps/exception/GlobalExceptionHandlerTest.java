@@ -10,6 +10,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -123,5 +124,22 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(resp.getBody()).containsEntry("error", "Bad Request");
         assertThat(resp.getBody()).containsEntry("message", "Missing file part");
+    }
+
+    @Test
+    void handleMethodArgumentTypeMismatch_returnsBadRequest() {
+        MethodArgumentTypeMismatchException ex = new MethodArgumentTypeMismatchException(
+                "PUT_STORE_UUID_HERE",
+                java.util.UUID.class,
+                "storeId",
+                null,
+                null
+        );
+
+        var resp = handler.handleMethodArgumentTypeMismatch(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().getMessage()).isEqualTo("Validation Error");
+        assertThat(resp.getBody().getDetails()).isEqualTo("Invalid value for 'storeId'. Expected UUID.");
     }
 }

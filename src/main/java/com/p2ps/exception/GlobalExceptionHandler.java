@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -110,6 +111,19 @@ public class GlobalExceptionHandler {
                         ERR_STR, "Bad Request",
                         MSG_STR, "Missing file part"
                 ));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String parameterName = ex.getName() == null ? "parameter" : ex.getName();
+        String requiredType = ex.getRequiredType() == null ? "valid value" : ex.getRequiredType().getSimpleName();
+        String details = "Invalid value for '" + parameterName + "'. Expected " + requiredType + ".";
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Validation Error",
+                details
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AiProcessingException.class)
