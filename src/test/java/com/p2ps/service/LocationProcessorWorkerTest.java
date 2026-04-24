@@ -9,8 +9,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,12 +33,22 @@ class LocationProcessorWorkerTest {
     @Mock
     private DataSource dataSource;
 
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private DatabaseMetaData metaData;
+
     @InjectMocks
     private LocationProcessorWorker worker;
 
     @Test
     @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
-    void processAndCalculateCenters_Success() {
+    void processAndCalculateCenters_Success() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+
         when(jdbcTemplate.update(anyString())).thenReturn(5);
 
         worker.processAndCalculateCenters();
@@ -44,7 +58,11 @@ class LocationProcessorWorkerTest {
 
     @Test
     @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
-    void processAndCalculateCenters_ThrowsExceptionOnError() {
+    void processAndCalculateCenters_ThrowsExceptionOnError() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+
         when(jdbcTemplate.update(anyString()))
                 .thenReturn(10)
                 .thenThrow(new RuntimeException("Database error during insert"));
@@ -72,14 +90,23 @@ class LocationProcessorWorkerTest {
 
     @Test
     @DisplayName("Trebuie să execute rapid recalculation pentru un item")
-    void recalculateSingleItem_ShouldPropagateFailure() {
+    void recalculateSingleItem_ShouldPropagateFailure() throws Exception {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
+
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Database error during update"));
 
-        assertThrows(RuntimeException.class, () -> worker.recalculateSingleItem(storeId, itemId));
+        CompletionException ex = assertThrows(
+                CompletionException.class,
+                () -> worker.recalculateSingleItem(storeId, itemId).join()
+        );
+
+        assertInstanceOf(com.p2ps.exception.RapidRecalculationException.class, ex.getCause());
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
     }

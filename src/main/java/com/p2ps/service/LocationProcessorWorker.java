@@ -77,10 +77,22 @@ public class LocationProcessorWorker {
     }
 
     private boolean isPostgreSQL() {
+        if (dataSource == null) {
+            return false;
+        }
+
         try (Connection connection = dataSource.getConnection()) {
-            return connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgres");
+            if (connection == null) {
+                return false;
+            }
+
+            String productName = connection.getMetaData().getDatabaseProductName();
+            return productName != null
+                    && productName.toLowerCase(Locale.ROOT).contains("postgres");
         } catch (SQLException exception) {
-            throw new IllegalStateException("Unable to inspect database metadata", exception);
+            // Treat "cannot inspect metadata" as "not postgres" so the worker safely no-ops
+            logger.warn("Unable to inspect database metadata; skipping location processing.", exception);
+            return false;
         }
     }
 
@@ -198,7 +210,7 @@ public class LocationProcessorWorker {
         } catch (Exception e) {
             RAPID_RECALCULATION_FAILURES.incrementAndGet();
             logger.error("Rapid recalculation failed for item {}.", itemId, e);
-            throw new RapidRecalculationException("Rapid recalculation failed for item " + itemId, e);
+            return CompletableFuture.failedFuture(new RapidRecalculationException("Rapid recalculation failed for item " + itemId, e));
         }
     }
 
