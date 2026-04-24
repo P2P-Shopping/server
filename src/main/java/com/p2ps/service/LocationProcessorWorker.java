@@ -28,6 +28,7 @@ public class LocationProcessorWorker {
 
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
+    private volatile Boolean postgresDetected = null;
 
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.jdbcTemplate = jdbcTemplate;
@@ -35,8 +36,22 @@ public class LocationProcessorWorker {
     }
 
     @PostConstruct
+    public void detectDatabaseType() {
+        if (dataSource == null) {
+            postgresDetected = false;
+            return;
+        }
+        try {
+            postgresDetected = checkIsPostgres();
+        } catch (SQLException e) {
+            logger.warn("Transient database inspection failure during startup; will retry on next use.", e);
+            // Leave postgresDetected as null so it can be retried in isPostgreSQL()
+        }
+    }
+
+    @PostConstruct
     public void ensureInventoryMapSchema() {
-        if (dataSource == null || !isPostgreSQL()) {
+        if (!isPostgreSQL()) {
             return;
         }
 
@@ -77,18 +92,29 @@ public class LocationProcessorWorker {
     }
 
     private boolean isPostgreSQL() {
+        if (postgresDetected != null) {
+            return postgresDetected;
+        }
+
         if (dataSource == null) {
             return false;
         }
 
+        try {
+            postgresDetected = checkIsPostgres();
+            return postgresDetected;
+        } catch (SQLException exception) {
+            // Treat "cannot inspect metadata" as "not postgres" for THIS call, but don't cache yet if transient
+            logger.warn("Unable to inspect database metadata; skipping location processing.", exception);
+            return false;
+        }
+    }
+
+    private boolean checkIsPostgres() throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
             String productName = connection.getMetaData().getDatabaseProductName();
             return productName != null
                     && productName.toLowerCase(Locale.ROOT).contains("postgres");
-        } catch (SQLException exception) {
-            // Treat "cannot inspect metadata" as "not postgres" so the worker safely no-ops
-            logger.warn("Unable to inspect database metadata; skipping location processing.", exception);
-            return false;
         }
     }
 

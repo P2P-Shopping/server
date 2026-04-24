@@ -197,4 +197,21 @@ class LocationProcessorWorkerTest {
         assertThrows(CompletionException.class, future::join);
         assertEquals(before + 1, LocationProcessorWorker.getRapidRecalculationFailures());
     }
+
+    @Test
+    @DisplayName("Trebuie să sară peste recalculare dacă nu este PostgreSQL")
+    void recalculateSingleItem_ShouldShortCircuit_WhenNotPostgres() throws Exception {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("H2");
+
+        CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
+
+        assertTrue(future.isDone());
+        assertFalse(future.isCompletedExceptionally());
+        verify(jdbcTemplate, never()).update(anyString(), any(), any(), any(), any());
+    }
 }

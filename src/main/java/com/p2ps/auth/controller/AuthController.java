@@ -4,6 +4,7 @@ import com.p2ps.auth.security.dto.LoginRequest;
 import com.p2ps.auth.dto.RegisterRequest;
 import com.p2ps.auth.security.JwtUtil;
 import com.p2ps.auth.service.UserService;
+import com.p2ps.auth.model.Users;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -50,15 +51,9 @@ public class AuthController {
         }
         String email = auth.getName();
         return userService.findByEmail(email)
-                .map(user -> {
-                    Map<String, Object> data = new HashMap<>();
-                    data.put("email", user.getEmail());
-                    data.put("firstName", user.getFirstName());
-                    data.put("userId", user.getId().toString());
-                    return ResponseEntity.ok(data);
-                })
+                .map(user -> ResponseEntity.ok(toUserResponse(user)))
                 .orElseGet(() -> {
-                    logger.warn("Authenticated user {} not found in database.", email);
+                    logger.warn("Authenticated user record not found in database.");
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
                 });
     }
@@ -76,31 +71,35 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        authenticationManager.authenticate(
+        Authentication auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
-        String email = request.getEmail();
-        String token = jwtUtil.generateToken(email);
+        String principalName = auth.getName();
+        String token = jwtUtil.generateToken(principalName);
 
-        ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
-
-        return userService.findByEmail(email)
+        return userService.findByEmail(principalName)
                 .map(user -> {
-                    Map<String, Object> data = new HashMap<>();
+                    ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
+                    Map<String, Object> data = toUserResponse(user);
                     data.put("message", "Login successful");
-                    data.put("email", user.getEmail());
-                    data.put("firstName", user.getFirstName());
-                    data.put("userId", user.getId().toString());
                     return ResponseEntity.ok()
                             .header(HttpHeaders.SET_COOKIE, cookie.toString())
                             .body(data);
                 })
                 .orElseGet(() -> {
-                    logger.error("User {} authenticated successfully but record is missing in database.", email);
+                    logger.error("User authenticated successfully but record is missing in database.");
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body(Map.of("error", "User record missing after authentication"));
                 });
+    }
+
+    private Map<String, Object> toUserResponse(Users user) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("email", user.getEmail());
+        data.put("firstName", user.getFirstName());
+        data.put("userId", user.getId().toString());
+        return data;
     }
 
     @PostMapping("/logout")
