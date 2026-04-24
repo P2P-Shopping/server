@@ -14,15 +14,15 @@ import java.sql.DatabaseMetaData;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class LocationProcessorWorkerTest {
@@ -109,5 +109,98 @@ class LocationProcessorWorkerTest {
         assertInstanceOf(com.p2ps.exception.RapidRecalculationException.class, ex.getCause());
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă DataSource este null")
+    void isPostgreSQL_NullDataSource() {
+        LocationProcessorWorker workerNull = new LocationProcessorWorker(jdbcTemplate, null);
+        assertFalse(workerNull.isLowConfidence(0.8d, 6)); // Just checking it doesn't crash
+        // Wait, I want to test isPostgreSQL which is private.
+        // But I can test it through processAndCalculateCenters() or ensureInventoryMapSchema()
+        workerNull.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă Connection este null")
+    void isPostgreSQL_NullConnection() throws Exception {
+        when(dataSource.getConnection()).thenReturn(null);
+        worker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă apare SQLException")
+    void isPostgreSQL_SQLException() throws Exception {
+        when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
+        worker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă nu este PostgreSQL")
+    void isPostgreSQL_NotPostgres() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("H2");
+
+        worker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să creeze schema dacă este PostgreSQL")
+    void ensureInventoryMapSchema_Success() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+
+        worker.ensureInventoryMapSchema();
+
+        verify(jdbcTemplate, atLeastOnce()).execute(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să nu facă nimic la PostConstruct dacă nu este PostgreSQL")
+    void ensureInventoryMapSchema_NotPostgres() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("MySQL");
+
+        worker.ensureInventoryMapSchema();
+
+        verify(jdbcTemplate, never()).execute(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să execute rapid recalculation cu succes")
+    void recalculateSingleItem_Success() throws Exception {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+
+        worker.recalculateSingleItem(storeId, itemId).join();
+
+        verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
+    }
+
+    @Test
+    @DisplayName("Trebuie să urmărească eșecurile de rapid recalculation")
+    void getRapidRecalculationFailures_ShouldReflectCount() throws Exception {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), any())).thenThrow(new RuntimeException("Fail"));
+
+        long before = LocationProcessorWorker.getRapidRecalculationFailures();
+        assertThrows(CompletionException.class, () -> worker.recalculateSingleItem(storeId, itemId).join());
+        assertEquals(before + 1, LocationProcessorWorker.getRapidRecalculationFailures());
     }
 }

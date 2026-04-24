@@ -159,4 +159,53 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @org.springframework.security.test.context.support.WithMockUser(username = "test@example.com")
+    void me_ShouldReturnUserData() throws Exception {
+        Users mockUser = new Users();
+        mockUser.setEmail("test@example.com");
+        mockUser.setFirstName("John");
+        mockUser.setId(1);
+
+        when(userService.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(mockUser));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.email").value("test@example.com"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.firstName").value("John"));
+    }
+
+    @Test
+    void me_ShouldReturnUnauthorized_WhenNotAuthenticated() throws Exception {
+        // No @WithMockUser, context is empty
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logout_ShouldReturnOkAndClearCookie() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().exists("Set-Cookie"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Set-Cookie", org.hamcrest.Matchers.containsString("Max-Age=0")));
+    }
+
+    @Test
+    void login_ShouldReturnInternalServerError_WhenUserNotFoundInDbAfterAuth() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@example.com");
+        request.setPassword("Password123!");
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
+        when(jwtUtil.generateToken(anyString())).thenReturn("mocked-jwt-token-123");
+        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError());
+    }
 }
