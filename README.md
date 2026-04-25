@@ -12,6 +12,13 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ```
 
 The local profile uses `spring.jpa.hibernate.ddl-auto=update` so Hibernate can create or adjust the schema during development.
+It also sets `app.security.cookie-secure-flag=false` to allow cookies over HTTP.
+
+If you are not using the `local` profile, you can manually disable the secure flag for cookies by exporting the `COOKIE_SECURE_FLAG` environment variable:
+
+```bash
+export COOKIE_SECURE_FLAG=false
+```
 
 In IntelliJ IDEA, you can set this up by following these steps:
 

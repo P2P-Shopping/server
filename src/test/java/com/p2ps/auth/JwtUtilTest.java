@@ -36,24 +36,26 @@ class JwtUtilTest {
     }
 
     @Test
-    void generateAndExtractEmail() {
+    void generateAndExtractEmailAndVersion() {
         String email = "user@test.com";
-        String token = jwtUtil.generateToken(email);
+        Integer version = 5;
+        String token = jwtUtil.generateToken(email, version);
 
         assertNotNull(token);
         assertEquals(email, jwtUtil.extractEmail(token));
+        assertEquals(version, jwtUtil.extractTokenVersion(token));
     }
 
     @Test
     void validateToken_Success() {
         String email = "user@test.com";
-        String token = jwtUtil.generateToken(email);
+        String token = jwtUtil.generateToken(email, 1);
         assertTrue(jwtUtil.isTokenValid(token, email));
     }
 
     @Test
     void validateToken_Fail_WrongUser() {
-        String token = jwtUtil.generateToken("user1@test.com");
+        String token = jwtUtil.generateToken("user1@test.com", 1);
         assertFalse(jwtUtil.isTokenValid(token, "user2@test.com"));
     }
 }

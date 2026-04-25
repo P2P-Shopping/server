@@ -28,6 +28,10 @@ public class LocationProcessorWorker {
 
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
+    private volatile Boolean postgresDetected = null;
+
+    private static final int MAX_STARTUP_FAILURES = 3;
+    private final java.util.concurrent.atomic.AtomicInteger startupDetectFailures = new java.util.concurrent.atomic.AtomicInteger(0);
 
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.jdbcTemplate = jdbcTemplate;
@@ -35,8 +39,34 @@ public class LocationProcessorWorker {
     }
 
     @PostConstruct
-    public void ensureInventoryMapSchema() {
-        if (dataSource == null || !isPostgreSQL()) {
+    public void initialize() {
+        detectDatabaseType();
+        ensureInventoryMapSchema();
+    }
+
+    private void detectDatabaseType() {
+        if (dataSource == null) {
+            postgresDetected = false;
+            return;
+        }
+
+        while (postgresDetected == null && startupDetectFailures.get() < MAX_STARTUP_FAILURES) {
+            try {
+                postgresDetected = checkIsPostgres();
+                startupDetectFailures.set(0); // Reset on success
+            } catch (SQLException e) {
+                int failures = startupDetectFailures.incrementAndGet();
+                logger.warn("Database inspection failure (attempt {}/{}).", failures, MAX_STARTUP_FAILURES, e);
+                if (failures >= MAX_STARTUP_FAILURES) {
+                    logger.error("STABLE_MARKER: Failed to detect database type after {} attempts. Disabling location processing.", MAX_STARTUP_FAILURES);
+                    postgresDetected = false;
+                }
+            }
+        }
+    }
+
+    private void ensureInventoryMapSchema() {
+        if (!isPostgreSQL()) {
             return;
         }
 
@@ -77,10 +107,23 @@ public class LocationProcessorWorker {
     }
 
     private boolean isPostgreSQL() {
+        if (postgresDetected != null) {
+            return postgresDetected;
+        }
+
+        if (dataSource == null) {
+            return false;
+        }
+
+        detectDatabaseType();
+        return Boolean.TRUE.equals(postgresDetected);
+    }
+
+    private boolean checkIsPostgres() throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
-            return connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgres");
-        } catch (SQLException exception) {
-            throw new IllegalStateException("Unable to inspect database metadata", exception);
+            String productName = connection.getMetaData().getDatabaseProductName();
+            return productName != null
+                    && productName.toLowerCase(Locale.ROOT).contains("postgres");
         }
     }
 
@@ -93,6 +136,9 @@ public class LocationProcessorWorker {
     @Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
+        if (!isPostgreSQL()) {
+            return;
+        }
         logger.info("Starting location centroid recalculation.");
 
         try {
@@ -148,6 +194,10 @@ public class LocationProcessorWorker {
     @Async("locationProcessorExecutor")
     @Transactional
     public CompletableFuture<Void> recalculateSingleItem(UUID storeId, UUID itemId) {
+        if (!isPostgreSQL()) {
+            logger.debug("Skipping rapid recalculation for item {} in store {} because database is not PostgreSQL.", itemId, storeId);
+            return CompletableFuture.completedFuture(null);
+        }
         logger.info("Starting rapid recalculation for item {} in store {}.", itemId, storeId);
 
         try {
@@ -192,11 +242,15 @@ public class LocationProcessorWorker {
         } catch (Exception e) {
             RAPID_RECALCULATION_FAILURES.incrementAndGet();
             logger.error("Rapid recalculation failed for item {}.", itemId, e);
-            throw new RapidRecalculationException("Rapid recalculation failed for item " + itemId, e);
+            return CompletableFuture.failedFuture(new RapidRecalculationException("Rapid recalculation failed for item " + itemId, e));
         }
     }
 
     public static long getRapidRecalculationFailures() {
         return RAPID_RECALCULATION_FAILURES.get();
+    }
+
+    public static void resetRapidRecalculationFailures() {
+        RAPID_RECALCULATION_FAILURES.set(0);
     }
 }
