@@ -116,7 +116,7 @@ public class LocationProcessorWorker {
         }
 
         detectDatabaseType();
-        return postgresDetected != null ? postgresDetected : false;
+        return Boolean.TRUE.equals(postgresDetected);
     }
 
     private boolean checkIsPostgres() throws SQLException {
