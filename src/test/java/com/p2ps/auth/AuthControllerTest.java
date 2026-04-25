@@ -19,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -100,7 +101,7 @@ class AuthControllerTest {
         mockUser.setId(1);
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
-        when(jwtUtil.generateToken(anyString())).thenReturn("mocked-jwt-token-123");
+        when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
         when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
@@ -208,7 +209,7 @@ class AuthControllerTest {
         Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
-        when(jwtUtil.generateToken(anyString())).thenReturn("mocked-jwt-token-123");
+        when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
         when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.empty());
 
         mockMvc.perform(post("/api/auth/login")
@@ -240,7 +241,7 @@ class AuthControllerTest {
         mockUser.setId(1);
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
-        when(jwtUtil.generateToken(anyString())).thenReturn("mock-token");
+        when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mock-token");
         when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")

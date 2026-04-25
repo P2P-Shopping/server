@@ -51,9 +51,18 @@ public class UserService implements UserDetailsService {
         try {
             String hashedPassword = passwordEncoder.encode(rawPassword);
             Users newUser = new Users(email, hashedPassword, firstName, lastName);
+            newUser.setTokenVersion(0);
             return userRepository.save(newUser);
         } catch (DataIntegrityViolationException _) {
             throw new UserAlreadyExistsException("Email already in use!");
         }
+    }
+
+    @Transactional
+    public void incrementTokenVersion(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setTokenVersion(user.getTokenVersion() + 1);
+            userRepository.save(user);
+        });
     }
 }

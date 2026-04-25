@@ -29,6 +29,9 @@ class JwtAuthFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    @Mock
+    private com.p2ps.auth.service.UserService userService;
+
     @InjectMocks
     private JwtAuthFilter jwtAuthFilter;
 
@@ -104,7 +107,12 @@ class JwtAuthFilterTest {
         @Test
         void validToken_ReturnsAuthentication() {
             when(jwtUtil.extractEmail("valid-token")).thenReturn("test@test.com");
+            when(jwtUtil.extractTokenVersion("valid-token")).thenReturn(1);
             when(jwtUtil.isTokenExpired("valid-token")).thenReturn(false);
+            com.p2ps.auth.model.Users user = new com.p2ps.auth.model.Users();
+            user.setEmail("test@test.com");
+            user.setTokenVersion(1);
+            when(userService.findByEmail("test@test.com")).thenReturn(java.util.Optional.of(user));
 
             UsernamePasswordAuthenticationToken result = jwtAuthFilter.authenticateToken("valid-token");
 
@@ -123,6 +131,7 @@ class JwtAuthFilterTest {
         @Test
         void expiredToken_ReturnsNull() {
             when(jwtUtil.extractEmail("expired-token")).thenReturn("test@test.com");
+            when(jwtUtil.extractTokenVersion("expired-token")).thenReturn(1);
             when(jwtUtil.isTokenExpired("expired-token")).thenReturn(true);
 
             assertNull(jwtAuthFilter.authenticateToken("expired-token"));
@@ -147,7 +156,12 @@ class JwtAuthFilterTest {
             request.addHeader("Authorization", "Bearer valid-jwt");
 
             when(jwtUtil.extractEmail("valid-jwt")).thenReturn("test@test.com");
+            when(jwtUtil.extractTokenVersion("valid-jwt")).thenReturn(1);
             when(jwtUtil.isTokenExpired("valid-jwt")).thenReturn(false);
+            com.p2ps.auth.model.Users user = new com.p2ps.auth.model.Users();
+            user.setEmail("test@test.com");
+            user.setTokenVersion(1);
+            when(userService.findByEmail("test@test.com")).thenReturn(java.util.Optional.of(user));
 
             jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -175,6 +189,7 @@ class JwtAuthFilterTest {
             request.addHeader("Authorization", "Bearer expired-jwt");
 
             when(jwtUtil.extractEmail("expired-jwt")).thenReturn("test@test.com");
+            when(jwtUtil.extractTokenVersion("expired-jwt")).thenReturn(1);
             when(jwtUtil.isTokenExpired("expired-jwt")).thenReturn(true);
 
             jwtAuthFilter.doFilterInternal(request, response, filterChain);
@@ -193,6 +208,7 @@ class JwtAuthFilterTest {
 
             request.addHeader("Authorization", "Bearer new-jwt");
             when(jwtUtil.extractEmail("new-jwt")).thenReturn("new@test.com");
+            when(jwtUtil.extractTokenVersion("new-jwt")).thenReturn(1);
             when(jwtUtil.isTokenExpired("new-jwt")).thenReturn(false);
 
             jwtAuthFilter.doFilterInternal(request, response, filterChain);
@@ -223,7 +239,12 @@ class JwtAuthFilterTest {
             request.addHeader("Authorization", "raw-token-value");
 
             when(jwtUtil.extractEmail("raw-token-value")).thenReturn("test@test.com");
+            when(jwtUtil.extractTokenVersion("raw-token-value")).thenReturn(1);
             when(jwtUtil.isTokenExpired("raw-token-value")).thenReturn(false);
+            com.p2ps.auth.model.Users user = new com.p2ps.auth.model.Users();
+            user.setEmail("test@test.com");
+            user.setTokenVersion(1);
+            when(userService.findByEmail("test@test.com")).thenReturn(java.util.Optional.of(user));
 
             jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -240,7 +261,12 @@ class JwtAuthFilterTest {
             request.addHeader("Authorization", "Bearer header-token");
 
             when(jwtUtil.extractEmail("cookie-token")).thenReturn("cookie@test.com");
+            when(jwtUtil.extractTokenVersion("cookie-token")).thenReturn(1);
             when(jwtUtil.isTokenExpired("cookie-token")).thenReturn(false);
+            com.p2ps.auth.model.Users user = new com.p2ps.auth.model.Users();
+            user.setEmail("cookie@test.com");
+            user.setTokenVersion(1);
+            when(userService.findByEmail("cookie@test.com")).thenReturn(java.util.Optional.of(user));
 
             jwtAuthFilter.doFilterInternal(request, response, filterChain);
 

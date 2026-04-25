@@ -30,27 +30,42 @@ public class LocationProcessorWorker {
     private final DataSource dataSource;
     private volatile Boolean postgresDetected = null;
 
+    private static final int MAX_STARTUP_FAILURES = 3;
+    private final java.util.concurrent.atomic.AtomicInteger startupDetectFailures = new java.util.concurrent.atomic.AtomicInteger(0);
+
     public LocationProcessorWorker(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.jdbcTemplate = jdbcTemplate;
         this.dataSource = dataSource;
     }
 
     @PostConstruct
-    public void detectDatabaseType() {
+    public void initialize() {
+        detectDatabaseType();
+        ensureInventoryMapSchema();
+    }
+
+    private void detectDatabaseType() {
         if (dataSource == null) {
             postgresDetected = false;
             return;
         }
-        try {
-            postgresDetected = checkIsPostgres();
-        } catch (SQLException e) {
-            logger.warn("Transient database inspection failure during startup; will retry on next use.", e);
-            // Leave postgresDetected as null so it can be retried in isPostgreSQL()
+
+        while (postgresDetected == null && startupDetectFailures.get() < MAX_STARTUP_FAILURES) {
+            try {
+                postgresDetected = checkIsPostgres();
+                startupDetectFailures.set(0); // Reset on success
+            } catch (SQLException e) {
+                int failures = startupDetectFailures.incrementAndGet();
+                logger.warn("Database inspection failure (attempt {}/{}).", failures, MAX_STARTUP_FAILURES, e);
+                if (failures >= MAX_STARTUP_FAILURES) {
+                    logger.error("STABLE_MARKER: Failed to detect database type after {} attempts. Disabling location processing.", MAX_STARTUP_FAILURES);
+                    postgresDetected = false;
+                }
+            }
         }
     }
 
-    @PostConstruct
-    public void ensureInventoryMapSchema() {
+    private void ensureInventoryMapSchema() {
         if (!isPostgreSQL()) {
             return;
         }
@@ -100,14 +115,8 @@ public class LocationProcessorWorker {
             return false;
         }
 
-        try {
-            postgresDetected = checkIsPostgres();
-            return postgresDetected;
-        } catch (SQLException exception) {
-            // Treat "cannot inspect metadata" as "not postgres" for THIS call, but don't cache yet if transient
-            logger.warn("Unable to inspect database metadata; skipping location processing.", exception);
-            return false;
-        }
+        detectDatabaseType();
+        return postgresDetected != null ? postgresDetected : false;
     }
 
     private boolean checkIsPostgres() throws SQLException {
@@ -239,5 +248,9 @@ public class LocationProcessorWorker {
 
     public static long getRapidRecalculationFailures() {
         return RAPID_RECALCULATION_FAILURES.get();
+    }
+
+    public static void resetRapidRecalculationFailures() {
+        RAPID_RECALCULATION_FAILURES.set(0);
     }
 }

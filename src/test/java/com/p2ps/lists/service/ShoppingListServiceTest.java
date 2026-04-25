@@ -216,7 +216,6 @@ class ShoppingListServiceTest {
 
         list.setItems(List.of(item));
 
-        // Use a method that triggers mapToDTO, e.g., getListById or getUserLists
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
         list.setUser(user);

@@ -76,10 +76,10 @@ public class AuthController {
         );
 
         String principalName = auth.getName();
-        String token = jwtUtil.generateToken(principalName);
 
         return userService.findByEmail(principalName)
                 .map(user -> {
+                    String token = jwtUtil.generateToken(principalName, user.getTokenVersion());
                     ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
                     Map<String, Object> data = toUserResponse(user);
                     data.put("message", "Login successful");
@@ -106,6 +106,10 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest servletRequest) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+            userService.incrementTokenVersion(auth.getName());
+        }
         ResponseCookie cookie = createJwtCookie("", 0, servletRequest.isSecure());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())

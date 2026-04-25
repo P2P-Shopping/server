@@ -181,6 +181,8 @@ class ShoppingListControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(listId.toString()))
                 .andExpect(jsonPath("$.title").value("My List"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
     }
 
     @Test
@@ -192,7 +194,10 @@ class ShoppingListControllerTest {
         mockMvc.perform(get("/api/lists/{listId}", listId)
                         .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Resource Not Found"));
+                .andExpect(jsonPath("$.message").value("Resource Not Found"))
+                .andExpect(jsonPath("$.details").value("Shopping list not found"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
     }
 
     @Test
@@ -204,7 +209,10 @@ class ShoppingListControllerTest {
         mockMvc.perform(get("/api/lists/{listId}", listId)
                         .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Forbidden"));
+                .andExpect(jsonPath("$.message").value("Forbidden"))
+                .andExpect(jsonPath("$.details").value("You do not have permission to view this list"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
     }
 
 }

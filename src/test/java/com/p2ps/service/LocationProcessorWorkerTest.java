@@ -90,7 +90,7 @@ class LocationProcessorWorkerTest {
     }
 
     @Test
-    @DisplayName("Trebuie să execute rapid recalculation pentru un item")
+    @DisplayName("Should propagate failure when rapid recalculation fails")
     void recalculateSingleItem_ShouldPropagateFailure() throws Exception {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
@@ -148,7 +148,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
-        worker.ensureInventoryMapSchema();
+        worker.initialize();
 
         verify(jdbcTemplate, atLeastOnce()).execute(anyString());
     }
@@ -160,7 +160,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("MySQL");
 
-        worker.ensureInventoryMapSchema();
+        worker.initialize();
 
         verify(jdbcTemplate, never()).execute(anyString());
     }
@@ -183,6 +183,7 @@ class LocationProcessorWorkerTest {
     @Test
     @DisplayName("Trebuie să urmărească eșecurile de rapid recalculation")
     void getRapidRecalculationFailures_ShouldReflectCount() throws Exception {
+        LocationProcessorWorker.resetRapidRecalculationFailures();
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
@@ -222,9 +223,8 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
-        worker.detectDatabaseType();
+        worker.initialize();
         // verify success via behavior
-        worker.ensureInventoryMapSchema();
         verify(jdbcTemplate, atLeastOnce()).execute(anyString());
     }
 

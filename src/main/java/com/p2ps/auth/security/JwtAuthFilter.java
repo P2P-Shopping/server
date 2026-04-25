@@ -18,9 +18,11 @@ import java.util.ArrayList;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final com.p2ps.auth.service.UserService userService;
 
-    public JwtAuthFilter(JwtUtil jwtUtil) {
+    public JwtAuthFilter(JwtUtil jwtUtil, @org.springframework.context.annotation.Lazy com.p2ps.auth.service.UserService userService) {
         this.jwtUtil = jwtUtil;
+        this.userService = userService;
     }
 
     public String extractBearerToken(String authorizationHeader) {
@@ -55,9 +57,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             String userEmail = jwtUtil.extractEmail(token);
+            Integer tokenVersion = jwtUtil.extractTokenVersion(token);
 
-            if (userEmail != null && !jwtUtil.isTokenExpired(token)) {
-                return new UsernamePasswordAuthenticationToken(userEmail, null, new ArrayList<>());
+            if (userEmail != null && tokenVersion != null && !jwtUtil.isTokenExpired(token)) {
+                return userService.findByEmail(userEmail)
+                        .filter(user -> tokenVersion.equals(user.getTokenVersion()))
+                        .map(user -> new UsernamePasswordAuthenticationToken(userEmail, null, new ArrayList<>()))
+                        .orElse(null);
             }
         } catch (Exception _) {
             return null;
