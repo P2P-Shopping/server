@@ -14,7 +14,7 @@ public class Users {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "token_version", nullable = false)
+    @Column(name = "token_version", nullable = false, columnDefinition = "integer default 0")
     private Integer tokenVersion = 0;
 
     @Column(nullable = false, unique = true)
