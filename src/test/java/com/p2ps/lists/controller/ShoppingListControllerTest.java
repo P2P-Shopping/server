@@ -166,4 +166,53 @@ class ShoppingListControllerTest {
                 .andExpect(jsonPath("$.message").value("Forbidden"))
                 .andExpect(jsonPath("$.details").value("You do not have permission to delete this list"));
     }
+
+    @Test
+    void getListShouldReturnList() throws Exception {
+        UUID listId = UUID.randomUUID();
+        ShoppingListDTO listDTO = new ShoppingListDTO();
+        listDTO.setId(listId);
+        listDTO.setTitle("My List");
+
+        when(shoppingListService.getListById(listId, "ana@example.com")).thenReturn(listDTO);
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(listId.toString()))
+                .andExpect(jsonPath("$.title").value("My List"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
+    @Test
+    void getListShouldReturnNotFoundWhenListDoesNotExist() throws Exception {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListService.getListById(listId, "ana@example.com"))
+                .thenThrow(new ShoppingListNotFoundException("Shopping list not found"));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Resource Not Found"))
+                .andExpect(jsonPath("$.details").value("Shopping list not found"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
+    @Test
+    void getListShouldReturnForbiddenWhenAccessDenied() throws Exception {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListService.getListById(listId, "ana@example.com"))
+                .thenThrow(new ListAccessDeniedException("You do not have permission to view this list"));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Forbidden"))
+                .andExpect(jsonPath("$.details").value("You do not have permission to view this list"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
 }

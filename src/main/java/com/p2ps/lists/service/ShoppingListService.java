@@ -62,6 +62,18 @@ public class ShoppingListService {
         shoppingListRepository.delete(list);
     }
 
+    @Transactional(readOnly = true)
+    public ShoppingListDTO getListById(java.util.UUID listId, String userEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.getUser().getEmail().equals(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to view this list");
+        }
+
+        return mapToDTO(list);
+    }
+
     private ShoppingListDTO mapToDTO(ShoppingList list) {
         ShoppingListDTO dto = new ShoppingListDTO();
         dto.setId(list.getId());

@@ -48,7 +48,7 @@ class StoreInventoryMapRepositoryTest {
         registry.add("spring.datasource.username", postgresContainer::getUsername);
         registry.add("spring.datasource.password", postgresContainer::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-        registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
     @Autowired
@@ -88,7 +88,7 @@ class StoreInventoryMapRepositoryTest {
         jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Magazin Test', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", storeId);
 
         // B. Inserăm un utilizator (pentru a putea crea lista de cumpărături)
-        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password) VALUES (999, 'Test', 'User', 'test@example.com', 'pass')");
+        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password, token_version) VALUES (999, 'Test', 'User', 'test@example.com', 'pass', 0)");
 
         // C. Inserăm lista de cumpărături
         jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'Lista mea', 999)", listId);

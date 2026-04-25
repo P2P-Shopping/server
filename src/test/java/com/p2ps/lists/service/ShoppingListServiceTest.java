@@ -2,10 +2,12 @@ package com.p2ps.lists.service;
 
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
+import java.math.BigDecimal;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
+import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.junit.jupiter.api.Test;
@@ -155,5 +157,74 @@ class ShoppingListServiceTest {
 
         assertEquals("You do not have permission to delete this list", exception.getMessage());
         verify(shoppingListRepository, never()).delete(any(ShoppingList.class));
+    }
+
+    @Test
+    void getListByIdShouldReturnMappedDTO() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setTitle("My List");
+        list.setUser(user);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        ShoppingListDTO result = shoppingListService.getListById(listId, userEmail);
+
+        assertEquals(listId, result.getId());
+        assertEquals("My List", result.getTitle());
+    }
+
+    @Test
+    void getListByIdShouldThrowWhenNotFound() {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        assertThrows(ShoppingListNotFoundException.class,
+                () -> shoppingListService.getListById(listId, "ana@example.com"));
+    }
+
+    @Test
+    void getListByIdShouldThrowWhenAccessDenied() {
+        UUID listId = UUID.randomUUID();
+        Users owner = new Users("owner@example.com", "secret", "Owner", "User");
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        assertThrows(ListAccessDeniedException.class,
+                () -> shoppingListService.getListById(listId, "ana@example.com"));
+    }
+
+    @Test
+    void mapToDTOShouldIncludeItems() {
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Groceries");
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Milk");
+        item.setChecked(false);
+        item.setPrice(new BigDecimal("1.5"));
+        item.setQuantity("2");
+
+
+        list.setItems(List.of(item));
+
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        list.setUser(user);
+        when(shoppingListRepository.findById(list.getId())).thenReturn(Optional.of(list));
+
+        ShoppingListDTO result = shoppingListService.getListById(list.getId(), userEmail);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals("Milk", result.getItems().get(0).getName());
+        assertEquals(new BigDecimal("1.5"), result.getItems().get(0).getPrice());
     }
 }

@@ -40,6 +40,14 @@ public class ShoppingListController {
         return ResponseEntity.ok(myLists);
     }
 
+    @GetMapping("/{listId}")
+    public ResponseEntity<ShoppingListDTO> getList(
+            @PathVariable UUID listId,
+            Authentication authentication) {
+        ShoppingListDTO list = shoppingListService.getListById(listId, authentication.getName());
+        return ResponseEntity.ok(list);
+    }
+
     @DeleteMapping("/{listId}")
     public ResponseEntity<Void> deleteList(
             @PathVariable UUID listId,
