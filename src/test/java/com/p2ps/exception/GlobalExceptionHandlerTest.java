@@ -146,7 +146,7 @@ class GlobalExceptionHandlerTest {
         MethodArgumentTypeMismatchException ex = mock(MethodArgumentTypeMismatchException.class);
         when(ex.getName()).thenReturn("storeId");
         Class<?> requiredType = UUID.class;
-        when(ex.getRequiredType()).thenReturn((Class) requiredType);
+        org.mockito.Mockito.doReturn(requiredType).when(ex).getRequiredType();
 
         var resp = handler.handleMethodArgumentTypeMismatch(ex);
 

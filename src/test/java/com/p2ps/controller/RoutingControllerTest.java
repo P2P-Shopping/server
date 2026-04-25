@@ -74,7 +74,7 @@ class RoutingControllerTest {
     }
 
     @Test
-    void shouldReturnMockRouteEvenWhenRequestIsNull() {
+    void shouldReturnMockRouteForEmptyItemList() {
         RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of());
         RoutingResponse mockResponse = new RoutingResponse("success", List.of(
                 new RoutePoint("user_loc", "Tu", 47.151726, 27.587914),
