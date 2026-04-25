@@ -217,4 +217,45 @@ class AuthControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("User record missing after authentication"));
     }
+
+    @Test
+    @org.springframework.security.test.context.support.WithMockUser(username = "missing@example.com")
+    void me_ShouldReturnUnauthorized_WhenUserRecordMissingInDb() throws Exception {
+        when(userService.findByEmail("missing@example.com")).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_ShouldSetSecureCookie_WhenRequestIsSecure() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@example.com");
+        request.setPassword("Password123!");
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Users mockUser = new Users();
+        mockUser.setEmail(request.getEmail());
+        mockUser.setFirstName("John");
+        mockUser.setId(1);
+
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
+        when(jwtUtil.generateToken(anyString())).thenReturn("mock-token");
+        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .secure(true) // Simulate HTTPS
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", containsString("Secure")));
+    }
+
+    @Test
+    void logout_ShouldSetSecureCookie_WhenRequestIsSecure() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .secure(true)) // Simulate HTTPS
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", containsString("Secure")));
+    }
 }

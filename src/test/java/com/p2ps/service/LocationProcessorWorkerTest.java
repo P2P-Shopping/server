@@ -214,4 +214,28 @@ class LocationProcessorWorkerTest {
         assertFalse(future.isCompletedExceptionally());
         verify(jdbcTemplate, never()).update(anyString(), any(), any(), any(), any());
     }
+
+    @Test
+    @DisplayName("Trebuie să execute detectDatabaseType la startup")
+    void detectDatabaseType_Success() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+
+        worker.detectDatabaseType();
+        // verify success via behavior
+        worker.ensureInventoryMapSchema();
+        verify(jdbcTemplate, atLeastOnce()).execute(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă DatabaseProductName este null")
+    void checkIsPostgres_NullProductName() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(metaData.getDatabaseProductName()).thenReturn(null);
+
+        worker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
 }

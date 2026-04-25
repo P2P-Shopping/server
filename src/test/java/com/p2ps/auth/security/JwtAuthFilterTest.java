@@ -284,6 +284,13 @@ class JwtAuthFilterTest {
         }
 
         @Test
+        void authMePath_IsNotSkipped() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.setRequestURI("/api/auth/me");
+            assertFalse(jwtAuthFilter.shouldNotFilter(request));
+        }
+
+        @Test
         void otherPaths_AreNotSkipped() {
             MockHttpServletRequest request = new MockHttpServletRequest();
 
