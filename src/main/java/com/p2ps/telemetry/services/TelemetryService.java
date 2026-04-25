@@ -18,16 +18,18 @@ import com.p2ps.telemetry.repository.TelemetryRepository;
 public class TelemetryService {
 
     private final TelemetryRepository telemetryRepository;
+    private final AnomalyDetectionService anomalyDetectionService;
 
     @Async("telemetryExecutor")
     public void processPing(TelemetryPingDTO pingDTO) {
         log.info("[SERVICE] Processing ping for the product: {}", pingDTO.getItemId());
 
         TelemetryRecord telemetryRecord = mapToEntity(pingDTO);
+        anomalyDetectionService.evaluateAndSetStatus(telemetryRecord);
 
         try {
             telemetryRepository.save(telemetryRecord);
-            log.info("[SERVICE] Ping successfully saved for product: {}", pingDTO.getItemId());
+            log.info("[SERVICE] Ping successfully saved for product: {} with status: {}", pingDTO.getItemId(), telemetryRecord.getStatus());
         } catch (Exception e) {
             log.error("[SERVICE] Failed to save ping: {}", e.getMessage(), e);
         }
@@ -39,6 +41,7 @@ public class TelemetryService {
 
         List<TelemetryRecord> records = batchDTO.getPings().stream()
                 .map(this::mapToEntity)
+                .peek(anomalyDetectionService::evaluateAndSetStatus)
                 .toList();
 
         try {
