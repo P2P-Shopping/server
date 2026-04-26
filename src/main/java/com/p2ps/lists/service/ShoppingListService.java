@@ -44,7 +44,7 @@ public class ShoppingListService {
 
     @Transactional(readOnly = true)
     public List<ShoppingListDTO> getUserLists(String userEmail) {
-        return shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)
+        return shoppingListRepository.findAccessibleByEmail(userEmail)
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
@@ -85,6 +85,10 @@ public class ShoppingListService {
 
         if (!list.getUser().getEmail().equals(ownerEmail)) {
             throw new ListAccessDeniedException("Only the owner can share this list");
+        }
+
+        if (collaboratorEmail.equals(ownerEmail)) {
+            throw new IllegalArgumentException("Cannot share list with owner");
         }
 
         Users collaborator = userRepository.findByEmail(collaboratorEmail)

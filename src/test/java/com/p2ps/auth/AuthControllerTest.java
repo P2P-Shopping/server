@@ -105,20 +105,41 @@ class AuthControllerTest {
         when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
+                        .header("X-Return-Token", "true")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Set-Cookie", containsString("jwt-token=mocked-jwt-token-123")))
                 .andExpect(header().string("Set-Cookie", containsString("Path=/")))
                 .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
-                .andExpect(content().json("""
-                        {
-                          "message": "Login successful",
-                          "email": "test@example.com",
-                          "firstName": "John",
-                          "userId": "1"
-                        }
-                        """));
+                .andExpect(jsonPath("$.token").value("mocked-jwt-token-123"))
+                .andExpect(jsonPath("$.message").value("Login successful"))
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.userId").value("1"));
+    }
+
+    @Test
+    void login_ShouldOmitToken_WhenHeaderIsMissing() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@example.com");
+        request.setPassword("Password123!");
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Users mockUser = new Users();
+        mockUser.setEmail(request.getEmail());
+        mockUser.setFirstName("John");
+        mockUser.setId(1);
+
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
+        when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
+        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").doesNotExist());
     }
 
     @Test

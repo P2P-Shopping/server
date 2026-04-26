@@ -83,7 +83,7 @@ class ShoppingListServiceTest {
         secondList.setId(UUID.randomUUID());
         secondList.setTitle("Hardware");
 
-        when(shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)).thenReturn(List.of(firstList, secondList));
+        when(shoppingListRepository.findAccessibleByEmail(userEmail)).thenReturn(List.of(firstList, secondList));
 
         List<ShoppingListDTO> result = shoppingListService.getUserLists(userEmail);
 
@@ -102,7 +102,7 @@ class ShoppingListServiceTest {
         list.setTitle("Groceries");
         list.setItems(null);
 
-        when(shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)).thenReturn(List.of(list));
+        when(shoppingListRepository.findAccessibleByEmail(userEmail)).thenReturn(List.of(list));
 
         List<ShoppingListDTO> result = shoppingListService.getUserLists(userEmail);
 
@@ -226,5 +226,96 @@ class ShoppingListServiceTest {
         assertEquals(1, result.getItems().size());
         assertEquals("Milk", result.getItems().get(0).getName());
         assertEquals(new BigDecimal("1.5"), result.getItems().get(0).getPrice());
+    }
+    @Test
+    void shareListShouldAddCollaboratorWhenCalledByOwner() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+        
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        
+        shoppingListService.shareList(listId, collabEmail, ownerEmail);
+        
+        assertTrue(list.getCollaborators().contains(collaborator));
+        verify(shoppingListRepository).save(list);
+    }
+
+    @Test
+    void shareListShouldThrowWhenCalledByNonOwner() {
+        String ownerEmail = "owner@example.com";
+        String otherEmail = "other@example.com";
+        UUID listId = UUID.randomUUID();
+        
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        
+        assertThrows(ListAccessDeniedException.class, 
+                () -> shoppingListService.shareList(listId, "some@email.com", otherEmail));
+    }
+
+    @Test
+    void shareListShouldThrowWhenSharingWithSelf() {
+        String ownerEmail = "owner@example.com";
+        UUID listId = UUID.randomUUID();
+        
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        
+        assertThrows(IllegalArgumentException.class, 
+                () -> shoppingListService.shareList(listId, ownerEmail, ownerEmail));
+    }
+
+    @Test
+    void shareListShouldThrowWhenCollaboratorNotFound() {
+        String ownerEmail = "owner@example.com";
+        String unknownEmail = "unknown@example.com";
+        UUID listId = UUID.randomUUID();
+        
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(unknownEmail)).thenReturn(Optional.empty());
+        
+        assertThrows(ListUserNotFoundException.class, 
+                () -> shoppingListService.shareList(listId, unknownEmail, ownerEmail));
+    }
+
+    @Test
+    void getListByIdShouldAllowCollaboratorAccess() {
+        String collabEmail = "collab@example.com";
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        list.getCollaborators().add(collaborator);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        
+        ShoppingListDTO result = shoppingListService.getListById(listId, collabEmail);
+        
+        assertEquals(listId, result.getId());
     }
 }

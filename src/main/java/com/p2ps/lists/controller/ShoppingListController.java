@@ -62,6 +62,6 @@ public class ShoppingListController {
             @Valid @RequestBody com.p2ps.lists.dto.ShareListRequest request,
             Authentication authentication) {
         shoppingListService.shareList(listId, request.getEmail(), authentication.getName());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 }

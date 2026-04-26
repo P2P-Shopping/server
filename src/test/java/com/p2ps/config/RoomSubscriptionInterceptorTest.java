@@ -1,7 +1,5 @@
 package com.p2ps.config;
 
-import com.p2ps.auth.model.Users;
-import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +13,6 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
-import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -51,18 +47,11 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
-    void preSend_ValidSubscription() {
+    void preSend_ValidSubscription_Owner() {
         UUID listId = UUID.randomUUID();
         String userEmail = "test@test.com";
 
-        Users owner = new Users();
-        owner.setEmail(userEmail);
-
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(owner);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail)).thenReturn(true);
 
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
@@ -77,18 +66,49 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
+    void preSend_ValidSubscription_Collaborator() {
+        UUID listId = UUID.randomUUID();
+        String userEmail = "collab@test.com";
+
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail)).thenReturn(true);
+
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/" + listId,
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertSame(message, result);
+    }
+
+    @Test
+    void preSend_UnauthorizedSubscription_ReturnsNull() {
+        UUID listId = UUID.randomUUID();
+        String userEmail = "hacker@test.com";
+
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail)).thenReturn(false);
+
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/" + listId,
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
+    @Test
     void preSend_ValidSubscription_Presence() {
         UUID listId = UUID.randomUUID();
         String userEmail = "test@test.com";
 
-        Users owner = new Users();
-        owner.setEmail(userEmail);
-
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(owner);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail)).thenReturn(true);
 
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
@@ -103,7 +123,7 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
-    void preSend_InvalidSubscription_ReturnsNull() {
+    void preSend_InvalidSubscriptionId_ReturnsNull() {
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
                 "/topic/list/invalid_ID!",
@@ -117,28 +137,15 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
-    void preSend_InvalidSubscription_Presence_ReturnsNull() {
-        Message<?> message = createMessage(
-                StompCommand.SUBSCRIBE,
-                "/topic/list/invalid_ID!/presence",
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
-        );
-        MessageChannel channel = mock(MessageChannel.class);
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNull(result);
-    }
-
-    @Test
     void preSend_SubscriptionToNonExistentList_ReturnsNull() {
         UUID listId = UUID.randomUUID();
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+        String userEmail = "test@test.com";
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail)).thenReturn(false);
 
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
                 "/topic/list/" + listId,
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);
 

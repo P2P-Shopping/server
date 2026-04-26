@@ -1,5 +1,6 @@
 package com.p2ps.config;
 
+import com.p2ps.lists.repo.ShoppingListRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.jspecify.annotations.Nullable;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.security.core.Authentication;
 
 import java.security.Principal;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -26,9 +28,9 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
 
     private static final Pattern VALID_LIST_ID = Pattern.compile("^[a-zA-Z0-9-]+$");
 
-    private final com.p2ps.lists.repo.ShoppingListRepository shoppingListRepository;
+    private final ShoppingListRepository shoppingListRepository;
 
-    public RoomSubscriptionInterceptor(com.p2ps.lists.repo.ShoppingListRepository shoppingListRepository) {
+    public RoomSubscriptionInterceptor(ShoppingListRepository shoppingListRepository) {
         this.shoppingListRepository = shoppingListRepository;
     }
 
@@ -67,15 +69,8 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
                 }
 
                 try {
-                    java.util.UUID listId = java.util.UUID.fromString(extractedId);
-                    boolean hasAccess = shoppingListRepository.findById(listId)
-                            .map(list -> {
-                                boolean isOwner = list.getUser().getEmail().equals(userEmail);
-                                boolean isCollaborator = list.getCollaborators().stream()
-                                        .anyMatch(c -> c.getEmail().equals(userEmail));
-                                return isOwner || isCollaborator;
-                            })
-                            .orElse(false);
+                    UUID listId = UUID.fromString(extractedId);
+                    boolean hasAccess = shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail);
 
                     if (!hasAccess) {
                         logger.warn("Security Alert: User {} attempted to subscribe to unauthorized list {}", userEmail, extractedId);

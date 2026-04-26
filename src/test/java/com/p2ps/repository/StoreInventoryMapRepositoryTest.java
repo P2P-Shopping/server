@@ -28,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
     "app.scheduling.enabled=false"
 })
 @Transactional
-@ActiveProfiles("test")
 class StoreInventoryMapRepositoryTest {
     static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
             .asCompatibleSubstituteFor("postgres");
