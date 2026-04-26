@@ -1,5 +1,9 @@
 package com.p2ps.config;
 
+import com.p2ps.auth.model.Users;
+import com.p2ps.lists.model.ShoppingList;
+import com.p2ps.lists.repo.ShoppingListRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -11,14 +15,24 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.*;
 
 class RoomSubscriptionInterceptorTest {
 
-    private final RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor();
+    private ShoppingListRepository shoppingListRepository;
+    private RoomSubscriptionInterceptor interceptor;
+
+    @BeforeEach
+    void setUp() {
+        shoppingListRepository = mock(ShoppingListRepository.class);
+        interceptor = new RoomSubscriptionInterceptor(shoppingListRepository);
+    }
 
     private Message<?> createMessage(StompCommand command, String destination) {
         return createMessage(command, destination, null);
@@ -38,10 +52,22 @@ class RoomSubscriptionInterceptorTest {
 
     @Test
     void preSend_ValidSubscription() {
+        UUID listId = UUID.randomUUID();
+        String userEmail = "test@test.com";
+
+        Users owner = new Users();
+        owner.setEmail(userEmail);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
-                "/topic/list/valid-ID-123",
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+                "/topic/list/" + listId,
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);
 
@@ -52,10 +78,22 @@ class RoomSubscriptionInterceptorTest {
 
     @Test
     void preSend_ValidSubscription_Presence() {
+        UUID listId = UUID.randomUUID();
+        String userEmail = "test@test.com";
+
+        Users owner = new Users();
+        owner.setEmail(userEmail);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
-                "/topic/list/valid-ID-123/presence",
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+                "/topic/list/" + listId + "/presence",
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);
 
@@ -92,6 +130,23 @@ class RoomSubscriptionInterceptorTest {
         assertNull(result);
     }
 
+    @Test
+    void preSend_SubscriptionToNonExistentList_ReturnsNull() {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/" + listId,
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
     @ParameterizedTest(name = "command={0}, destination={1}")
     @MethodSource("nonBlockingSubscriptions")
     void preSend_NonBlockingSubscriptions_Pass(StompCommand command, String destination) {
@@ -115,7 +170,7 @@ class RoomSubscriptionInterceptorTest {
 
     @Test
     void preSend_SubscribeWithoutPrincipal_ReturnsNull() {
-        Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/valid-ID-123");
+        Message<?> message = createMessage(StompCommand.SUBSCRIBE, "/topic/list/" + UUID.randomUUID());
         MessageChannel channel = mock(MessageChannel.class);
 
         Message<?> result = interceptor.preSend(message, channel);
