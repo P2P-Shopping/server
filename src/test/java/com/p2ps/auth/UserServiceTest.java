@@ -92,4 +92,24 @@ class UserServiceTest {
             userService.loadUserByUsername("nonexistent@example.com");
         });
     }
+
+    @Test
+    void findByEmail_Success() {
+        Users user = new Users(email, "hashed", firstName, lastName);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        Optional<Users> foundUser = userService.findByEmail(email);
+
+        assertTrue(foundUser.isPresent());
+        assertEquals(email, foundUser.get().getEmail());
+    }
+
+    @Test
+    void findByEmail_NotFound() {
+        when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        Optional<Users> foundUser = userService.findByEmail("absent@example.com");
+
+        assertTrue(foundUser.isEmpty());
+    }
 }

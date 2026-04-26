@@ -51,10 +51,38 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
+    void preSend_ValidSubscription_Presence() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/valid-ID-123/presence",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertSame(message, result);
+    }
+
+    @Test
     void preSend_InvalidSubscription_ReturnsNull() {
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
                 "/topic/list/invalid_ID!",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
+    @Test
+    void preSend_InvalidSubscription_Presence_ReturnsNull() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/invalid_ID!/presence",
                 new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);

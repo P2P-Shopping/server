@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.exception.GlobalExceptionHandler;
 import com.p2ps.lists.dto.CreateListRequest;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
+import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.service.ShoppingListService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,9 +23,11 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -123,4 +127,92 @@ class ShoppingListControllerTest {
 
         verify(shoppingListService).getUserLists("ana@example.com");
     }
+
+    @Test
+    void deleteListShouldReturnNoContent() throws Exception {
+        UUID listId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isNoContent());
+
+        verify(shoppingListService).deleteList(listId, "ana@example.com");
+    }
+
+    @Test
+    void deleteListShouldReturnNotFoundWhenListDoesNotExist() throws Exception {
+        UUID listId = UUID.randomUUID();
+        doThrow(new ShoppingListNotFoundException("Shopping list not found"))
+                .when(shoppingListService)
+                .deleteList(listId, "ana@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Resource Not Found"))
+                .andExpect(jsonPath("$.details").value("Shopping list not found"));
+    }
+
+    @Test
+    void deleteListShouldReturnForbiddenWhenUserDoesNotOwnList() throws Exception {
+        UUID listId = UUID.randomUUID();
+        doThrow(new ListAccessDeniedException("You do not have permission to delete this list"))
+                .when(shoppingListService)
+                .deleteList(listId, "ana@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Forbidden"))
+                .andExpect(jsonPath("$.details").value("You do not have permission to delete this list"));
+    }
+
+    @Test
+    void getListShouldReturnList() throws Exception {
+        UUID listId = UUID.randomUUID();
+        ShoppingListDTO listDTO = new ShoppingListDTO();
+        listDTO.setId(listId);
+        listDTO.setTitle("My List");
+
+        when(shoppingListService.getListById(listId, "ana@example.com")).thenReturn(listDTO);
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(listId.toString()))
+                .andExpect(jsonPath("$.title").value("My List"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
+    @Test
+    void getListShouldReturnNotFoundWhenListDoesNotExist() throws Exception {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListService.getListById(listId, "ana@example.com"))
+                .thenThrow(new ShoppingListNotFoundException("Shopping list not found"));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Resource Not Found"))
+                .andExpect(jsonPath("$.details").value("Shopping list not found"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
+    @Test
+    void getListShouldReturnForbiddenWhenAccessDenied() throws Exception {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListService.getListById(listId, "ana@example.com"))
+                .thenThrow(new ListAccessDeniedException("You do not have permission to view this list"));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Forbidden"))
+                .andExpect(jsonPath("$.details").value("You do not have permission to view this list"));
+
+        verify(shoppingListService).getListById(listId, "ana@example.com");
+    }
+
 }

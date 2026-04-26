@@ -34,10 +34,11 @@ public class JwtUtil {
         this.secretKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(String email) {
+    public String generateToken(String email, Integer tokenVersion) {
 
         return Jwts.builder()
                 .subject(email)
+                .claim("version", tokenVersion)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
                 .signWith(secretKey)
@@ -46,6 +47,10 @@ public class JwtUtil {
 
     public String extractEmail(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    public Integer extractTokenVersion(String token) {
+        return extractAllClaims(token).get("version", Integer.class);
     }
 
     public boolean isTokenExpired(String token) {

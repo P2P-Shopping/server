@@ -10,7 +10,9 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.util.UriComponentsBuilder;
+import jakarta.servlet.http.Cookie;
 
 import java.util.Map;
 
@@ -33,21 +35,37 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler,
                                    Map<String, Object> attributes) {
-        if (!enableUrlToken) {
-            return true;
+        String token = null;
+
+        // Try to get token from query param if enabled
+        if (enableUrlToken) {
+            token = UriComponentsBuilder.fromUri(request.getURI())
+                    .build()
+                    .getQueryParams()
+                    .getFirst("token");
         }
 
-        String token = UriComponentsBuilder.fromUri(request.getURI())
-                .build()
-                .getQueryParams()
-                .getFirst("token");
+        // Try to get token from cookie if not found in query param
+        if (token == null || token.isBlank()) {
+            if (request instanceof ServletServerHttpRequest servletRequest) {
+                Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+                if (cookies != null) {
+                    for (Cookie cookie : cookies) {
+                        if ("jwt-token".equals(cookie.getName())) {
+                            token = cookie.getValue();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         if (token == null || token.isBlank()) {
             return true;
         }
 
         if (jwtAuthFilter.authenticateToken(token) == null) {
-            logger.warn("Rejecting websocket handshake with invalid JWT query token");
+            logger.warn("Rejecting websocket handshake with invalid JWT token");
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }

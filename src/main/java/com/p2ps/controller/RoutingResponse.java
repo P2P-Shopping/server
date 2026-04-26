@@ -13,6 +13,5 @@ import java.util.List;
 public class RoutingResponse implements Serializable {
     private String status;
     private List<RoutePoint> route;
-
-
+    private List<String> warnings;
 }
