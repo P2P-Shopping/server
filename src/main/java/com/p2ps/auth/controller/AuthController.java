@@ -82,6 +82,7 @@ public class AuthController {
                     String token = jwtUtil.generateToken(principalName, user.getTokenVersion());
                     ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
                     Map<String, Object> data = toUserResponse(user);
+                    data.put("token", token);
                     data.put("message", "Login successful");
                     return ResponseEntity.ok()
                             .header(HttpHeaders.SET_COOKIE, cookie.toString())

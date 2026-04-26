@@ -44,7 +44,7 @@ public class ShoppingListService {
 
     @Transactional(readOnly = true)
     public List<ShoppingListDTO> getUserLists(String userEmail) {
-        return shoppingListRepository.findByUser_Email(userEmail)
+        return shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
@@ -56,7 +56,7 @@ public class ShoppingListService {
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
         if (!list.getUser().getEmail().equals(userEmail)) {
-            throw new ListAccessDeniedException("You do not have permission to delete this list");
+            throw new ListAccessDeniedException("Only the owner can delete this list");
         }
 
         shoppingListRepository.delete(list);
@@ -67,11 +67,31 @@ public class ShoppingListService {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = list.getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = list.getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to view this list");
         }
 
         return mapToDTO(list);
+    }
+
+    @Transactional
+    public void shareList(java.util.UUID listId, String collaboratorEmail, String ownerEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.getUser().getEmail().equals(ownerEmail)) {
+            throw new ListAccessDeniedException("Only the owner can share this list");
+        }
+
+        Users collaborator = userRepository.findByEmail(collaboratorEmail)
+                .orElseThrow(() -> new ListUserNotFoundException("Collaborator user not found"));
+
+        list.getCollaborators().add(collaborator);
+        shoppingListRepository.save(list);
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {

@@ -55,4 +55,13 @@ public class ShoppingListController {
         shoppingListService.deleteList(listId, authentication.getName());
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{listId}/share")
+    public ResponseEntity<Void> shareList(
+            @PathVariable UUID listId,
+            @Valid @RequestBody com.p2ps.lists.dto.ShareListRequest request,
+            Authentication authentication) {
+        shoppingListService.shareList(listId, request.getEmail(), authentication.getName());
+        return ResponseEntity.ok().build();
+    }
 }

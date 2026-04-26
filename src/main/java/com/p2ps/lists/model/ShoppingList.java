@@ -25,6 +25,14 @@ public class ShoppingList {
     @JoinColumn(name = "user_id", nullable = false)
     private Users user;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "shopping_list_collaborators",
+        joinColumns = @JoinColumn(name = "shopping_list_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private java.util.Set<Users> collaborators = new java.util.HashSet<>();
+
     //sterge itemi din lista cand sterge o lista
     @OneToMany(mappedBy = "shoppingList", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Item> items = new ArrayList<>();

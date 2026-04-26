@@ -26,6 +26,12 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
 
     private static final Pattern VALID_LIST_ID = Pattern.compile("^[a-zA-Z0-9-]+$");
 
+    private final com.p2ps.lists.repo.ShoppingListRepository shoppingListRepository;
+
+    public RoomSubscriptionInterceptor(com.p2ps.lists.repo.ShoppingListRepository shoppingListRepository) {
+        this.shoppingListRepository = shoppingListRepository;
+    }
+
     /**
      * Inspects inbound messages before they are processed by the message broker.
      * Enforces strict formatting rules on requested room IDs.
@@ -49,6 +55,7 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
                     return null;
                 }
 
+                String userEmail = authentication.getName();
                 String extractedPath = destination.substring("/topic/list/".length());
                 String extractedId = extractedPath.endsWith("/presence") ? 
                         extractedPath.substring(0, extractedPath.length() - "/presence".length()) : 
@@ -56,6 +63,26 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
                 
                 if (!VALID_LIST_ID.matcher(extractedId).matches()) {
                     logger.warn("Security Alert: Blocked malformed room subscription attempt");
+                    return null;
+                }
+
+                try {
+                    java.util.UUID listId = java.util.UUID.fromString(extractedId);
+                    boolean hasAccess = shoppingListRepository.findById(listId)
+                            .map(list -> {
+                                boolean isOwner = list.getUser().getEmail().equals(userEmail);
+                                boolean isCollaborator = list.getCollaborators().stream()
+                                        .anyMatch(c -> c.getEmail().equals(userEmail));
+                                return isOwner || isCollaborator;
+                            })
+                            .orElse(false);
+
+                    if (!hasAccess) {
+                        logger.warn("Security Alert: User {} attempted to subscribe to unauthorized list {}", userEmail, extractedId);
+                        return null;
+                    }
+                } catch (IllegalArgumentException e) {
+                    logger.warn("Security Alert: Blocked subscription attempt with invalid UUID format: {}", extractedId);
                     return null;
                 }
             }

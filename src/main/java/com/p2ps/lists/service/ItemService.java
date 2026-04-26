@@ -40,7 +40,11 @@ public class ItemService {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = list.getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = list.getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 
@@ -65,7 +69,11 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
-        if (!item.getShoppingList().getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = item.getShoppingList().getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = item.getShoppingList().getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
         }
 
@@ -111,7 +119,11 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
-        if (!item.getShoppingList().getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = item.getShoppingList().getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = item.getShoppingList().getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to delete this item");
         }
 
@@ -148,7 +160,11 @@ public class ItemService {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = list.getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = list.getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 
