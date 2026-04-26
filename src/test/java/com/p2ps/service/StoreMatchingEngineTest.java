@@ -62,7 +62,7 @@ class StoreMatchingEngineTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void findOptimalStore_ShouldReturnBestStore_WhenStoresAreFound() throws SQLException {
+    void findOptimalStore_ShouldReturnBestStore_WhenStoresAreFound() {
         List<UUID> items = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
         String storeId = UUID.randomUUID().toString();
         String storeName = "Supermarket Central";
