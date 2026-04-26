@@ -11,9 +11,12 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,7 +51,7 @@ class StoreMatchingEngineTest {
     @Test
     @SuppressWarnings("unchecked")
     void findOptimalStore_ShouldReturnNull_WhenNoStoresFound() {
-        List<String> items = Arrays.asList("item1", "item2");
+        List<UUID> items = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
         when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(Collections.emptyList());
 
@@ -60,32 +63,46 @@ class StoreMatchingEngineTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void findOptimalStore_ShouldReturnBestStore_WhenStoresAreFound() {
-        List<String> items = Arrays.asList("item1", "item2");
-        StoreMatchingEngine.StoreMatchResult expectedStore =
-                new StoreMatchingEngine.StoreMatchResult("store_123", "Supermarket Central", 2, 1200.5);
+    void findOptimalStore_ShouldReturnBestStore_WhenStoresAreFound() throws SQLException {
+        List<UUID> items = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
+        String storeId = UUID.randomUUID().toString();
+        String storeName = "Supermarket Central";
+        int matchedItems = 2;
+        double distance = 1200.5;
 
         when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
-                .thenReturn(Collections.singletonList(expectedStore));
+                .thenAnswer(invocation -> {
+                    RowMapper<StoreMatchingEngine.StoreMatchResult> mapper = invocation.getArgument(2);
+                    ResultSet rs = mock(ResultSet.class);
+                    when(rs.next()).thenReturn(true, false);
+                    when(rs.getString("store_id")).thenReturn(storeId);
+                    when(rs.getString("name")).thenReturn(storeName);
+                    when(rs.getInt("matched_items")).thenReturn(matchedItems);
+                    when(rs.getDouble("distance_m")).thenReturn(distance);
+                    
+                    return Collections.singletonList(mapper.mapRow(rs, 0));
+                });
 
         StoreMatchingEngine.StoreMatchResult actualStore = storeMatchingEngine.findOptimalStore(47.1585, 27.6014, 3000.0, items);
 
         assertNotNull(actualStore);
-        assertEquals("store_123", actualStore.storeId());
-        assertEquals("Supermarket Central", actualStore.storeName());
-        assertEquals(2, actualStore.matchedItems());
-        assertEquals(1200.5, actualStore.distanceMeters());
+        assertEquals(storeId, actualStore.storeId());
+        assertEquals(storeName, actualStore.storeName());
+        assertEquals(matchedItems, actualStore.matchedItems());
+        assertEquals(distance, actualStore.distanceMeters());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void findOptimalStore_ShouldPassCorrectNamedParameters() {
         // Arrange
-        List<String> items = Arrays.asList("prod1", "prod2", "prod3");
+        List<UUID> items = Arrays.asList(UUID.randomUUID(), UUID.randomUUID());
         double lat = 47.1585;
         double lng = 27.6014;
         double radiusMeters = 1500.0;
-        double expectedRadiusDegrees = radiusMeters / 111320.0; // Constanta din clasa de service
+        
+        // Conservative over-approximation calculation
+        double expectedRadiusDegrees = (radiusMeters / 111320.0) * (1.0 / Math.cos(Math.toRadians(lat))) * 1.02;
 
         when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(Collections.emptyList());
@@ -103,7 +120,7 @@ class StoreMatchingEngineTest {
         assertEquals(lat, capturedParams.getValue("lat"));
         assertEquals(lng, capturedParams.getValue("lng"));
         assertEquals(radiusMeters, capturedParams.getValue("radiusMeters"));
-        assertEquals(expectedRadiusDegrees, capturedParams.getValue("radiusDegrees"));
+        assertEquals(expectedRadiusDegrees, (Double) capturedParams.getValue("radiusDegrees"), 0.0001);
         assertEquals(items, capturedParams.getValue("itemIds"));
     }
 }

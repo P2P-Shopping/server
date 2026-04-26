@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class StoreMatchingEngine {
@@ -22,14 +23,21 @@ public class StoreMatchingEngine {
         this.namedJdbcTemplate = namedJdbcTemplate;
     }
 
-    public StoreMatchResult findOptimalStore(double userLat, double userLng, double radiusInMeters, List<String> itemIds) {
+    public StoreMatchResult findOptimalStore(double userLat, double userLng, double radiusInMeters, List<UUID> itemIds) {
         if (itemIds == null || itemIds.isEmpty()) {
             logger.warn("Lista de produse este goala. Nu se poate calcula magazinul optim.");
             return null;
         }
 
 
-        double radiusInDegrees = radiusInMeters / METERS_PER_DEGREE;
+        // Use a conservative over-approximation for the geometry bounding box.
+        // At the equator, 1 degree longitude is ~111km. At higher latitudes, it's smaller.
+        // We divide by cos(lat) to get a safe degree radius for ST_DWithin(geometry).
+        double latRadians = Math.toRadians(userLat);
+        double cosLat = Math.cos(latRadians);
+        // Add a 2% safety margin and ensure we don't divide by zero at poles (though unlikely for stores)
+        double safetyMargin = 1.02;
+        double radiusInDegrees = (radiusInMeters / METERS_PER_DEGREE) * (1.0 / Math.max(cosLat, 0.01)) * safetyMargin;
 
 
         String sql = """
@@ -40,7 +48,7 @@ public class StoreMatchingEngine {
                 COUNT(sim.item_id) AS matched_items
             FROM store_geofences sg
             LEFT JOIN store_inventory_map sim
-                ON sg.store_id = sim.store_id AND sim.item_id::text IN (:itemIds)
+                ON sg.store_id = sim.store_id AND sim.item_id IN (:itemIds)
             WHERE 
                 -- Pasul 1: Pre-filtrare rapidă folosind indexul pe geometrie
                 ST_DWithin(sg.boundary_polygon, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :radiusDegrees)
