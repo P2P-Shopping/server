@@ -31,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -221,7 +222,7 @@ class ShoppingListServiceTest {
                 () -> shoppingListService.deleteList(listId, "ana@example.com")
         );
 
-        assertEquals("You do not have permission to delete this list", exception.getMessage());
+        assertEquals("You do not have permission to view this list", exception.getMessage());
         verify(shoppingListRepository, never()).delete(any(ShoppingList.class));
     }
 
@@ -300,7 +301,7 @@ class ShoppingListServiceTest {
         
         ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
         
-        verify(itemRepository).save(any(Item.class));
+        verify(itemRepository, times(2)).save(any(Item.class));
         assertEquals(2, result.getItems().size());
         assertTrue(result.getItems().stream().anyMatch(i -> i.getName().equals("Item 1")));
         assertTrue(result.getItems().stream().anyMatch(i -> i.getName().equals("Item 2")));
@@ -341,6 +342,7 @@ class ShoppingListServiceTest {
         
         ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
         
+        verify(itemRepository, times(1)).save(any(Item.class));
         assertEquals(1, result.getItems().size());
         assertEquals("Item 1", result.getItems().get(0).getName());
     }
