@@ -91,7 +91,7 @@ class StoreInventoryMapRepositoryTest {
         jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password, token_version) VALUES (999, 'Test', 'User', 'test@example.com', 'pass', 0)");
 
         // C. Inserăm lista de cumpărături
-        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'Lista mea', 999)", listId);
+        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id, category) VALUES (?, 'Lista mea', 999, 'NORMAL')", listId);
 
         // D. Inserăm produsul
         jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Lapte', false, ?)", itemId, listId);
