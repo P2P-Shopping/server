@@ -83,7 +83,7 @@ class ShoppingListServiceTest {
         secondList.setId(UUID.randomUUID());
         secondList.setTitle("Hardware");
 
-        when(shoppingListRepository.findByUser_Email(userEmail)).thenReturn(List.of(firstList, secondList));
+        when(shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)).thenReturn(List.of(firstList, secondList));
 
         List<ShoppingListDTO> result = shoppingListService.getUserLists(userEmail);
 
@@ -102,7 +102,7 @@ class ShoppingListServiceTest {
         list.setTitle("Groceries");
         list.setItems(null);
 
-        when(shoppingListRepository.findByUser_Email(userEmail)).thenReturn(List.of(list));
+        when(shoppingListRepository.findByUser_EmailOrCollaborators_Email(userEmail, userEmail)).thenReturn(List.of(list));
 
         List<ShoppingListDTO> result = shoppingListService.getUserLists(userEmail);
 
@@ -155,7 +155,7 @@ class ShoppingListServiceTest {
                 () -> shoppingListService.deleteList(listId, "ana@example.com")
         );
 
-        assertEquals("You do not have permission to delete this list", exception.getMessage());
+        assertEquals("Only the owner can delete this list", exception.getMessage());
         verify(shoppingListRepository, never()).delete(any(ShoppingList.class));
     }
 
