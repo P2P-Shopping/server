@@ -56,10 +56,19 @@ public class RoutingController {
         this.locationProcessorWorker = locationProcessorWorker;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        // Initialize with hardcoded defaults so unit tests work without Spring context.
+        // @PostConstruct re-initializes with @Value values when Spring manages the bean.
+        this.recalculationCooldown = Duration.ofMinutes(1);
+        this.recalculationGuard = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofMinutes(1))
+                .maximumSize(10_000)
+                .build();
     }
 
     @jakarta.annotation.PostConstruct
     void init() {
+        // Re-initialize with values from application.properties.
+        // No-op in tests since defaults match the @Value fallbacks.
         this.recalculationGuard = Caffeine.newBuilder()
                 .expireAfterWrite(recalculationCooldown)
                 .maximumSize(recalculationGuardMaxSize)
