@@ -47,10 +47,8 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         
-        if (isSubscribeToTopic(accessor)) {
-            if (!handleSubscription(accessor)) {
-                return null;
-            }
+        if (isSubscribeToTopic(accessor) && !handleSubscription(accessor)) {
+            return null;
         }
         return message;
     }
