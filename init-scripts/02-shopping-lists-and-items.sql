@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS p2p_product_catalog (
 
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10, 2);
+CREATE UNIQUE INDEX IF NOT EXISTS unq_product_catalog_name_brand
+    ON p2p_product_catalog(specific_name, COALESCE(brand, ''));
 
 CREATE TABLE IF NOT EXISTS shopping_lists (
     id UUID PRIMARY KEY,

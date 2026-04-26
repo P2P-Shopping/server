@@ -2,6 +2,7 @@ package com.p2ps.catalog.service;
 
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,17 @@ public class CatalogService {
             return null; // Cannot catalog without a specific name
         }
         
+        try {
+            return processRecordPurchase(genericName, specificName, brand, category, price);
+        } catch (DataIntegrityViolationException e) {
+            // Race condition occurred: another thread inserted the exact same (specificName, brand) between our
+            // findBySpecificNameAndBrand() and our save() in orElseGet.
+            // Catch the unique constraint violation and retry the lookup & update once.
+            return processRecordPurchase(genericName, specificName, brand, category, price);
+        }
+    }
+    
+    private ProductCatalog processRecordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price) {
         return catalogRepository.findBySpecificNameAndBrand(specificName, brand)
                 .map(existingProduct -> {
                     existingProduct.setPurchaseCount(existingProduct.getPurchaseCount() + 1);
@@ -45,7 +57,7 @@ public class CatalogService {
                     newProduct.setCategory(category);
                     newProduct.setEstimatedPrice(price);
                     newProduct.setPurchaseCount(1);
-                    return catalogRepository.save(newProduct);
+                    return catalogRepository.saveAndFlush(newProduct); // Folosim flush pentru a forta exceptia aici (pentru clauza catch)
                 });
     }
 

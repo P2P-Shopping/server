@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @SpringBootTest(properties = {
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
-    "telemetry.api.key=test-telemetry-key-for-tests",
-    "app.scheduling.enabled=false"
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
+        "telemetry.api.key=test-telemetry-key-for-tests",
+        "app.scheduling.enabled=false"
 })
 @Transactional
 class ProductCatalogRepositoryTest {
@@ -62,15 +62,15 @@ class ProductCatalogRepositoryTest {
         product.setCategory("Lactate");
         product.setEstimatedPrice(new BigDecimal("7.50"));
         product.setPurchaseCount(10);
-        
+
         repository.save(product);
 
         Optional<ProductCatalog> found = repository.findBySpecificNameAndBrand("Lapte Zuzu 1.5%", "Zuzu");
-        
+
         assertTrue(found.isPresent());
         assertEquals("Lapte", found.get().getGenericName());
     }
-    
+
     @Test
     void shouldFindBySpecificNameWhenBrandIsNull() {
         ProductCatalog product = new ProductCatalog();
@@ -78,11 +78,11 @@ class ProductCatalogRepositoryTest {
         product.setSpecificName("Rosii calitatea I");
         product.setBrand(null);
         product.setPurchaseCount(5);
-        
+
         repository.save(product);
 
         Optional<ProductCatalog> found = repository.findBySpecificNameAndBrand("Rosii calitatea I", null);
-        
+
         assertTrue(found.isPresent());
         assertEquals("Rosii", found.get().getGenericName());
     }
@@ -100,7 +100,7 @@ class ProductCatalogRepositoryTest {
         }
 
         List<ProductCatalog> topProducts = repository.findTop50ByOrderByPurchaseCountDesc();
-        
+
         assertEquals(50, topProducts.size());
         // The first one should be the one with count 1055
         assertEquals("TestSpecific 55", topProducts.get(0).getSpecificName());
@@ -113,7 +113,7 @@ class ProductCatalogRepositoryTest {
         // Prepare DB schema for PostGIS & custom tables needed for the native query
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS postgis");
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto");
-        
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS store_geofences (
                 store_id UUID PRIMARY KEY,
@@ -133,7 +133,7 @@ class ProductCatalogRepositoryTest {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """);
-        
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS shopping_lists (
                 id UUID PRIMARY KEY,
@@ -142,7 +142,7 @@ class ProductCatalogRepositoryTest {
                 category VARCHAR(50) NOT NULL DEFAULT 'NORMAL'
             )
         """);
-        
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS store_inventory_map (
                 map_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -157,39 +157,41 @@ class ProductCatalogRepositoryTest {
 
         UUID store1Id = UUID.randomUUID();
         UUID store2Id = UUID.randomUUID();
-        
-        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Store 1', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store1Id);
-        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Store 2', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store2Id);
 
-        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password) VALUES (999, 'Test', 'User', 'catalog@example.com', 'pass') ON CONFLICT DO NOTHING");
-        
+        // Cast la ::uuid
+        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 1', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store1Id);
+        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 2', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store2Id);
+
+        // Adăugat token_version
+        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password, token_version) VALUES (999, 'Test', 'User', 'catalog@example.com', 'pass', 0) ON CONFLICT DO NOTHING");
+
         UUID listId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'List', 999)", listId);
+        // Adăugat category și cast la ::uuid
+        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id, category) VALUES (?::uuid, 'List', 999, 'NORMAL')", listId);
 
         // Create the product catalog
         ProductCatalog catalogProduct = new ProductCatalog();
         catalogProduct.setGenericName("Zahar");
         catalogProduct.setSpecificName("Zahar Margaritar 1kg");
         catalogProduct.setPurchaseCount(10);
-        ProductCatalog savedCatalog = repository.save(catalogProduct);
+        ProductCatalog savedCatalog = repository.saveAndFlush(catalogProduct);
         UUID catalogId = savedCatalog.getId();
 
         // Items mapped to the catalog product
         UUID item1Id = UUID.randomUUID();
         UUID item2Id = UUID.randomUUID();
-        
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?, 'Zahar 1', false, ?, ?)", item1Id, listId, catalogId);
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?, 'Zahar 2', false, ?, ?)", item2Id, listId, catalogId);
 
-        // Inventory mapping
-        // Store 1 has item1 with confidence 0.9
-        jdbcTemplate.update("INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?, ?, ST_GeomFromText('POINT(0 0)', 4326), 0.9, 1, NOW())", store1Id, item1Id);
-        
-        // Store 2 has item2 with confidence 0.95
-        jdbcTemplate.update("INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?, ?, ST_GeomFromText('POINT(0 0)', 4326), 0.95, 1, NOW())", store2Id, item2Id);
+        // Cast la ::uuid pentru id, list_id și catalog_id
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid)", item1Id, listId, catalogId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid)", item2Id, listId, catalogId);
+
+        // Inventory mapping cu cast la ::uuid
+        jdbcTemplate.update("INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?::uuid, ?::uuid, ?::uuid, ST_GeomFromText('POINT(0 0)', 4326), 0.9, 1, NOW())", UUID.randomUUID(), store1Id, item1Id);
+
+        jdbcTemplate.update("INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?::uuid, ?::uuid, ?::uuid, ST_GeomFromText('POINT(0 0)', 4326), 0.95, 1, NOW())", UUID.randomUUID(), store2Id, item2Id);
 
         List<UUID> bestStores = repository.findBestStoresForCatalogProduct(catalogId);
-        
+
         assertEquals(2, bestStores.size());
         // Since Store 2 has highest confidence (0.95 vs 0.9), it should be first
         assertEquals(store2Id, bestStores.get(0));

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,6 +32,7 @@ class CatalogServiceTest {
         ProductCatalog result = catalogService.recordPurchase("Generic", " ", "Brand", "Category", BigDecimal.TEN);
         assertNull(result, "Should return null when specific name is blank");
         verify(catalogRepository, never()).save(any());
+        verify(catalogRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -47,7 +49,7 @@ class CatalogServiceTest {
         savedProduct.setBrand(brand);
         savedProduct.setPurchaseCount(1);
         
-        when(catalogRepository.save(any(ProductCatalog.class))).thenReturn(savedProduct);
+        when(catalogRepository.saveAndFlush(any(ProductCatalog.class))).thenReturn(savedProduct);
 
         ProductCatalog result = catalogService.recordPurchase("Generic", specificName, brand, "Category", BigDecimal.TEN);
 
@@ -55,7 +57,7 @@ class CatalogServiceTest {
         assertEquals(specificName, result.getSpecificName());
         assertEquals(1, result.getPurchaseCount());
         
-        verify(catalogRepository).save(argThat(product -> 
+        verify(catalogRepository).saveAndFlush(argThat(product -> 
             product.getSpecificName().equals(specificName) && 
             product.getPurchaseCount() == 1 &&
             product.getEstimatedPrice().equals(BigDecimal.TEN)
@@ -116,6 +118,42 @@ class CatalogServiceTest {
         assertEquals("Old Category", result.getCategory(), "Category should not change");
         
         verify(catalogRepository).save(existingProduct);
+    }
+
+    @Test
+    void recordPurchaseShouldRetryOnDataIntegrityViolationException() {
+        String specificName = "Race Condition Product";
+        String brand = "Race Brand";
+
+        // First attempt: Not found, then throws exception on save
+        when(catalogRepository.findBySpecificNameAndBrand(specificName, brand))
+                .thenReturn(Optional.empty()) // prima oara nu gaseste (race condition)
+                .thenReturn(Optional.of(createMockProduct(specificName, brand, 1))); // a doua oara gaseste (produsul inserat de celalalt thread)
+                
+        when(catalogRepository.saveAndFlush(any(ProductCatalog.class)))
+                .thenThrow(new DataIntegrityViolationException("Unique constraint violation"));
+                
+        when(catalogRepository.save(any(ProductCatalog.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProductCatalog result = catalogService.recordPurchase("Generic", specificName, brand, "Category", BigDecimal.TEN);
+
+        assertNotNull(result);
+        assertEquals(2, result.getPurchaseCount()); // A fost 1 de la thread-ul concurent + 1 de la incrementul nostru dupa retry
+        
+        // Verificam ca l-a cautat de 2 ori in total (1 fail, 1 retry succes)
+        verify(catalogRepository, times(2)).findBySpecificNameAndBrand(specificName, brand);
+        // Verificam ca l-a incercat sa il insereze o data (fail), si sa il udateze o data (succes)
+        verify(catalogRepository, times(1)).saveAndFlush(any(ProductCatalog.class));
+        verify(catalogRepository, times(1)).save(any(ProductCatalog.class));
+    }
+
+    private ProductCatalog createMockProduct(String specificName, String brand, int purchaseCount) {
+        ProductCatalog product = new ProductCatalog();
+        product.setId(UUID.randomUUID());
+        product.setSpecificName(specificName);
+        product.setBrand(brand);
+        product.setPurchaseCount(purchaseCount);
+        return product;
     }
 
     @Test
