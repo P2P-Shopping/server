@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,16 +28,25 @@ class DataDecayServiceTest {
 
     @Test
     void shouldExecuteDataDecayAndCallRepositoryWithCorrectPenalty() {
-        Double expectedPenalty = 0.1;
+        Double expectedPenalty = 0.02;
+        Double expectedMinConfidenceFloor = 0.15;
 
-        // Când serviciul va apela repository-ul, îi spunem mock-ului să pretindă că a modificat 5 rânduri
-        when(repository.applyDecayToOldRecords(eq(expectedPenalty), any(LocalDateTime.class)))
+        when(repository.applyDecayToOldRecords(eq(expectedPenalty), any(LocalDateTime.class), eq(expectedMinConfidenceFloor)))
                 .thenReturn(5);
 
-        // Aici simulăm că e ora 03:00 dimineața și se declanșează Cron Job-ul
         dataDecayService.executeDataDecay();
 
-        // Verificăm dacă serviciul a calculat penalizarea corectă și a trimis-o către baza de date exact o singură dată
-        verify(repository).applyDecayToOldRecords(eq(expectedPenalty), any(LocalDateTime.class));
+        verify(repository).applyDecayToOldRecords(eq(expectedPenalty), any(LocalDateTime.class), eq(expectedMinConfidenceFloor));
+    }
+
+    @Test
+    void shouldSkipDecayWhenFeatureIsDisabled() throws Exception {
+        java.lang.reflect.Field enabledField = DataDecayService.class.getDeclaredField("dataDecayEnabled");
+        enabledField.setAccessible(true);
+        enabledField.set(dataDecayService, false);
+
+        dataDecayService.executeDataDecay();
+
+        verify(repository, never()).applyDecayToOldRecords(any(Double.class), any(LocalDateTime.class), any(Double.class));
     }
 }

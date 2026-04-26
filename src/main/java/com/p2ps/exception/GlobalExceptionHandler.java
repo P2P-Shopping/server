@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -27,6 +28,7 @@ public class GlobalExceptionHandler {
 
     private static final String ERR_STR = "error";
     private static final String MSG_STR = "message";
+    private static final String VALIDATION_ERROR = "Validation Error";
 
     // Logger used to record internal errors secretly on the server
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -50,7 +52,7 @@ public class GlobalExceptionHandler {
                 .orElse("Validation failed");
 
         ErrorResponse errorResponse = new ErrorResponse(
-                "Validation Error",
+                VALIDATION_ERROR,
                 errorMessage
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST); // 400 Bad Request
@@ -59,7 +61,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ListValidationException.class)
     public ResponseEntity<ErrorResponse> handleListValidationException(ListValidationException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
-                "Validation Error",
+                VALIDATION_ERROR,
                 ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -94,6 +96,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        logger.warn("Upload rejected because file exceeds size limit: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONTENT_TOO_LARGE)
                 .body(Map.of(
@@ -104,12 +107,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<Map<String, String>> handleMissingServletRequestPart(MissingServletRequestPartException ex) {
+        logger.warn("Missing multipart request part: {}", ex.getRequestPartName());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(Map.of(
                         ERR_STR, "Bad Request",
                         MSG_STR, "Missing file part"
                 ));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String parameterName = ex.getName();
+        Class<?> requiredTypeClass = ex.getRequiredType();
+        String requiredType = requiredTypeClass == null ? "valid value" : requiredTypeClass.getSimpleName();
+        String details = "Invalid value for '" + parameterName + "'. Expected " + requiredType + ".";
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                VALIDATION_ERROR,
+                details
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AiProcessingException.class)
@@ -148,6 +166,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
     public ResponseEntity<Map<String, String>> handleAuthenticationError(Exception ex) {
+        logger.warn("Authentication failed: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED) // Trimitem 401 în loc de 500
                 .body(Map.of(
