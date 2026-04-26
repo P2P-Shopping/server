@@ -47,7 +47,7 @@ public class MacroRoutingService {
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        logger.info("Macro-routing: calculating estimates for storeId={}", storeId);
+        logger.info("Macro-routing: calculating estimates to store entrance");
 
         OsrmClient.TransportEstimate walkingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot");
         OsrmClient.TransportEstimate drivingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car");
