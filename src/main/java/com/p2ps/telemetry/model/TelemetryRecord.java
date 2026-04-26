@@ -1,6 +1,8 @@
 package com.p2ps.telemetry.model;
 
 import java.time.Instant;
+
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -19,6 +21,7 @@ public class TelemetryRecord {
     @Id
     private String id;
 
+    @NotNull
     private String deviceId;
 
     private String storeId;
@@ -29,6 +32,7 @@ public class TelemetryRecord {
     private Double lng;
     private Double accuracyMeters;
 
+    @NotNull
     private Long timestamp;
 
     @Indexed(expireAfter = "94608000s")
