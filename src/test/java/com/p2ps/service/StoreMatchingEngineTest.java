@@ -7,7 +7,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
@@ -74,7 +73,6 @@ class StoreMatchingEngineTest {
                 .thenAnswer(invocation -> {
                     RowMapper<StoreMatchingEngine.StoreMatchResult> mapper = invocation.getArgument(2);
                     ResultSet rs = mock(ResultSet.class);
-                    when(rs.next()).thenReturn(true, false);
                     when(rs.getString("store_id")).thenReturn(storeId);
                     when(rs.getString("name")).thenReturn(storeName);
                     when(rs.getInt("matched_items")).thenReturn(matchedItems);
@@ -102,7 +100,8 @@ class StoreMatchingEngineTest {
         double radiusMeters = 1500.0;
         
         // Conservative over-approximation calculation
-        double expectedRadiusDegrees = (radiusMeters / 111320.0) * (1.0 / Math.cos(Math.toRadians(lat))) * 1.02;
+        double cosLat = Math.cos(Math.toRadians(lat));
+        double expectedRadiusDegrees = (radiusMeters / 111320.0) * (1.0 / Math.max(cosLat, 0.01)) * 1.02;
 
         when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(Collections.emptyList());
@@ -114,12 +113,12 @@ class StoreMatchingEngineTest {
         ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
         verify(namedJdbcTemplate).query(anyString(), paramsCaptor.capture(), any(RowMapper.class));
 
-        MapSqlParameterSource capturedParams = (MapSqlParameterSource) paramsCaptor.getValue();
+        SqlParameterSource capturedParams = paramsCaptor.getValue();
 
-        // Verificăm maparea corectă a noilor parametri
-        assertEquals(lat, capturedParams.getValue("lat"));
-        assertEquals(lng, capturedParams.getValue("lng"));
-        assertEquals(radiusMeters, capturedParams.getValue("radiusMeters"));
+        // Verify the named parameters mapped into the query
+        assertEquals(lat, (Double) capturedParams.getValue("lat"), 0.0001);
+        assertEquals(lng, (Double) capturedParams.getValue("lng"), 0.0001);
+        assertEquals(radiusMeters, (Double) capturedParams.getValue("radiusMeters"), 0.0001);
         assertEquals(expectedRadiusDegrees, (Double) capturedParams.getValue("radiusDegrees"), 0.0001);
         assertEquals(items, capturedParams.getValue("itemIds"));
     }
