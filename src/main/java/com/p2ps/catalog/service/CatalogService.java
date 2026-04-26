@@ -27,7 +27,7 @@ public class CatalogService {
         
         try {
             return processRecordPurchase(genericName, specificName, brand, category, price);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException _) {
             // Race condition occurred: another thread inserted the exact same (specificName, brand) between our
             // findBySpecificNameAndBrand() and our save() in orElseGet.
             // Catch the unique constraint violation and retry the lookup & update once.
