@@ -10,6 +10,8 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Point;
 import org.springframework.http.ResponseEntity;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,7 +39,13 @@ class RoutingControllerTest {
         routingService = mock(RoutingService.class);
         inventoryMapRepository = mock(StoreInventoryMapRepository.class);
         locationProcessorWorker = mock(LocationProcessorWorker.class);
-        controller = new RoutingController(routingService, inventoryMapRepository, locationProcessorWorker);
+        controller = new RoutingController(
+                routingService,
+                inventoryMapRepository,
+                locationProcessorWorker,
+                Duration.ofMinutes(1),
+                10_000
+        );
     }
 
     @Test
@@ -65,16 +74,17 @@ class RoutingControllerTest {
     }
 
     @Test
-    void shouldReturnMockRouteEvenWhenRequestIsNull() {
+    void shouldReturnMockRouteForEmptyItemList() {
+        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of());
         RoutingResponse mockResponse = new RoutingResponse("success", List.of(
                 new RoutePoint("user_loc", "Tu", 47.151726, 27.587914),
                 new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
                 new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
                 new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
         ), List.of());
-        when(routingService.calculateOptimalRoute(null)).thenReturn(mockResponse);
+        when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
 
-        RoutingResponse response = controller.calculateRoute(null);
+        RoutingResponse response = controller.calculateRoute(request);
 
         assertEquals("success", response.getStatus());
         assertNotNull(response.getRoute());
@@ -89,6 +99,7 @@ class RoutingControllerTest {
         map.setItemId(itemId);
         map.setConfidenceScore(0.2d);
         map.setPingCount(2);
+        map.setLastUpdated(LocalDateTime.now().minusMinutes(5));
         Point estimatedPoint = mock(Point.class);
         when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
         map.setEstimatedLocPoint(estimatedPoint);
@@ -103,8 +114,74 @@ class RoutingControllerTest {
         assertNotNull(response.getBody());
         assertEquals(47.151726, response.getBody().getLat(), 0.000001);
         assertEquals(27.587914, response.getBody().getLon(), 0.000001);
-        assertEquals(true, response.getBody().isLowConfidenceWarning());
+        assertTrue(response.getBody().isLowConfidenceWarning());
         assertEquals(0.2d, response.getBody().getConfidenceScore(), 0.000001);
+        verify(locationProcessorWorker).recalculateSingleItem(storeId, itemId);
+    }
+
+    @Test
+    void shouldReturnNoContentWhenCoordinateIsMissing() {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        StoreInventoryMap map = new StoreInventoryMap();
+        map.setStoreId(storeId);
+        map.setItemId(itemId);
+        map.setConfidenceScore(0.9d);
+        map.setPingCount(10);
+        map.setLastUpdated(LocalDateTime.now());
+
+        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(locationProcessorWorker.isLowConfidence(0.9d, 10)).thenReturn(false);
+
+        ResponseEntity<com.p2ps.dto.ItemLocationDTO> response = controller.getItemLocation(storeId, itemId);
+
+        assertEquals(204, response.getStatusCode().value());
+    }
+
+    @Test
+    void shouldReturnNoContentWhenEstimatedPointHasNullCoordinate() {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        StoreInventoryMap map = new StoreInventoryMap();
+        map.setStoreId(storeId);
+        map.setItemId(itemId);
+        map.setConfidenceScore(0.95d);
+        map.setPingCount(12);
+        map.setLastUpdated(LocalDateTime.now());
+
+        Point estimatedPoint = mock(Point.class);
+        when(estimatedPoint.getCoordinate()).thenReturn(null);
+        map.setEstimatedLocPoint(estimatedPoint);
+
+        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(locationProcessorWorker.isLowConfidence(0.95d, 12)).thenReturn(false);
+
+        ResponseEntity<com.p2ps.dto.ItemLocationDTO> response = controller.getItemLocation(storeId, itemId);
+
+        assertEquals(204, response.getStatusCode().value());
+    }
+
+    @Test
+    void shouldTriggerRecalculationOnlyOnceWithinCooldownWindow() {
+        UUID storeId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        StoreInventoryMap map = new StoreInventoryMap();
+        map.setStoreId(storeId);
+        map.setItemId(itemId);
+        map.setConfidenceScore(0.1d);
+        map.setPingCount(1);
+        map.setLastUpdated(LocalDateTime.now().minusMinutes(5));
+        Point estimatedPoint = mock(Point.class);
+        when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
+        map.setEstimatedLocPoint(estimatedPoint);
+
+        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(locationProcessorWorker.isLowConfidence(0.1d, 1)).thenReturn(true);
+        when(locationProcessorWorker.recalculateSingleItem(storeId, itemId)).thenReturn(CompletableFuture.completedFuture(null));
+
+        controller.getItemLocation(storeId, itemId);
+        controller.getItemLocation(storeId, itemId);
+
         verify(locationProcessorWorker).recalculateSingleItem(storeId, itemId);
     }
 }

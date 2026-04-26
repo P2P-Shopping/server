@@ -23,11 +23,13 @@ public interface StoreInventoryMapRepository extends JpaRepository<StoreInventor
         UPDATE StoreInventoryMap s
         SET s.confidenceScore =
             CASE
-                WHEN s.confidenceScore - :penalty < 0 THEN 0
+                WHEN s.confidenceScore - :penalty < :minConfidenceFloor THEN :minConfidenceFloor
                 ELSE s.confidenceScore - :penalty
             END
         WHERE s.lastUpdated < :cutoffDate
-          AND s.confidenceScore > 0
+          AND s.confidenceScore > :minConfidenceFloor
     """)
-    int applyDecayToOldRecords(@Param("penalty") Double penalty, @Param("cutoffDate") LocalDateTime cutoffDate);
+    int applyDecayToOldRecords(@Param("penalty") Double penalty,
+                               @Param("cutoffDate") LocalDateTime cutoffDate,
+                               @Param("minConfidenceFloor") Double minConfidenceFloor);
 }
