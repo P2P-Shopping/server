@@ -1,5 +1,6 @@
 package com.p2ps.lists.model;
 
+import com.p2ps.catalog.model.ProductCatalog;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -50,4 +51,8 @@ public class Item {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "list_id", nullable = false)
     private ShoppingList shoppingList;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "catalog_id")
+    private ProductCatalog catalogItem;
 }
