@@ -99,6 +99,9 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
+        // Initialize the worker to detect database type
+        worker.initialize();
+
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Database error during update"));
 
@@ -175,6 +178,9 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
+        // Initialize the worker to detect database type
+        worker.initialize();
+
         worker.recalculateSingleItem(storeId, itemId).join();
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
@@ -190,6 +196,10 @@ class LocationProcessorWorkerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+        
+        // Initialize the worker to detect database type
+        worker.initialize();
+        
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Fail"));
 
@@ -208,6 +218,9 @@ class LocationProcessorWorkerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("H2");
+
+        // Initialize the worker to detect database type
+        worker.initialize();
 
         CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
 
