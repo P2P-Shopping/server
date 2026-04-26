@@ -126,8 +126,22 @@ class LocationProcessorWorkerTest {
     }
 
     @Test
-    @DisplayName("Trebuie să returneze false dacă apare SQLException")
-    void isPostgreSQL_SQLException() throws Exception {
+    @DisplayName("Trebuie să returneze false dacă apare SQLException la detectDatabaseType")
+    void isPostgreSQL_SQLException_At_Init() throws Exception {
+        when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
+        
+        // Should catch the exception and disable postgres features
+        worker.initialize();
+        
+        // This should short-circuit and not execute SQL
+        worker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă apare SQLException in runtime")
+    void isPostgreSQL_SQLException_Runtime() throws Exception {
+        // Nu chemam initialize, vrem sa vedem cum se comporta isPostgreSQL cand prinde exceptia prima oara la un call de runtime
         when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
         worker.processAndCalculateCenters();
         verify(jdbcTemplate, never()).update(anyString());

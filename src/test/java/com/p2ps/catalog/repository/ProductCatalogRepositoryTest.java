@@ -70,25 +70,42 @@ class ProductCatalogRepositoryTest {
         assertTrue(found.isPresent());
         assertEquals("Lapte", found.get().getGenericName());
     }
+    
+    @Test
+    void shouldFindBySpecificNameWhenBrandIsNull() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Rosii");
+        product.setSpecificName("Rosii calitatea I");
+        product.setBrand(null);
+        product.setPurchaseCount(5);
+        
+        repository.save(product);
+
+        Optional<ProductCatalog> found = repository.findBySpecificNameAndBrand("Rosii calitatea I", null);
+        
+        assertTrue(found.isPresent());
+        assertEquals("Rosii", found.get().getGenericName());
+    }
 
     @Test
     void shouldFindTop50ByOrderByPurchaseCountDesc() {
+        // Using a specific prefix to avoid conflicts with 98-populate-catalog.sql if it runs
         for (int i = 1; i <= 55; i++) {
             ProductCatalog product = new ProductCatalog();
-            product.setGenericName("Generic " + i);
-            product.setSpecificName("Specific " + i);
-            product.setBrand("Brand");
-            product.setPurchaseCount(i); // Highest ID has highest purchase count
+            product.setGenericName("TestGeneric " + i);
+            product.setSpecificName("TestSpecific " + i);
+            product.setBrand("TestBrand");
+            product.setPurchaseCount(i + 1000); // Use very high purchase counts to guarantee they are the top 50
             repository.save(product);
         }
 
         List<ProductCatalog> topProducts = repository.findTop50ByOrderByPurchaseCountDesc();
         
         assertEquals(50, topProducts.size());
-        // The first one should be the one with count 55
-        assertEquals("Specific 55", topProducts.get(0).getSpecificName());
-        // The 50th one should be the one with count 6
-        assertEquals("Specific 6", topProducts.get(49).getSpecificName());
+        // The first one should be the one with count 1055
+        assertEquals("TestSpecific 55", topProducts.get(0).getSpecificName());
+        // The 50th one should be the one with count 1006
+        assertEquals("TestSpecific 6", topProducts.get(49).getSpecificName());
     }
 
     @Test
@@ -144,7 +161,7 @@ class ProductCatalogRepositoryTest {
         jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Store 1', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store1Id);
         jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?, 'Store 2', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store2Id);
 
-        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password) VALUES (999, 'Test', 'User', 'catalog@example.com', 'pass')");
+        jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password) VALUES (999, 'Test', 'User', 'catalog@example.com', 'pass') ON CONFLICT DO NOTHING");
         
         UUID listId = UUID.randomUUID();
         jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id) VALUES (?, 'List', 999)", listId);

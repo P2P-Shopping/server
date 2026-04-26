@@ -1,8 +1,10 @@
 package com.p2ps.catalog.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2ps.catalog.dto.RecordPurchaseRequest;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,10 +36,13 @@ class CatalogControllerTest {
     private CatalogController catalogController;
 
     private MockMvc mockMvc;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(catalogController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(catalogController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -65,15 +70,18 @@ class CatalogControllerTest {
         p1.setCategory("Bauturi");
         p1.setEstimatedPrice(new BigDecimal("7.50"));
 
+        RecordPurchaseRequest request = new RecordPurchaseRequest();
+        request.setGenericName("Cola");
+        request.setSpecificName("Coca Cola Zero 2L");
+        request.setBrand("Coca Cola");
+        request.setCategory("Bauturi");
+        request.setPrice(new BigDecimal("7.50"));
+
         when(catalogService.recordPurchase("Cola", "Coca Cola Zero 2L", "Coca Cola", "Bauturi", new BigDecimal("7.50")))
                 .thenReturn(p1);
 
         mockMvc.perform(post("/api/catalog/record")
-                        .param("genericName", "Cola")
-                        .param("specificName", "Coca Cola Zero 2L")
-                        .param("brand", "Coca Cola")
-                        .param("category", "Bauturi")
-                        .param("price", "7.50")
+                        .content(objectMapper.writeValueAsString(request))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.specificName").value("Coca Cola Zero 2L"))
@@ -83,15 +91,16 @@ class CatalogControllerTest {
     }
 
     @Test
-    void recordPurchaseShouldReturnBadRequestWhenServiceReturnsNull() throws Exception {
-        when(catalogService.recordPurchase(any(), any(), any(), any(), any())).thenReturn(null);
-
+    void recordPurchaseShouldReturnBadRequestWhenNameIsBlank() throws Exception {
+        RecordPurchaseRequest request = new RecordPurchaseRequest();
+        request.setSpecificName("   "); // invalid name
+        
         mockMvc.perform(post("/api/catalog/record")
-                        .param("specificName", "   ") // invalid name
+                        .content(objectMapper.writeValueAsString(request))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest());
 
-        verify(catalogService).recordPurchase(null, "   ", null, null, null);
+        verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any());
     }
 
     @Test

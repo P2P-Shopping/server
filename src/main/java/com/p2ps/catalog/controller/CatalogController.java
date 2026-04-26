@@ -1,11 +1,12 @@
 package com.p2ps.catalog.controller;
 
+import com.p2ps.catalog.dto.RecordPurchaseRequest;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.CatalogService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,17 +28,16 @@ public class CatalogController {
 
     // 2. Endpoint pentru a simula scanarea unui bon și "recoltarea" unui produs
     @PostMapping("/record")
-    public ResponseEntity<ProductCatalog> recordPurchase(
-            @RequestParam(required = false) String genericName,
-            @RequestParam String specificName,
-            @RequestParam(required = false) String brand,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) BigDecimal price) {
+    public ResponseEntity<ProductCatalog> recordPurchase(@Valid @RequestBody RecordPurchaseRequest request) {
         
-        ProductCatalog recordedProduct = catalogService.recordPurchase(genericName, specificName, brand, category, price);
-        if (recordedProduct == null) {
-            return ResponseEntity.badRequest().build();
-        }
+        ProductCatalog recordedProduct = catalogService.recordPurchase(
+                request.getGenericName(),
+                request.getSpecificName(),
+                request.getBrand(),
+                request.getCategory(),
+                request.getPrice()
+        );
+
         return ResponseEntity.ok(recordedProduct);
     }
     
