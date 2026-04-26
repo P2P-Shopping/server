@@ -15,7 +15,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
-import org.springframework.test.context.ActiveProfiles;
 import java.time.LocalDateTime;
 import java.util.UUID;
 

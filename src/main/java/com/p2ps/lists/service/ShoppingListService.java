@@ -21,6 +21,7 @@ public class ShoppingListService {
 
     private final ShoppingListRepository shoppingListRepository;
     private final UserRepository userRepository;
+    private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
 
     public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository) {
         this.shoppingListRepository = shoppingListRepository;
@@ -53,7 +54,7 @@ public class ShoppingListService {
     @Transactional
     public void deleteList(java.util.UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         if (!list.getUser().getEmail().equals(userEmail)) {
             throw new ListAccessDeniedException("Only the owner can delete this list");
@@ -65,7 +66,7 @@ public class ShoppingListService {
     @Transactional(readOnly = true)
     public ShoppingListDTO getListById(java.util.UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         boolean isOwner = list.getUser().getEmail().equals(userEmail);
         boolean isCollaborator = list.getCollaborators().stream()
@@ -81,7 +82,7 @@ public class ShoppingListService {
     @Transactional
     public void shareList(java.util.UUID listId, String collaboratorEmail, String ownerEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         if (!list.getUser().getEmail().equals(ownerEmail)) {
             throw new ListAccessDeniedException("Only the owner can share this list");

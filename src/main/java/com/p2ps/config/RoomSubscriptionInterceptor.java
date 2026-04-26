@@ -47,41 +47,65 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         
-        if (accessor != null && StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-            String destination = accessor.getDestination();
-            
-            if (destination != null && destination.startsWith("/topic/list/")) {
-                Principal principal = accessor.getUser();
-                if (!(principal instanceof Authentication authentication) || !authentication.isAuthenticated()) {
-                    logger.warn("Security Alert: Blocked subscription attempt without authenticated principal");
-                    return null;
-                }
-
-                String userEmail = authentication.getName();
-                String extractedPath = destination.substring("/topic/list/".length());
-                String extractedId = extractedPath.endsWith("/presence") ? 
-                        extractedPath.substring(0, extractedPath.length() - "/presence".length()) : 
-                        extractedPath;
-                
-                if (!VALID_LIST_ID.matcher(extractedId).matches()) {
-                    logger.warn("Security Alert: Blocked malformed room subscription attempt");
-                    return null;
-                }
-
-                try {
-                    UUID listId = UUID.fromString(extractedId);
-                    boolean hasAccess = shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail);
-
-                    if (!hasAccess) {
-                        logger.warn("Security Alert: User {} attempted to subscribe to unauthorized list {}", userEmail, extractedId);
-                        return null;
-                    }
-                } catch (IllegalArgumentException e) {
-                    logger.warn("Security Alert: Blocked subscription attempt with invalid UUID format: {}", extractedId);
-                    return null;
-                }
+        if (isSubscribeToTopic(accessor)) {
+            if (!handleSubscription(accessor)) {
+                return null;
             }
         }
         return message;
+    }
+
+    private boolean isSubscribeToTopic(StompHeaderAccessor accessor) {
+        return accessor != null && 
+               StompCommand.SUBSCRIBE.equals(accessor.getCommand()) && 
+               accessor.getDestination() != null && 
+               accessor.getDestination().startsWith("/topic/list/");
+    }
+
+    private boolean handleSubscription(StompHeaderAccessor accessor) {
+        Authentication auth = getAuthenticatedUser(accessor);
+        if (auth == null) {
+            logger.warn("Security Alert: Blocked subscription attempt without authenticated principal");
+            return false;
+        }
+
+        String extractedId = extractListId(accessor.getDestination());
+        if (!VALID_LIST_ID.matcher(extractedId).matches()) {
+            logger.warn("Security Alert: Blocked malformed room subscription attempt");
+            return false;
+        }
+
+        return validateUserAccess(extractedId, auth.getName());
+    }
+
+    private Authentication getAuthenticatedUser(StompHeaderAccessor accessor) {
+        Principal principal = accessor.getUser();
+        if (principal instanceof Authentication auth && auth.isAuthenticated()) {
+            return auth;
+        }
+        return null;
+    }
+
+    private String extractListId(String destination) {
+        String extractedPath = destination.substring("/topic/list/".length());
+        return extractedPath.endsWith("/presence") ? 
+               extractedPath.substring(0, extractedPath.length() - "/presence".length()) : 
+               extractedPath;
+    }
+
+    private boolean validateUserAccess(String extractedId, String userEmail) {
+        try {
+            UUID listId = UUID.fromString(extractedId);
+            boolean hasAccess = shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, userEmail);
+
+            if (!hasAccess) {
+                logger.warn("Security Alert: User {} attempted to subscribe to unauthorized list {}", userEmail, extractedId);
+                return false;
+            }
+            return true;
+        } catch (IllegalArgumentException _) {
+            logger.warn("Security Alert: Blocked subscription attempt with invalid UUID format: {}", extractedId);
+            return false;
+        }
     }
 }
