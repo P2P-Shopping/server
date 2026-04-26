@@ -40,15 +40,14 @@ public class MacroRoutingService {
      */
     public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId) {
         double[] entrance = fetchStoreEntrance(storeId);
-        if (entrance == null) {
-            logger.warn("Store not found or has no boundary polygon: storeId={}", storeId);
+        if (entrance.length == 0) {
+            logger.warn("Store not found or has no boundary polygon");
             return null;
         }
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        logger.info("Macro-routing: user=({},{}) → store entrance=({},{}) storeId={}",
-                userLat, userLng, storeLat, storeLng, storeId);
+        logger.info("Macro-routing: calculating estimates for storeId={}", storeId);
 
         OsrmClient.TransportEstimate walkingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot");
         OsrmClient.TransportEstimate drivingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car");
@@ -70,7 +69,7 @@ public class MacroRoutingService {
                      "FROM store_geofences WHERE store_id::text = ?";
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeId);
-        if (rows.isEmpty()) return null;
+        if (rows.isEmpty()) return new double[0];
 
         double lat = ((Number) rows.get(0).get("lat")).doubleValue();
         double lng = ((Number) rows.get(0).get("lng")).doubleValue();

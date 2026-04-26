@@ -14,7 +14,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.ResponseEntity;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -50,9 +49,7 @@ class RoutingControllerTest {
                 inventoryMapRepository,
                 locationProcessorWorker,
                 redis,
-                objectMapper,
-                Duration.ofMinutes(1),
-                10_000
+                objectMapper
         );
     }
 

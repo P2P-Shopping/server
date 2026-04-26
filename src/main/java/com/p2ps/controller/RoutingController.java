@@ -28,8 +28,13 @@ public class RoutingController {
 
     private static final Logger logger = LoggerFactory.getLogger(RoutingController.class);
 
-    private final Duration recalculationCooldown;
-    private final Cache<String, Instant> recalculationGuard;
+    @Value("${routing.recalculation.cooldown:PT1M}")
+    private Duration recalculationCooldown;
+
+    @Value("${routing.recalculation.guard.max-size:10000}")
+    private int recalculationGuardMaxSize;
+
+    private Cache<String, Instant> recalculationGuard;
 
     private final RoutingService routingService;
     private final MacroRoutingService macroRoutingService;
@@ -38,26 +43,23 @@ public class RoutingController {
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
 
-    /**
-     * @Value params last so Spring can inject them from properties,
-     * while tests can still pass Duration/int directly as constructor args.
-     */
     public RoutingController(
             RoutingService routingService,
             MacroRoutingService macroRoutingService,
             StoreInventoryMapRepository inventoryMapRepository,
             LocationProcessorWorker locationProcessorWorker,
             StringRedisTemplate redis,
-            ObjectMapper objectMapper,
-            @Value("${routing.recalculation.cooldown:PT1M}") Duration recalculationCooldown,
-            @Value("${routing.recalculation.guard.max-size:10000}") int recalculationGuardMaxSize) {
+            ObjectMapper objectMapper) {
         this.routingService = routingService;
         this.macroRoutingService = macroRoutingService;
         this.inventoryMapRepository = inventoryMapRepository;
         this.locationProcessorWorker = locationProcessorWorker;
         this.redis = redis;
         this.objectMapper = objectMapper;
-        this.recalculationCooldown = recalculationCooldown;
+    }
+
+    @jakarta.annotation.PostConstruct
+    void init() {
         this.recalculationGuard = Caffeine.newBuilder()
                 .expireAfterWrite(recalculationCooldown)
                 .maximumSize(recalculationGuardMaxSize)

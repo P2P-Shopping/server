@@ -211,6 +211,7 @@ public class RoutingService {
     // -------------------------------------------------------------------------
 
     private void logImprovement(List<RoutePoint> before, List<RoutePoint> after) {
+        if (!logger.isInfoEnabled()) return;
         double distBefore = optimizer.routeDistance(before);
         double distAfter  = optimizer.routeDistance(after);
         logger.info("NN: {}m | 3-Opt: {}m | Imbunatatire: {}%",

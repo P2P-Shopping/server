@@ -52,7 +52,7 @@ public class RouteOptimizer {
     public List<RoutePoint> threeOptImprove(List<RoutePoint> route) {
         List<RoutePoint> current = new ArrayList<>(route);
         List<RoutePoint> improved = tryImproveOnce(current);
-        while (improved != null) {
+        while (!improved.isEmpty()) {
             current = improved;
             improved = tryImproveOnce(current);
         }
@@ -70,7 +70,7 @@ public class RouteOptimizer {
                 }
             }
         }
-        return null;
+        return List.of();
     }
 
     private List<RoutePoint> findBestReconnect(List<RoutePoint> route, int i, int j, int k, double currentDist) {

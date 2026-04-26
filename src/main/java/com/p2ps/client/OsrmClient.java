@@ -74,7 +74,7 @@ public class OsrmClient {
 
             double distance = route.path("distance").asDouble();
             double duration = route.path("duration").asDouble();
-            logger.debug("OSRM [{}]: {:.0f}m in {:.0f}s", profile, distance, duration);
+            logger.debug("OSRM [{}]: {}m in {}s", profile, (int) distance, (int) duration);
             return new TransportEstimate(distance, duration);
 
         } catch (Exception e) {
