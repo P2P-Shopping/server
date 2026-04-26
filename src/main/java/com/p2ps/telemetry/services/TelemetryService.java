@@ -41,8 +41,10 @@ public class TelemetryService {
 
         List<TelemetryRecord> records = batchDTO.getPings().stream()
                 .map(this::mapToEntity)
-                .peek(anomalyDetectionService::evaluateAndSetStatus)
                 .toList();
+                
+        // SonarQube fix: avoiding .peek() for side-effects
+        records.forEach(anomalyDetectionService::evaluateAndSetStatus);
 
         try {
             // Bulk native insert in MongoDB

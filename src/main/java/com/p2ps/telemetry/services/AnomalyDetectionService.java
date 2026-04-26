@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -18,54 +18,102 @@ public class AnomalyDetectionService {
 
     private static final double MAX_POSSIBLE_SPEED_M_S = 15.0; // ~54 km/h, which is physically impossible on foot in a store
 
+    // In-memory state to prevent TOCTOU anomalies under concurrent async ingestion
+    // and to optimize batch processing. Acts as both a per-key lock and a cache.
+    private final ConcurrentHashMap<String, TelemetryRecord> latestValidPings = new ConcurrentHashMap<>();
+
     public void evaluateAndSetStatus(TelemetryRecord newRecord) {
-        // 1. Check for bad accuracy
-        if (newRecord.getAccuracyMeters() != null && newRecord.getAccuracyMeters() > 30) {
-            newRecord.setStatus(PingStatus.DEGRADED);
-            log.info("[ANOMALY] Ping marked as DEGRADED due to low accuracy ({}m)", newRecord.getAccuracyMeters());
-            return;
-        }
+        String stateKey = newRecord.getDeviceId() + ":" + newRecord.getStoreId() + ":" + newRecord.getItemId();
 
-        // 2. Check for physically impossible speed
-        Optional<TelemetryRecord> lastPingOpt = telemetryRepository.findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
-                newRecord.getDeviceId(), newRecord.getStoreId(), newRecord.getItemId());
-
-        if (lastPingOpt.isPresent()) {
-            TelemetryRecord lastPing = lastPingOpt.get();
+        // compute() guarantees atomicity per key, acting as a lightweight lock
+        latestValidPings.compute(stateKey, (key, lastPing) -> {
+            applyAccuracyCheck(newRecord);
             
-            // Calculate time difference in seconds
-            double timeDiffSeconds = (newRecord.getTimestamp() - lastPing.getTimestamp()) / 1000.0;
+            TelemetryRecord referencePing = resolveReferencePing(newRecord, lastPing);
             
-            // Ensure time moves forward (if a ping comes out of order we might not be able to compute speed simply, but we assume chronological mostly)
-            if (timeDiffSeconds > 0) {
-                double distanceMeters = calculateDistance(
-                        lastPing.getLat(), lastPing.getLng(),
-                        newRecord.getLat(), newRecord.getLng()
-                );
-                
-                double speed = distanceMeters / timeDiffSeconds;
-                
-                if (speed > MAX_POSSIBLE_SPEED_M_S) {
+            if (referencePing != null) {
+                if (isImpossibleSpeed(newRecord, referencePing)) {
                     newRecord.setStatus(PingStatus.REJECTED);
-                    log.warn("[ANOMALY] Ping marked as REJECTED due to impossible speed ({} m/s)", speed);
-                    return;
+                    return referencePing; // Do not update the state with a rejected ping
                 }
-            } else if (timeDiffSeconds == 0) {
-                // two pings at the exact same millisecond with different coordinates is basically impossible
-                 double distanceMeters = calculateDistance(
-                        lastPing.getLat(), lastPing.getLng(),
-                        newRecord.getLat(), newRecord.getLng()
-                );
-                if (distanceMeters > 5) {
-                    newRecord.setStatus(PingStatus.REJECTED);
-                    log.warn("[ANOMALY] Ping marked as REJECTED due to jumping location at the exact same timestamp");
-                    return;
+                
+                if (isOutOfOrder(newRecord, referencePing)) {
+                    ensureStatusSet(newRecord);
+                    return referencePing; // Do not update state with an out-of-order ping
                 }
             }
+
+            ensureStatusSet(newRecord);
+            // The valid incoming ping becomes the new baseline state for this key
+            return newRecord;
+        });
+    }
+
+    private void applyAccuracyCheck(TelemetryRecord pingRecord) {
+        if (pingRecord.getAccuracyMeters() != null && pingRecord.getAccuracyMeters() > 30) {
+            pingRecord.setStatus(PingStatus.DEGRADED);
+            log.info("[ANOMALY] Ping marked as DEGRADED due to low accuracy ({}m)", pingRecord.getAccuracyMeters());
+        }
+    }
+
+    private TelemetryRecord resolveReferencePing(TelemetryRecord newRecord, TelemetryRecord lastPing) {
+        if (lastPing != null) {
+            return lastPing;
+        }
+        return telemetryRepository.findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                newRecord.getDeviceId(), newRecord.getStoreId(), newRecord.getItemId()).orElse(null);
+    }
+
+    private boolean isImpossibleSpeed(TelemetryRecord newRecord, TelemetryRecord lastPing) {
+        if (newRecord.getTimestamp() == null || lastPing.getTimestamp() == null) {
+            return false;
         }
 
-        // If no anomaly detected, ping is accepted
-        newRecord.setStatus(PingStatus.ACCEPTED);
+        double timeDiffSeconds = (newRecord.getTimestamp() - lastPing.getTimestamp()) / 1000.0;
+        
+        // Out-of-order pings are handled by isOutOfOrder()
+        if (timeDiffSeconds < 0) {
+            return false;
+        }
+
+        if (newRecord.getLat() == null || newRecord.getLng() == null ||
+            lastPing.getLat() == null || lastPing.getLng() == null) {
+            return false;
+        }
+
+        double distanceMeters = calculateDistance(
+                lastPing.getLat(), lastPing.getLng(),
+                newRecord.getLat(), newRecord.getLng()
+        );
+
+        if (timeDiffSeconds == 0) {
+            if (distanceMeters > 5) {
+                log.warn("[ANOMALY] Ping marked as REJECTED due to jumping location at the exact same timestamp");
+                return true;
+            }
+            return false;
+        }
+
+        double speed = distanceMeters / timeDiffSeconds;
+        if (speed > MAX_POSSIBLE_SPEED_M_S) {
+            log.warn("[ANOMALY] Ping marked as REJECTED due to impossible speed ({} m/s)", speed);
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isOutOfOrder(TelemetryRecord newRecord, TelemetryRecord lastPing) {
+        if (newRecord.getTimestamp() == null || lastPing.getTimestamp() == null) {
+            return false;
+        }
+        return newRecord.getTimestamp() < lastPing.getTimestamp();
+    }
+
+    private void ensureStatusSet(TelemetryRecord pingRecord) {
+        if (pingRecord.getStatus() == null) {
+            pingRecord.setStatus(PingStatus.ACCEPTED);
+        }
     }
 
     /**
