@@ -63,11 +63,17 @@ public class ShoppingListService {
         if (updateDto.getCategory() != null) {
             list.setCategory(updateDto.getCategory());
         }
+        
+        // Permite resetarea valorilor optionale (subcategory si finalStore) doar
+        // daca se trimit in DTO. Intrucat `UpdateListRequest` e JSON, DTO-ul ar putea sa foloseasca
+        // JsonNullable pt a distinge intre explicit null si camp lipsa, dar
+        // momentan vom updata doar daca valoarea nu e null, as-is din cerinta sau
+        // lasam asa cum e (se va accepta ca null in DTO nu face update la acele campuri)
         if (updateDto.getSubcategory() != null) {
-            list.setSubcategory(updateDto.getSubcategory());
+            list.setSubcategory(updateDto.getSubcategory().isEmpty() ? null : updateDto.getSubcategory());
         }
         if (updateDto.getFinalStore() != null) {
-            list.setFinalStore(updateDto.getFinalStore());
+            list.setFinalStore(updateDto.getFinalStore().isEmpty() ? null : updateDto.getFinalStore());
         }
         
         ShoppingList savedList = shoppingListRepository.save(list);
@@ -96,6 +102,14 @@ public class ShoppingListService {
     
     @Transactional
     public ShoppingListDTO importItems(UUID currentListId, ImportItemsRequestDTO request, String userEmail) {
+        if (request.getSourceListId() == null) {
+            throw new IllegalArgumentException("Source list ID cannot be null");
+        }
+        
+        if (currentListId.equals(request.getSourceListId())) {
+            throw new IllegalArgumentException("Cannot import items from the same list into itself");
+        }
+
         ShoppingList currentList = getListEntityByIdAndUser(currentListId, userEmail);
         ShoppingList sourceList = getListEntityByIdAndUser(request.getSourceListId(), userEmail);
         

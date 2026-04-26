@@ -22,7 +22,7 @@ public class ShoppingList {
     private String title;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "category", length = 50)
+    @Column(name = "category", length = 50, nullable = false)
     private ListCategory category = ListCategory.NORMAL;
 
     @Column(name = "subcategory", length = 100)

@@ -3,11 +3,15 @@ CREATE TABLE IF NOT EXISTS shopping_lists (
     id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     user_id INTEGER NOT NULL,
-    category VARCHAR(50) DEFAULT 'NORMAL',
+    category VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
     subcategory VARCHAR(100),
     final_store VARCHAR(255),
     CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'NORMAL';
+ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
+ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS final_store VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS items (
     id UUID PRIMARY KEY,

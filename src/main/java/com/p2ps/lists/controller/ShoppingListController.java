@@ -37,7 +37,7 @@ public class ShoppingListController {
     @PatchMapping("/{listId}")
     public ResponseEntity<ShoppingListDTO> updateList(
             @PathVariable UUID listId,
-            @RequestBody UpdateListRequest request,
+            @Valid @RequestBody UpdateListRequest request,
             Authentication authentication) {
         String userEmail = authentication.getName();
         
@@ -79,7 +79,7 @@ public class ShoppingListController {
     @PostMapping("/{currentListId}/import")
     public ResponseEntity<ShoppingListDTO> importItems(
             @PathVariable UUID currentListId,
-            @RequestBody ImportItemsRequestDTO request,
+            @Valid @RequestBody ImportItemsRequestDTO request,
             Authentication authentication) {
         String userEmail = authentication.getName();
         ShoppingListDTO updatedList = shoppingListService.importItems(currentListId, request, userEmail);
