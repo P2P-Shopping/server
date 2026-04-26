@@ -1,7 +1,9 @@
 package com.p2ps.lists.controller;
 
 import com.p2ps.lists.dto.CreateListRequest;
+import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.dto.UpdateListRequest;
 import com.p2ps.lists.service.ShoppingListService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -27,8 +29,26 @@ public class ShoppingListController {
             @Valid @RequestBody CreateListRequest request,
             Authentication authentication) {
         String userEmail = authentication.getName();
-        ShoppingListDTO createdList = shoppingListService.createList(request.getTitle(), userEmail);
+        ShoppingListDTO createdList = shoppingListService.createList(
+                request.getTitle(), userEmail, request.getCategory(), request.getSubcategory());
         return ResponseEntity.status(HttpStatus.CREATED).body(createdList);
+    }
+    
+    @PatchMapping("/{listId}")
+    public ResponseEntity<ShoppingListDTO> updateList(
+            @PathVariable UUID listId,
+            @RequestBody UpdateListRequest request,
+            Authentication authentication) {
+        String userEmail = authentication.getName();
+        
+        ShoppingListDTO updateDto = new ShoppingListDTO();
+        updateDto.setTitle(request.getTitle());
+        updateDto.setCategory(request.getCategory());
+        updateDto.setSubcategory(request.getSubcategory());
+        updateDto.setFinalStore(request.getFinalStore());
+        
+        ShoppingListDTO updatedList = shoppingListService.updateList(listId, updateDto, userEmail);
+        return ResponseEntity.ok(updatedList);
     }
 
     @GetMapping
@@ -54,5 +74,15 @@ public class ShoppingListController {
             Authentication authentication) {
         shoppingListService.deleteList(listId, authentication.getName());
         return ResponseEntity.noContent().build();
+    }
+    
+    @PostMapping("/{currentListId}/import")
+    public ResponseEntity<ShoppingListDTO> importItems(
+            @PathVariable UUID currentListId,
+            @RequestBody ImportItemsRequestDTO request,
+            Authentication authentication) {
+        String userEmail = authentication.getName();
+        ShoppingListDTO updatedList = shoppingListService.importItems(currentListId, request, userEmail);
+        return ResponseEntity.ok(updatedList);
     }
 }

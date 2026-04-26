@@ -3,6 +3,7 @@ package com.p2ps.ai.service;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.service.ItemService;
 import com.p2ps.lists.service.ShoppingListService;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,7 @@ public class AiPersistenceService {
             String title = (newListTitle != null && !newListTitle.isBlank())
                     ? newListTitle
                     : "AI Generated " + java.time.LocalDate.now();
-            ShoppingListDTO newList = shoppingListService.createList(title, userEmail);
+            ShoppingListDTO newList = shoppingListService.createList(title, userEmail, ListCategory.NORMAL, null);
             targetListId = newList.getId();
         }
 

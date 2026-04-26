@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS shopping_lists (
     id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     user_id INTEGER NOT NULL,
+    category VARCHAR(50) DEFAULT 'NORMAL',
+    subcategory VARCHAR(100),
+    final_store VARCHAR(255),
     CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
