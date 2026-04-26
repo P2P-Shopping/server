@@ -135,14 +135,14 @@ class AnomalyDetectionServiceTest {
     }
 
     private TelemetryRecord createRecord(Double lat, Double lng, Double accuracy, Long timestamp) {
-        TelemetryRecord record = new TelemetryRecord();
-        record.setDeviceId("device-1");
-        record.setStoreId("store-1");
-        record.setItemId("item-1");
-        record.setLat(lat);
-        record.setLng(lng);
-        record.setAccuracyMeters(accuracy);
-        record.setTimestamp(timestamp);
-        return record;
+        TelemetryRecord telemetryRecord = new TelemetryRecord();
+        telemetryRecord.setDeviceId("device-1");
+        telemetryRecord.setStoreId("store-1");
+        telemetryRecord.setItemId("item-1");
+        telemetryRecord.setLat(lat);
+        telemetryRecord.setLng(lng);
+        telemetryRecord.setAccuracyMeters(accuracy);
+        telemetryRecord.setTimestamp(timestamp);
+        return telemetryRecord;
     }
 }
