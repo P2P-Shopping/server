@@ -352,8 +352,9 @@ class ShoppingListServiceTest {
         ImportItemsRequestDTO request = new ImportItemsRequestDTO();
         // sourceListId is null
         
+        UUID currentListId = UUID.randomUUID();
         assertThrows(IllegalArgumentException.class, 
-            () -> shoppingListService.importItems(UUID.randomUUID(), request, "ana@example.com"));
+            () -> shoppingListService.importItems(currentListId, request, "ana@example.com"));
     }
     
     @Test
