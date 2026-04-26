@@ -102,6 +102,7 @@ class LocationProcessorWorkerTest {
         // Initialize the worker to detect database type
         worker.initialize();
 
+        reset(jdbcTemplate);
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Database error during update"));
 
@@ -214,6 +215,7 @@ class LocationProcessorWorkerTest {
         // Initialize the worker to detect database type
         worker.initialize();
         
+        reset(jdbcTemplate);
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Fail"));
 
