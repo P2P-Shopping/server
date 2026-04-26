@@ -127,7 +127,7 @@ class StoreInventoryMapRepositoryTest {
         lowConfidenceProduct.setStoreId(storeId);
         lowConfidenceProduct.setItemId(lowConfidenceItemId);
         lowConfidenceProduct.setEstimatedLocPoint(dummyPoint);
-        lowConfidenceProduct.setConfidenceScore(0.05);
+        lowConfidenceProduct.setConfidenceScore(0.2);
         lowConfidenceProduct.setPingCount(10);
         lowConfidenceProduct.setLastUpdated(LocalDateTime.now().minusDays(10));
 
@@ -154,7 +154,7 @@ class StoreInventoryMapRepositoryTest {
 
         repository.save(zeroConfidenceProduct);
 
-        int rowsUpdated = repository.applyDecayToOldRecords(0.1, cutoffDate);
+        int rowsUpdated = repository.applyDecayToOldRecords(0.1, cutoffDate, 0.15);
 
         assertEquals(2, rowsUpdated, "Ar fi trebuit să se actualizeze exact două rânduri");
 
@@ -162,7 +162,7 @@ class StoreInventoryMapRepositoryTest {
         assertEquals(0.7, updatedProduct.getConfidenceScore(), 0.001, "Scorul trebuia să scadă de la 0.8 la 0.7");
 
         StoreInventoryMap clampedProduct = repository.findById(lowConfidenceProduct.getMapId()).orElseThrow();
-        assertEquals(0.0, clampedProduct.getConfidenceScore(), 0.001, "Scorul trebuia să fie clamped la 0.0");
+        assertEquals(0.15, clampedProduct.getConfidenceScore(), 0.001, "Scorul trebuia să fie clamped la 0.15");
 
         StoreInventoryMap unchangedCutoffProduct = repository.findById(exactCutoffProduct.getMapId()).orElseThrow();
         assertEquals(0.6, unchangedCutoffProduct.getConfidenceScore(), 0.001, "Rândul de la cutoff nu trebuia modificat");
