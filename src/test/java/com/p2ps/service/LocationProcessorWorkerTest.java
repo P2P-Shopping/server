@@ -95,6 +95,7 @@ class LocationProcessorWorkerTest {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
+        reset(dataSource); // Resetați datasource dacă ar exista alte mock-uri preexistente din rulări
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
@@ -207,6 +208,9 @@ class LocationProcessorWorkerTest {
         LocationProcessorWorker.resetRapidRecalculationFailures();
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
+
+        // Facem reset LA datasource ca sa se uite logica interna ca deja are un stub (mai ales in mediu de CI)
+        reset(dataSource);
 
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
