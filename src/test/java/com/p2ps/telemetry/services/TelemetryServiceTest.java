@@ -153,4 +153,30 @@ class TelemetryServiceTest {
         assertEquals(1, result.size());
         assertEquals("pasta", ReflectionTestUtils.getField(result.getFirst(), "itemId"));
     }
+
+    @Test
+    void shouldHandleDuplicateKeyExceptionOnPingWithoutThrowing() {
+        TelemetryPingDTO dto = buildPingDto();
+        doThrow(new org.springframework.dao.DuplicateKeyException("duplicate key: deviceId + timestamp"))
+                .when(telemetryRepository).save(org.mockito.ArgumentMatchers.any());
+
+        telemetryService.processPing(dto);
+
+        verify(telemetryRepository).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldHandleDuplicateKeyExceptionOnBatchWithoutThrowing() {
+        TelemetryBatchDTO batchDTO = new TelemetryBatchDTO();
+        ReflectionTestUtils.setField(batchDTO, "pings", List.of(buildPingDto()));
+        doThrow(new org.springframework.dao.DuplicateKeyException("duplicate key: deviceId + timestamp"))
+                .when(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
+
+        telemetryService.processBatch(batchDTO);
+
+        verify(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
+    }
+
+
+
 }
