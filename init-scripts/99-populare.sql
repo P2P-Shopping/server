@@ -3,10 +3,10 @@ TRUNCATE shopping_lists, store_geofences CASCADE;
 
 
 -- 1b. Seed users de test, astfel incat listele/items/ping-urile sa aiba parinti validi
-INSERT INTO users (first_name, last_name, email, password, created_at) VALUES
-('Ana', 'Popescu', 'seed.ana.popescu@example.com', 'seed-password', TIMESTAMP '2000-01-01 00:00:00'),
-('Mihai', 'Ionescu', 'seed.mihai.ionescu@example.com', 'seed-password', TIMESTAMP '2000-01-01 00:00:00'),
-('Elena', 'Georgescu', 'seed.elena.georgescu@example.com', 'seed-password', TIMESTAMP '2000-01-01 00:00:00')
+INSERT INTO users (first_name, last_name, email, password, token_version, created_at) VALUES
+('Ana', 'Popescu', 'seed.ana.popescu@example.com', 'seed-password', 0, TIMESTAMP '2000-01-01 00:00:00'),
+('Mihai', 'Ionescu', 'seed.mihai.ionescu@example.com', 'seed-password', 0, TIMESTAMP '2000-01-01 00:00:00'),
+('Elena', 'Georgescu', 'seed.elena.georgescu@example.com', 'seed-password', 0, TIMESTAMP '2000-01-01 00:00:00')
 ON CONFLICT (email) DO NOTHING;
 
 
