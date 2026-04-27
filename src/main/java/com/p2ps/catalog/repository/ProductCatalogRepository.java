@@ -2,10 +2,12 @@ package com.p2ps.catalog.repository;
 
 import com.p2ps.catalog.model.ProductCatalog;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +30,20 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             LIMIT 10
             """, nativeQuery = true)
     List<UUID> findBestStoresForCatalogProduct(@Param("catalogId") UUID catalogId);
+    
+    @Modifying
+    @Query(value = """
+        INSERT INTO p2p_product_catalog (id, generic_name, specific_name, brand, category, estimated_price, purchase_count)
+        VALUES (gen_random_uuid(), :genericName, :specificName, :brand, :category, :price, 1)
+        ON CONFLICT (specific_name, COALESCE(brand, ''))
+        DO UPDATE SET
+            purchase_count = p2p_product_catalog.purchase_count + 1,
+            estimated_price = COALESCE(:price, p2p_product_catalog.estimated_price),
+            category = COALESCE(:category, p2p_product_catalog.category)
+        """, nativeQuery = true)
+    void upsertProduct(@Param("genericName") String genericName, 
+                       @Param("specificName") String specificName, 
+                       @Param("brand") String brand, 
+                       @Param("category") String category, 
+                       @Param("price") BigDecimal price);
 }
