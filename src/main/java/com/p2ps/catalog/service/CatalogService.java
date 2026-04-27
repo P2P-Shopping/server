@@ -47,4 +47,12 @@ public class CatalogService {
     public List<UUID> getBestStoresForCatalogProduct(UUID catalogId) {
         return catalogRepository.findBestStoresForCatalogProduct(catalogId);
     }
+
+    @Transactional(readOnly = true)
+    public List<ProductCatalog> searchProductsByName(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return List.of(); // returnează listă goală dacă AI-ul trimite null
+        }
+        return catalogRepository.findByGenericNameContainingIgnoreCase(keyword.trim());
+    }
 }

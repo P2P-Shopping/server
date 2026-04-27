@@ -1,11 +1,16 @@
 package com.p2ps.ai.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,24 +26,33 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AiOrchestrationServiceTest {
 
-    GeminiService geminiService = mock(GeminiService.class);
-    AiPersistenceService aiPersistenceService = mock(AiPersistenceService.class);
+    @Mock
+    private GeminiService geminiService;
+
+    @Mock
+    private AiPersistenceService aiPersistenceService;
+
+    private AiOrchestrationService svc;
+
+    @BeforeEach
+    void setUp() {
+        svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+    }
 
     @Test
-    void invalidJson_throwsAiProcessingException() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+    void processRecipe_invalidJson_throwsAiProcessingException() {
         when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("invalid-json");
 
         RecipeRequest req = new RecipeRequest();
         req.setText("text");
 
         assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
-                .isInstanceOf(AiProcessingException.class);
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI could not return a correctly structured list");
     }
 
     @Test
-    void emptyItems_throwsAiProcessingException() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+    void processRecipe_emptyItems_throwsAiProcessingException() {
         when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("[]");
 
         RecipeRequest req = new RecipeRequest();
@@ -50,8 +64,7 @@ class AiOrchestrationServiceTest {
     }
 
     @Test
-    void nullPayload_throwsAiProcessingException() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+    void processRecipe_nullPayload_throwsAiProcessingException() {
         when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
 
         RecipeRequest req = new RecipeRequest();
@@ -63,9 +76,8 @@ class AiOrchestrationServiceTest {
     }
 
     @Test
-    void success_filtersInvalidItemsBeforePersisting() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
-        String json = "[null,{\"name\":\"   \",\"quantity\":1,\"unit\":\"pieces\"},{\"name\":\"Tomato\",\"quantity\":2,\"unit\":\"pieces\"}]";
+    void processRecipe_success_filtersInvalidItemsBeforePersisting() {
+        String json = "[null,{\"genericName\":\"   \",\"quantity\":1,\"unit\":\"pieces\"},{\"genericName\":\"Tomato\",\"quantity\":2,\"unit\":\"pieces\"}]";
         when(geminiService.extractIngredientsAsJson(anyString())).thenReturn(json);
 
         RecipeRequest req = new RecipeRequest();
@@ -77,15 +89,14 @@ class AiOrchestrationServiceTest {
         var result = svc.processRecipeAndPopulateList(req, "u@e");
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getName()).isEqualTo("Tomato");
+        assertThat(result.get(0).getGenericName()).isEqualTo("Tomato");
 
         verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), eq(List.of(result.get(0))), eq("u@e"));
     }
 
     @Test
-    void success_delegatesToPersistenceService() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
-        String json = "[{\"name\":\"Tomato\",\"quantity\":2,\"unit\":\"pieces\"}]";
+    void processRecipe_success_delegatesToPersistenceService() {
+        String json = "[{\"genericName\":\"Tomato\",\"quantity\":2,\"unit\":\"pieces\"}]";
         when(geminiService.extractIngredientsAsJson(anyString())).thenReturn(json);
 
         RecipeRequest req = new RecipeRequest();
@@ -97,8 +108,78 @@ class AiOrchestrationServiceTest {
         var result = svc.processRecipeAndPopulateList(req, "u@e");
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getName()).isEqualTo("Tomato");
+        assertThat(result.get(0).getGenericName()).isEqualTo("Tomato");
 
         verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), anyList(), eq("u@e"));
+    }
+
+
+    @Test
+    void generateShoppingItems_success_returnsParsedResponse() {
+        // Arrange
+        MultipartFile mockImage = new MockMultipartFile("image", "test.jpg", "image/jpeg", "data".getBytes());
+        String text = "Reteta clatite";
+        String validJson = """
+                {
+                  "listType": "RECIPE",
+                  "items": [
+                    {
+                      "genericName": "Lapte",
+                      "category": "Lactate"
+                    }
+                  ]
+                }
+                """;
+
+        when(geminiService.extractFromMultimodal(mockImage, text)).thenReturn(validJson);
+
+        // Act
+        AiGenerationResponse response = svc.generateShoppingItems(mockImage, text);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getListType()).isEqualTo("RECIPE");
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getGenericName()).isEqualTo("Lapte");
+
+        verifyNoInteractions(aiPersistenceService);
+    }
+
+    @Test
+    void generateShoppingItems_invalidJson_throwsAiProcessingException() {
+        when(geminiService.extractFromMultimodal(null, "text")).thenReturn("I am an AI, I cannot give you JSON.");
+
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI returned an invalid structure");
+    }
+
+    @Test
+    void generateShoppingItems_emptyItems_throwsAiProcessingException() {
+        String jsonWithEmptyItems = """
+                {
+                  "listType": "RECIPE",
+                  "items": []
+                }
+                """;
+        when(geminiService.extractFromMultimodal(null, "text")).thenReturn(jsonWithEmptyItems);
+
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI did not return any valid items");
+    }
+
+    @Test
+    void generateShoppingItems_nullItems_throwsAiProcessingException() {
+        String jsonWithNullItems = """
+                {
+                  "listType": "RECIPE"
+                }
+                """;
+        when(geminiService.extractFromMultimodal(null, "text")).thenReturn(jsonWithNullItems);
+
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI did not return any valid items");
     }
 }

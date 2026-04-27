@@ -46,4 +46,7 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
                        @Param("brand") String brand, 
                        @Param("category") String category, 
                        @Param("price") BigDecimal price);
+
+    // Searches the products wher egeneric name contains the word, ignoring upper case
+    List<ProductCatalog> findByGenericNameContainingIgnoreCase(String keyword);
 }
