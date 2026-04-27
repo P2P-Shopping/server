@@ -30,9 +30,13 @@ public class AiController {
 
     @Deprecated
     @PostMapping("/recipe-to-list")
-    public ResponseEntity<List<ParsedItemResponse>> parseRecipe(@Valid @RequestBody RecipeRequest request, Principal principal) {
-        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(null, request.getText());
-        return ResponseEntity.ok(response.getItems());
+    public ResponseEntity<?> parseRecipe(@Valid @RequestBody RecipeRequest request) {
+        return ResponseEntity.status(HttpStatus.GONE)
+                .header("Deprecation", "true")
+                .body(Map.of(
+                        "error", "This endpoint is permanently removed due to the new Gatekeeper architecture.",
+                        "migration", "Please use the multimodal /api/ai/generate endpoint."
+                ));
     }
 
     // New multimodal endpoint

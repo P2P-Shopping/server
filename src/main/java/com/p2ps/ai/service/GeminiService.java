@@ -66,7 +66,12 @@ public class GeminiService {
 
             // Combine the instruction catalog with user text
             List<Map<String, Object>> parts = new ArrayList<>();
-            String finalPrompt = SYSTEM_PROMPT + "\n\n" + catalogContext + "\n\nUser Text:\n" + (text != null ? text : "I want to cook with what's in the photo.");
+            String fallbackText = (image != null && !image.isEmpty())
+                    ? "I want to cook with what's in the photo."
+                    : "Please analyze the text below.";
+
+            String finalPrompt = SYSTEM_PROMPT + "\n\n" + catalogContext + "\n\nUser Text:\n" +
+                    (text != null && !text.trim().isEmpty() ? text : fallbackText);
             parts.add(Map.of("text", finalPrompt));
 
             if (image != null && !image.isEmpty()) {
@@ -105,9 +110,12 @@ public class GeminiService {
             // Return the text directly, guarantees a valid JSON
             return rootNode.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
 
+        } catch (AiProcessingException e) {
+            throw e;
         } catch (Exception e) {
             throw new AiProcessingException("Error during Multimodal AI processing: " + e.getMessage(), e);
         }
+
     }
 
     // Legacy method

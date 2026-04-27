@@ -43,26 +43,24 @@ class AiControllerTest {
     }
 
     @Test
-    void parseRecipe_callsServiceAndReturnsOk() {
+    @SuppressWarnings("unchecked")
+    void parseRecipe_returnsGoneStatusAndMigrationMessage() {
         // Arrange
         RecipeRequest req = new RecipeRequest();
         req.setText("recipe text");
 
-        ParsedItemResponse p = new ParsedItemResponse();
-        p.setGenericName("Tomato");
-
-        when(orchestration.processRecipeAndPopulateList(req, "user@test.com")).thenReturn(List.of(p));
-
         // Act
-        ResponseEntity<List<ParsedItemResponse>> resp = controller.parseRecipe(req, principal);
+        ResponseEntity<?> resp = controller.parseRecipe(req);
 
         // Assert
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(resp.getBody()).hasSize(1);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(resp.getHeaders().getFirst("Deprecation")).isEqualTo("true");
 
-        assertThat(resp.getBody().getFirst().getGenericName()).isEqualTo("Tomato");
+        Map<String, String> body = (Map<String, String>) resp.getBody();
+        assertThat(body).containsEntry("error", "This endpoint is permanently removed due to the new Gatekeeper architecture.");
+        assertThat(body).containsEntry("migration", "Please use the multimodal /api/ai/generate endpoint.");
 
-        verify(orchestration, times(1)).processRecipeAndPopulateList(req, "user@test.com");
+        verifyNoInteractions(orchestration);
     }
 
     @Test
