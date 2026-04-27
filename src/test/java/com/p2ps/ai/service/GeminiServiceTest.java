@@ -33,6 +33,10 @@ class GeminiServiceTest {
     private GeminiService geminiService;
     private RestTemplate restTemplate;
 
+    private static final byte[] VALID_PNG = new byte[]{
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+    };
+
     @BeforeEach
     void setup() throws Exception {
         geminiService = new GeminiService(catalogService);
@@ -86,16 +90,13 @@ class GeminiServiceTest {
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(googleResponse));
 
-        // Act
         String result = geminiService.extractIngredientsAsJson("Vreau o rețetă cu lapte.");
 
-        // Assert
         assertThat(result).isEqualTo(innerJson);
     }
 
     @Test
     void success_withImageAndTextMultimodal_returnsParsedJson() {
-        // Arrange
         when(catalogService.getTopPopularProducts()).thenReturn(List.of());
 
         String innerJson = "{\"listType\":\"NORMAL\",\"items\":[]}";
@@ -104,12 +105,19 @@ class GeminiServiceTest {
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(googleResponse));
 
-        MockMultipartFile mockImage = new MockMultipartFile("image", "fridge.png", "image/png", "fake-pixel-data".getBytes());
+        MockMultipartFile mockImage = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
 
-        // Act
-        String result = geminiService.extractFromMultimodal(mockImage, "Ce am în frigider?");
+        String result = geminiService.extractFromMultimodal(mockImage, "Ce am in frigider?");
 
-        // Assert
         assertThat(result).isEqualTo(innerJson);
+    }
+
+    @Test
+    void extractFromMultimodal_withInvalidImageSpoofing_throwsException() {
+        MockMultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
+
+        assertThatThrownBy(() -> geminiService.extractFromMultimodal(fakeImage, "Ce am în poza?"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("Unsupported or corrupted image format");
     }
 }
