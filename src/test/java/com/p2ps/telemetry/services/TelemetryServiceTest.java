@@ -29,12 +29,15 @@ class TelemetryServiceTest {
 
     @Mock
     private TelemetryRepository telemetryRepository;
+    
+    @Mock
+    private AnomalyDetectionService anomalyDetectionService;
 
     private TelemetryService telemetryService;
 
     @BeforeEach
     void setUp() {
-        telemetryService = newTelemetryService(telemetryRepository);
+        telemetryService = newTelemetryService(telemetryRepository, anomalyDetectionService);
     }
 
     @Test
@@ -129,11 +132,11 @@ class TelemetryServiceTest {
         return dto;
     }
 
-    private TelemetryService newTelemetryService(TelemetryRepository repository) {
+    private TelemetryService newTelemetryService(TelemetryRepository repository, AnomalyDetectionService anomalyDetectionService) {
         try {
-            Constructor<TelemetryService> constructor = TelemetryService.class.getDeclaredConstructor(TelemetryRepository.class);
+            Constructor<TelemetryService> constructor = TelemetryService.class.getDeclaredConstructor(TelemetryRepository.class, AnomalyDetectionService.class);
             constructor.setAccessible(true);
-            return constructor.newInstance(repository);
+            return constructor.newInstance(repository, anomalyDetectionService);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Failed to create TelemetryService", e);
         }

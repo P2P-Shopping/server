@@ -5,6 +5,7 @@ import com.p2ps.controller.RoutingResponse;
 import com.p2ps.controller.RoutePoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,13 +22,25 @@ public class RoutingService {
     private static final Logger logger = LoggerFactory.getLogger(RoutingService.class);
 
     private static final double CONFIDENCE_THRESHOLD = 0.3;
-    private static final double EARTH_RADIUS_M = 6_371_000.0;
 
     private final JdbcTemplate jdbcTemplate;
+    private final RouteOptimizer optimizer;
+    private final RoutingAsyncService asyncService;
+    private final StringRedisTemplate redis;
 
-    public RoutingService(JdbcTemplate jdbcTemplate) {
+    public RoutingService(JdbcTemplate jdbcTemplate,
+                          RouteOptimizer optimizer,
+                          RoutingAsyncService asyncService,
+                          StringRedisTemplate redis) {
         this.jdbcTemplate = jdbcTemplate;
+        this.optimizer = optimizer;
+        this.asyncService = asyncService;
+        this.redis = redis;
     }
+
+    // -------------------------------------------------------------------------
+    // BE 3.1 — Lazy Routing entry point
+    // -------------------------------------------------------------------------
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
@@ -39,29 +53,66 @@ public class RoutingService {
         String storeId = findStoreForUser(request.getUserLat(), request.getUserLng());
         if (storeId == null) {
             logger.warn("Userul nu se afla in niciun magazin cunoscut.");
-            return new RoutingResponse("error", List.of(), List.of("Nu esti in niciun magazin cunoscut."));
+            return RoutingResponse.error("Nu esti in niciun magazin cunoscut.");
         }
 
         List<ProductLocation> locations = getProductLocations(request.getProductIds(), storeId, warnings);
         if (locations.isEmpty()) {
-            return new RoutingResponse("error", List.of(), List.of("Niciunul din produsele cerute nu a fost gasit in magazin."));
+            return RoutingResponse.error("Niciunul din produsele cerute nu a fost gasit in magazin.");
         }
 
         RoutePoint userPoint = new RoutePoint("user_loc", "Tu", request.getUserLat(), request.getUserLng());
-        List<RoutePoint> nnRoute = nearestNeighborTSP(userPoint, toRoutePoints(locations));
-        nnRoute.add(0, userPoint);
 
-        List<RoutePoint> optimizedRoute = threeOptImprove(nnRoute);
+        // Full NN route (fast — always computed eagerly)
+        List<RoutePoint> nnRoute = new ArrayList<>();
+        nnRoute.add(userPoint);
+        nnRoute.addAll(optimizer.nearestNeighborTSP(userPoint, toRoutePoints(locations)));
 
-        double distanceBefore = routeDistance(nnRoute);
-        double distanceAfter  = routeDistance(optimizedRoute);
-        logger.info("NN: {}m | 3-Opt: {}m | Imbunatatire: {}%",
-                (int) distanceBefore, (int) distanceAfter,
-                String.format("%.1f", distanceBefore > 0 ? (distanceBefore - distanceAfter) / distanceBefore * 100 : 0));
+        int lazyN = request.getLazyN();
+        boolean goLazy = lazyN > 0 && nnRoute.size() > lazyN + 1; // +1 for user point
 
+        if (goLazy) {
+            return handleLazyRoute(nnRoute, lazyN, warnings);
+        }
+
+        // Eager path — same as before
+        List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
+        logImprovement(nnRoute, optimizedRoute);
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
-        return new RoutingResponse("success", optimizedRoute, warnings);
+        return RoutingResponse.eager(optimizedRoute, warnings);
     }
+
+    /**
+     * BE 3.1 — Lazy path.
+     *
+     * Returns the first lazyN stops immediately (NN order, no 3-opt yet).
+     * Schedules full 3-opt optimization in the background.
+     * The frontend polls GET /api/routing/full/{routeId} when it needs the rest.
+     */
+    private RoutingResponse handleLazyRoute(List<RoutePoint> fullNnRoute,
+                                             int lazyN,
+                                             List<String> warnings) {
+        String routeId = UUID.randomUUID().toString();
+
+        // Partial response: user point + first lazyN products
+        List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+
+        logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
+                partial.size(), fullNnRoute.size() - partial.size(), routeId);
+
+        // Set pending marker in Redis
+        String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
+        redis.opsForValue().set(pendingKey, "true", RoutingAsyncService.PENDING_TTL);
+
+        // Fire-and-forget: 3-opt on full route → Redis
+        asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
+
+        return RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+    }
+
+    // -------------------------------------------------------------------------
+    // DB queries (unchanged from original)
+    // -------------------------------------------------------------------------
 
     private String findStoreForUser(double lat, double lng) {
         String sql = "SELECT store_id::text FROM store_geofences " +
@@ -163,124 +214,18 @@ public class RoutingService {
         return result;
     }
 
-    double haversine(double lat1, double lng1, double lat2, double lng2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLng = Math.toRadians(lng2 - lng1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
-    List<RoutePoint> nearestNeighborTSP(RoutePoint start, List<RoutePoint> points) {
-        List<RoutePoint> unvisited = new ArrayList<>(points);
-        List<RoutePoint> route = new ArrayList<>();
-        RoutePoint current = start;
-
-        while (!unvisited.isEmpty()) {
-            RoutePoint nearest = null;
-            double minDist = Double.MAX_VALUE;
-
-            for (RoutePoint candidate : unvisited) {
-                double dist = haversine(current.getLat(), current.getLng(),
-                        candidate.getLat(), candidate.getLng());
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearest = candidate;
-                }
-            }
-
-            route.add(nearest);
-            unvisited.remove(nearest);
-            current = nearest;
-        }
-
-        return route;
-    }
-
-    List<RoutePoint> threeOptImprove(List<RoutePoint> route) {
-        List<RoutePoint> current = new ArrayList<>(route);
-        List<RoutePoint> improved = tryImproveOnce(current);
-        while (improved != null) {
-            current = improved;
-            improved = tryImproveOnce(current);
-        }
-        return current;
-    }
-
-    private List<RoutePoint> tryImproveOnce(List<RoutePoint> route) {
-        int n = route.size();
-        double currentDist = routeDistance(route);
-        for (int i = 0; i < n - 2; i++) {
-            for (int j = i + 1; j < n - 1; j++) {
-                for (int k = j + 1; k < n - 1; k++) {
-                    List<RoutePoint> best = findBestReconnect(route, i, j, k, currentDist);
-                    if (best != null) {
-                        return best;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private List<RoutePoint> findBestReconnect(List<RoutePoint> route, int i, int j, int k, double currentDist) {
-        List<RoutePoint> best = null;
-        double bestDist = currentDist;
-
-        for (int variant = 1; variant < 8; variant++) {
-            List<RoutePoint> candidate = reconnect(route, i, j, k, variant);
-            double candidateDist = routeDistance(candidate);
-            if (candidateDist < bestDist - 1e-10) {
-                bestDist = candidateDist;
-                best = candidate;
-            }
-        }
-
-        return best;
-    }
-
-    private List<RoutePoint> reconnect(List<RoutePoint> route, int i, int j, int k, int variant) {
-        List<RoutePoint> segA = new ArrayList<>(route.subList(0, i + 1));
-        List<RoutePoint> segB = new ArrayList<>(route.subList(i + 1, j + 1));
-        List<RoutePoint> segC = new ArrayList<>(route.subList(j + 1, k + 1));
-        List<RoutePoint> segD = new ArrayList<>(route.subList(k + 1, route.size()));
-        List<RoutePoint> segBr = reversed(segB);
-        List<RoutePoint> segCr = reversed(segC);
-
-        List<RoutePoint> result = new ArrayList<>(segA);
-        switch (variant) {
-            case 1 -> { result.addAll(segBr); result.addAll(segC);  result.addAll(segD); }
-            case 2 -> { result.addAll(segB);  result.addAll(segCr); result.addAll(segD); }
-            case 3 -> { result.addAll(segBr); result.addAll(segCr); result.addAll(segD); }
-            case 4 -> { result.addAll(segC);  result.addAll(segB);  result.addAll(segD); }
-            case 5 -> { result.addAll(segC);  result.addAll(segBr); result.addAll(segD); }
-            case 6 -> { result.addAll(segCr); result.addAll(segB);  result.addAll(segD); }
-            case 7 -> { result.addAll(segCr); result.addAll(segBr); result.addAll(segD); }
-            default -> throw new IllegalArgumentException("variant trebuie sa fie intre 1 si 7");
-        }
-        return result;
-    }
-
-    private List<RoutePoint> reversed(List<RoutePoint> segment) {
-        List<RoutePoint> copy = new ArrayList<>(segment);
-        java.util.Collections.reverse(copy);
-        return copy;
-    }
-
-    private double edgeCost(List<RoutePoint> route, int from, int to) {
-        if (to >= route.size()) return 0;
-        RoutePoint a = route.get(from);
-        RoutePoint b = route.get(to);
-        return haversine(a.getLat(), a.getLng(), b.getLat(), b.getLng());
-    }
-
-    double routeDistance(List<RoutePoint> route) {
-        double total = 0;
-        for (int i = 0; i < route.size() - 1; i++) {
-            total += edgeCost(route, i, i + 1);
-        }
-        return total;
+    private void logImprovement(List<RoutePoint> before, List<RoutePoint> after) {
+        if (!logger.isInfoEnabled()) return;
+        double distBefore = optimizer.routeDistance(before);
+        double distAfter  = optimizer.routeDistance(after);
+        logger.info("NN: {}m | 3-Opt: {}m | Imbunatatire: {}%",
+                (int) distBefore, (int) distAfter,
+                String.format("%.1f", distBefore > 0
+                        ? (distBefore - distAfter) / distBefore * 100 : 0));
     }
 
     private List<RoutePoint> toRoutePoints(List<ProductLocation> locations) {

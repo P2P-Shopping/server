@@ -19,11 +19,15 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.p2ps.auth.service.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+    private static final Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
 
     private final JwtAuthFilter jwtAuthFilter;
 
@@ -54,9 +58,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
+                            logger.error("Unauthorized access", authException);
                             response.setContentType("application/json");
                             response.setStatus(401);
-                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + authException.getMessage() + "\"}");
+                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Authentication failed\"}");
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
@@ -64,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/telemetry/**").permitAll() // exception for hardware devices
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/").permitAll()
+                        .requestMatchers("/error").permitAll() // allow Spring's default error page to bypass security so interceptor errors are visible
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/routing/**").permitAll()
                         .anyRequest().authenticated()
@@ -77,12 +83,22 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+        List<String> rawOrigins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
-                .toList());
+                .toList();
+
+        if (rawOrigins.contains("*")) {
+            logger.error("CORS configuration error: 'app.cors.allowed-origins' cannot contain '*' while 'allowCredentials' is true. Filtering out '*' to prevent browser rejection.");
+        }
+
+        List<String> origins = rawOrigins.stream()
+                .filter(origin -> !"*".equals(origin))
+                .toList();
+
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "X-Return-Token"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
