@@ -10,14 +10,13 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
-@Table(name = "items", schema = "public")
+@Table(name = "items")
 @Getter
 @Setter
 public class Item {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
 
     @Column(nullable = false)
