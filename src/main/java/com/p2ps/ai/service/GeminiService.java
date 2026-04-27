@@ -10,6 +10,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,7 +33,12 @@ public class GeminiService {
 
     public GeminiService(CatalogService catalogService) {
         this.objectMapper = new ObjectMapper();
-        this.restTemplate = new RestTemplate();
+
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000);
+        factory.setReadTimeout(30000);
+
+        this.restTemplate = new RestTemplate(factory);
         this.catalogService = catalogService;
     }
 
@@ -64,9 +70,16 @@ public class GeminiService {
             parts.add(Map.of("text", finalPrompt));
 
             if (image != null && !image.isEmpty()) {
-                String base64Image = Base64.getEncoder().encodeToString(image.getBytes());
+                byte[] imageBytes = image.getBytes();
+                String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+
+                String secureMimeType = detectMimeTypeSecurely(imageBytes);
+                if (secureMimeType == null) {
+                    throw new AiProcessingException("Unsupported or corrupted image format. Only actual JPEG/PNG files are allowed.");
+                }
+
                 parts.add(Map.of("inlineData", Map.of(
-                        "mimeType", image.getContentType(),
+                        "mimeType", secureMimeType,
                         "data", base64Image
                 )));
             }
@@ -100,5 +113,18 @@ public class GeminiService {
     // Legacy method
     public String extractIngredientsAsJson(String rawRecipeText) {
         return extractFromMultimodal(null, rawRecipeText);
+    }
+
+    private String detectMimeTypeSecurely(byte[] bytes) {
+        if (bytes.length >= 8 &&
+                bytes[0] == (byte) 0x89 && bytes[1] == 0x50 &&
+                bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        if (bytes.length >= 2 &&
+                bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8) {
+            return "image/jpeg";
+        }
+        return null;
     }
 }

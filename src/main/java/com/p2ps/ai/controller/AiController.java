@@ -28,12 +28,11 @@ public class AiController {
         this.imageValidator=imageValidator;
     }
 
-    //Probably obsolete
+    @Deprecated
     @PostMapping("/recipe-to-list")
     public ResponseEntity<List<ParsedItemResponse>> parseRecipe(@Valid @RequestBody RecipeRequest request, Principal principal) {
-        String userEmail = principal.getName();
-        List<ParsedItemResponse> response = aiOrchestrationService.processRecipeAndPopulateList(request, userEmail);
-        return ResponseEntity.ok(response);
+        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(null, request.getText());
+        return ResponseEntity.ok(response.getItems());
     }
 
     // New multimodal endpoint
