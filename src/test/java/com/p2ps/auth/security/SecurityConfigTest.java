@@ -69,8 +69,22 @@ class SecurityConfigTest {
         assertNotNull(corsConfig);
         assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
         assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"), corsConfig.getAllowedMethods());
-        assertEquals(List.of("Authorization", "Content-Type", "Accept"), corsConfig.getAllowedHeaders());
+        assertEquals(List.of("Authorization", "Content-Type", "Accept", "X-Return-Token"), corsConfig.getAllowedHeaders());
         assertTrue(corsConfig.getAllowCredentials());
+    }
+
+    @Test
+    void corsConfigurationSource_DisallowsWildcardWithCredentials() {
+        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
+        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173, *");
+
+        CorsConfiguration corsConfig = ((UrlBasedCorsConfigurationSource) config.corsConfigurationSource())
+                .getCorsConfiguration(new MockHttpServletRequest("/api/test"));
+
+        assertNotNull(corsConfig);
+        // * should be filtered out
+        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
     }
 
     @Test
