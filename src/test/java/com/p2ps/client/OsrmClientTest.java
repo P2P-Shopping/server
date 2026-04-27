@@ -3,6 +3,7 @@ package com.p2ps.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,14 +18,8 @@ class OsrmClientTest {
     void setUp() {
         restTemplate = mock(RestTemplate.class);
         client = new OsrmClient(restTemplate, new ObjectMapper());
-        // Set base URL via reflection since @Value doesn't run in unit tests
-        try {
-            var field = OsrmClient.class.getDeclaredField("osrmBaseUrl");
-            field.setAccessible(true);
-            field.set(client, "http://mock-osrm");
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        // Set base URL via ReflectionTestUtils instead of manual reflection
+        ReflectionTestUtils.setField(client, "osrmBaseUrl", "http://mock-osrm");
     }
 
     @Test

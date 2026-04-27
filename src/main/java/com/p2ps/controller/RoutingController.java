@@ -1,5 +1,6 @@
 package com.p2ps.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.dto.ItemLocationDTO;
 import com.p2ps.repository.StoreInventoryMapRepository;
@@ -16,6 +17,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -28,13 +30,13 @@ public class RoutingController {
 
     private static final Logger logger = LoggerFactory.getLogger(RoutingController.class);
 
-    @Value("${routing.recalculation.cooldown:PT1M}")
-    private Duration recalculationCooldown;
+    private static final String DEFAULT_COOLDOWN_STR = "PT1M";
+    private static final Duration DEFAULT_COOLDOWN = Duration.ofMinutes(1);
+    private static final int DEFAULT_GUARD_MAX_SIZE = 10000;
 
-    @Value("${routing.recalculation.guard.max-size:10000}")
-    private int recalculationGuardMaxSize;
-
-    private Cache<String, Instant> recalculationGuard;
+    private final Duration recalculationCooldown;
+    private final int recalculationGuardMaxSize;
+    private final Cache<String, Instant> recalculationGuard;
 
     private final RoutingService routingService;
     private final MacroRoutingService macroRoutingService;
@@ -49,29 +51,20 @@ public class RoutingController {
             StoreInventoryMapRepository inventoryMapRepository,
             LocationProcessorWorker locationProcessorWorker,
             StringRedisTemplate redis,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Value("${routing.recalculation.cooldown:" + DEFAULT_COOLDOWN_STR + "}") Duration recalculationCooldown,
+            @Value("${routing.recalculation.guard.max-size:" + DEFAULT_GUARD_MAX_SIZE + "}") int recalculationGuardMaxSize) {
         this.routingService = routingService;
         this.macroRoutingService = macroRoutingService;
         this.inventoryMapRepository = inventoryMapRepository;
         this.locationProcessorWorker = locationProcessorWorker;
         this.redis = redis;
         this.objectMapper = objectMapper;
-        // Initialize with hardcoded defaults so unit tests work without Spring context.
-        // @PostConstruct re-initializes with @Value values when Spring manages the bean.
-        this.recalculationCooldown = Duration.ofMinutes(1);
+        this.recalculationCooldown = recalculationCooldown != null ? recalculationCooldown : DEFAULT_COOLDOWN;
+        this.recalculationGuardMaxSize = recalculationGuardMaxSize;
         this.recalculationGuard = Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofMinutes(1))
-                .maximumSize(10_000)
-                .build();
-    }
-
-    @jakarta.annotation.PostConstruct
-    void init() {
-        // Re-initialize with values from application.properties.
-        // No-op in tests since defaults match the @Value fallbacks.
-        this.recalculationGuard = Caffeine.newBuilder()
-                .expireAfterWrite(recalculationCooldown)
-                .maximumSize(recalculationGuardMaxSize)
+                .expireAfterWrite(this.recalculationCooldown)
+                .maximumSize(this.recalculationGuardMaxSize)
                 .build();
     }
 
@@ -90,23 +83,34 @@ public class RoutingController {
 
     /**
      * GET /api/routing/full/{routeId}
-     * 200 — full route ready | 202 — still computing | 500 — deserialization error
+     * 200 — full route ready | 202 — still computing | 404 — unknown | 500 — error
      */
     @GetMapping("/full/{routeId}")
     public ResponseEntity<RoutingResponse> getFullRoute(@PathVariable String routeId) {
         String key = RoutingAsyncService.ROUTE_KEY_PREFIX + routeId;
         String json = redis.opsForValue().get(key);
 
-        if (json == null) {
-            logger.debug("Route not yet in Redis: routeId={}", routeId);
-            return ResponseEntity.accepted().build();
+        if (json == null || json.isBlank()) {
+            String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
+            Boolean isPending = redis.hasKey(pendingKey);
+
+            if (Boolean.TRUE.equals(isPending)) {
+                logger.debug("Route optimization still in progress: routeId={}", routeId);
+                return ResponseEntity.accepted().build();
+            } else {
+                logger.debug("Route not found and not pending in Redis: routeId={}", routeId);
+                return ResponseEntity.notFound().build();
+            }
         }
 
         try {
             RoutingResponse response = objectMapper.readValue(json, RoutingResponse.class);
             return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Failed to deserialize route from Redis: routeId={}", routeId, e);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to parse route JSON from Redis: routeId={}", routeId, e);
+            return ResponseEntity.internalServerError().build();
+        } catch (IOException e) {
+            logger.error("IO error reading route from Redis: routeId={}", routeId, e);
             return ResponseEntity.internalServerError().build();
         }
     }

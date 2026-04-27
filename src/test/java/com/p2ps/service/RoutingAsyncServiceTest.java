@@ -2,7 +2,6 @@ package com.p2ps.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.controller.RoutePoint;
-import com.p2ps.controller.RoutingResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -31,7 +30,7 @@ class RoutingAsyncServiceTest {
     }
 
     @Test
-    void completeRouteAsync_shouldSaveOptimizedRouteToRedis() throws Exception {
+    void completeRouteAsync_shouldSaveOptimizedRouteToRedis() {
         String routeId = "test-route-id";
         List<RoutePoint> route = List.of(
                 new RoutePoint("user", "Tu", 47.156, 27.587),

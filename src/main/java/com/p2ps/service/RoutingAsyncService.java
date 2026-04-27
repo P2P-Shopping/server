@@ -28,7 +28,9 @@ public class RoutingAsyncService {
     private static final Logger logger = LoggerFactory.getLogger(RoutingAsyncService.class);
 
     public static final String ROUTE_KEY_PREFIX = "route:";
+    public static final String PENDING_KEY_PREFIX = "route:pending:";
     private static final Duration ROUTE_TTL = Duration.ofMinutes(30);
+    public static final Duration PENDING_TTL = Duration.ofMinutes(5);
 
     private final RouteOptimizer optimizer;
     private final StringRedisTemplate redis;
@@ -49,7 +51,7 @@ public class RoutingAsyncService {
      * @param fullNnRoute the complete NN route (user + all products, not trimmed)
      * @param warnings   warnings already collected during the eager phase
      */
-    @Async
+    @Async("taskExecutor")
     public void completeRouteAsync(String routeId,
                                    List<RoutePoint> fullNnRoute,
                                    List<String> warnings) {

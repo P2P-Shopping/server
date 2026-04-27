@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
 
 /**
  * BE 3.2 — Macro-Routing (Walking vs Driving).
@@ -47,10 +50,17 @@ public class MacroRoutingService {
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        logger.info("Macro-routing: calculating estimates to store entrance");
+        logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId);
 
-        OsrmClient.TransportEstimate walkingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot");
-        OsrmClient.TransportEstimate drivingRaw = osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car");
+        CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
+        CompletableFuture<OsrmClient.TransportEstimate> drivingFuture = CompletableFuture.supplyAsync(
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car"));
+
+        CompletableFuture.allOf(walkingFuture, drivingFuture).join();
+
+        OsrmClient.TransportEstimate walkingRaw = walkingFuture.join();
+        OsrmClient.TransportEstimate drivingRaw = drivingFuture.join();
 
         MacroRoutingResponse.TransportEstimate walking = toDto(walkingRaw);
         MacroRoutingResponse.TransportEstimate driving = toDto(drivingRaw);
@@ -61,18 +71,34 @@ public class MacroRoutingService {
 
     /**
      * Uses ST_Centroid of the store's boundary_polygon as the entrance point.
-     * Returns [lat, lng] or null if the store doesn't exist.
+     * Returns [lat, lng] or an empty array if the store doesn't exist.
      */
     private double[] fetchStoreEntrance(String storeId) {
         String sql = "SELECT ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
                      "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
-                     "FROM store_geofences WHERE store_id::text = ?";
+                     "FROM store_geofences WHERE store_id = ? LIMIT 1";
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeId);
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(storeId);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid storeId UUID: {}", storeId);
+            return new double[0];
+        }
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, uuid);
         if (rows.isEmpty()) return new double[0];
 
-        double lat = ((Number) rows.get(0).get("lat")).doubleValue();
-        double lng = ((Number) rows.get(0).get("lng")).doubleValue();
+        Object latObj = rows.get(0).get("lat");
+        Object lngObj = rows.get(0).get("lng");
+
+        if (!(latObj instanceof Number) || !(lngObj instanceof Number)) {
+            logger.warn("Centroid extraction returned null or non-number for storeId={}", storeId);
+            return new double[0];
+        }
+
+        double lat = ((Number) latObj).doubleValue();
+        double lng = ((Number) lngObj).doubleValue();
         return new double[]{lat, lng};
     }
 

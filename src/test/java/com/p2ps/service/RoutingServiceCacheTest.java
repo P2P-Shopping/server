@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import static org.mockito.Mockito.mock;
 
@@ -26,7 +27,8 @@ class RoutingServiceCacheTest {
     void calculateOptimalRoute_shouldReturnErrorWhenUserNotInStore() {
         RouteOptimizer optimizer = new RouteOptimizer();
         RoutingAsyncService asyncService = mock(RoutingAsyncService.class);
-        RoutingService service = new RoutingService(jdbcTemplate, optimizer, asyncService);
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        RoutingService service = new RoutingService(jdbcTemplate, optimizer, asyncService, redis);
 
         // No store found for user coordinates
         when(jdbcTemplate.queryForList(anyString(), any(Class.class), any(), any()))

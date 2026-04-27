@@ -8,14 +8,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,6 +30,9 @@ class RoutingServiceTest {
     @Mock
     private RoutingAsyncService routingAsyncService;
 
+    @Mock
+    private StringRedisTemplate redis;
+
     private RouteOptimizer optimizer;
     private RoutingService service;
 
@@ -37,29 +43,28 @@ class RoutingServiceTest {
 
     @BeforeEach
     void setUp() {
-        // RouteOptimizer is stateless — use the real one, no mock needed
         optimizer = new RouteOptimizer();
-        service = new RoutingService(jdbcTemplate, optimizer, routingAsyncService);
+        service = new RoutingService(jdbcTemplate, optimizer, routingAsyncService, redis);
     }
 
     // -------------------------------------------------------------------------
-    // Haversine tests (delegated to RouteOptimizer, tested via service wrapper)
+    // Haversine tests (now testing RouteOptimizer directly)
     // -------------------------------------------------------------------------
 
     @Test
     void haversine_shouldReturnZeroForSameCoordinates() {
-        assertEquals(0.0, service.haversine(47.156, 27.587, 47.156, 27.587), 0.001);
+        assertEquals(0.0, optimizer.haversine(47.156, 27.587, 47.156, 27.587), 0.001);
     }
 
     @Test
     void haversine_shouldReturnPositiveDistanceForDifferentCoordinates() {
-        assertTrue(service.haversine(47.156, 27.587, 47.157, 27.588) > 0);
+        assertTrue(optimizer.haversine(47.156, 27.587, 47.157, 27.588) > 0);
     }
 
     @Test
     void haversine_shouldBeSymmetric() {
-        double d1 = service.haversine(47.156, 27.587, 47.160, 27.590);
-        double d2 = service.haversine(47.160, 27.590, 47.156, 27.587);
+        double d1 = optimizer.haversine(47.156, 27.587, 47.160, 27.590);
+        double d2 = optimizer.haversine(47.160, 27.590, 47.156, 27.587);
         assertEquals(d1, d2, 0.001);
     }
 
@@ -76,7 +81,7 @@ class RoutingServiceTest {
                 new RoutePoint(ITEM_3, "C", 47.159, 27.590)
         );
 
-        List<RoutePoint> route = service.nearestNeighborTSP(start, points);
+        List<RoutePoint> route = optimizer.nearestNeighborTSP(start, points);
 
         assertEquals(3, route.size());
         assertTrue(route.stream().anyMatch(p -> p.getItemId().equals(ITEM_1)));
@@ -90,7 +95,7 @@ class RoutingServiceTest {
         RoutePoint near = new RoutePoint(ITEM_1, "Near", 47.1561, 27.5871);
         RoutePoint far = new RoutePoint(ITEM_2, "Far", 47.200, 27.650);
 
-        List<RoutePoint> route = service.nearestNeighborTSP(start, List.of(far, near));
+        List<RoutePoint> route = optimizer.nearestNeighborTSP(start, List.of(far, near));
 
         assertEquals(ITEM_1, route.get(0).getItemId());
     }
@@ -98,7 +103,7 @@ class RoutingServiceTest {
     @Test
     void nearestNeighborTSP_shouldReturnEmptyForEmptyInput() {
         RoutePoint start = new RoutePoint("user", "Tu", 47.156, 27.587);
-        List<RoutePoint> route = service.nearestNeighborTSP(start, List.of());
+        List<RoutePoint> route = optimizer.nearestNeighborTSP(start, List.of());
         assertTrue(route.isEmpty());
     }
 
@@ -115,9 +120,9 @@ class RoutingServiceTest {
                 new RoutePoint(ITEM_3, "C", 47.162, 27.600)
         );
 
-        double before = service.routeDistance(route);
-        List<RoutePoint> improved = service.threeOptImprove(route);
-        double after = service.routeDistance(improved);
+        double before = optimizer.routeDistance(route);
+        List<RoutePoint> improved = optimizer.threeOptImprove(route);
+        double after = optimizer.routeDistance(improved);
 
         assertTrue(after <= before + 1e-9);
         assertEquals(route.size(), improved.size());
@@ -125,13 +130,14 @@ class RoutingServiceTest {
 
     @Test
     void threeOptImprove_shouldReturnAllSamePoints() {
-        List<RoutePoint> route = new ArrayList<>();
-        route.add(new RoutePoint("u", "Tu", 47.156, 27.587));
-        route.add(new RoutePoint(ITEM_1, "A", 47.160, 27.595));
-        route.add(new RoutePoint(ITEM_2, "B", 47.155, 27.580));
-        route.add(new RoutePoint(ITEM_3, "C", 47.162, 27.600));
+        List<RoutePoint> route = List.of(
+                new RoutePoint("u", "Tu", 47.156, 27.587),
+                new RoutePoint(ITEM_1, "A", 47.160, 27.595),
+                new RoutePoint(ITEM_2, "B", 47.155, 27.580),
+                new RoutePoint(ITEM_3, "C", 47.162, 27.600)
+        );
 
-        List<RoutePoint> improved = service.threeOptImprove(route);
+        List<RoutePoint> improved = optimizer.threeOptImprove(route);
 
         assertEquals(route.size(), improved.size());
         for (RoutePoint original : route) {
@@ -152,7 +158,8 @@ class RoutingServiceTest {
         RoutingResponse response = service.calculateOptimalRoute(request);
 
         assertEquals("error", response.getStatus());
-        assertFalse(response.getRoute() == null || !response.getRoute().isEmpty());
+        assertNotNull(response.getRoute());
+        assertTrue(response.getRoute().isEmpty());
     }
 
     @Test
@@ -182,7 +189,6 @@ class RoutingServiceTest {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        // 8 products so lazyN=5 triggers lazy path (8 > 5)
         List<RoutingService.ProductLocation> locations = List.of(
                 new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9),
                 new RoutingService.ProductLocation(ITEM_2, "P2", 47.1558, 27.5865, 0.8),
@@ -195,6 +201,9 @@ class RoutingServiceTest {
         );
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(locations);
+        
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(valueOps);
 
         RoutingRequest request = new RoutingRequest(47.156, 27.587,
                 List.of(ITEM_1, ITEM_2, ITEM_3, "item4", "item5", "item6", "item7", "item8"), 5);
@@ -203,7 +212,6 @@ class RoutingServiceTest {
         assertEquals("partial", response.getStatus());
         assertTrue(response.isPartial());
         assertNotNull(response.getRouteId());
-        // partial route = user point + 5 products
         assertEquals(6, response.getRoute().size());
     }
 
@@ -214,7 +222,7 @@ class RoutingServiceTest {
     @Test
     void routeDistance_shouldReturnZeroForSinglePoint() {
         List<RoutePoint> route = List.of(new RoutePoint("u", "Tu", 47.156, 27.587));
-        assertEquals(0.0, service.routeDistance(route), 0.001);
+        assertEquals(0.0, optimizer.routeDistance(route), 0.001);
     }
 
     @Test
@@ -223,7 +231,7 @@ class RoutingServiceTest {
                 new RoutePoint("u", "Tu", 47.156, 27.587),
                 new RoutePoint(ITEM_1, "A", 47.160, 27.595)
         );
-        assertTrue(service.routeDistance(route) > 0);
+        assertTrue(optimizer.routeDistance(route) > 0);
     }
 
     @Test

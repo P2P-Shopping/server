@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -20,6 +21,7 @@ class MacroRoutingServiceTest {
     private MacroRoutingService service;
 
     private static final String STORE_ID = "8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b";
+    private static final UUID STORE_UUID = UUID.fromString(STORE_ID);
 
     @BeforeEach
     void setUp() {
@@ -49,7 +51,7 @@ class MacroRoutingServiceTest {
 
     @Test
     void getEstimates_shouldReturnNullWhenStoreNotFound() {
-        when(jdbcTemplate.queryForList(anyString(), eq(STORE_ID))).thenReturn(List.of());
+        when(jdbcTemplate.queryForList(anyString(), eq(STORE_UUID))).thenReturn(List.of());
 
         MacroRoutingResponse response = service.getEstimates(47.15, 27.58, STORE_ID);
 
@@ -99,9 +101,8 @@ class MacroRoutingServiceTest {
         verify(osrmClient).getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("car"));
     }
 
-    @SuppressWarnings("unchecked")
     private void mockStoreEntrance(double lat, double lng) {
         Map<String, Object> row = Map.of("lat", lat, "lng", lng);
-        when(jdbcTemplate.queryForList(anyString(), eq(STORE_ID))).thenReturn(List.of(row));
+        when(jdbcTemplate.queryForList(anyString(), eq(STORE_UUID))).thenReturn(List.of(row));
     }
 }

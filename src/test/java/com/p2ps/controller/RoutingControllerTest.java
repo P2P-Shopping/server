@@ -5,6 +5,7 @@ import com.p2ps.model.StoreInventoryMap;
 import com.p2ps.repository.StoreInventoryMapRepository;
 import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.service.MacroRoutingService;
+import com.p2ps.service.RoutingAsyncService;
 import com.p2ps.service.RoutingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.ResponseEntity;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +51,9 @@ class RoutingControllerTest {
                 inventoryMapRepository,
                 locationProcessorWorker,
                 redis,
-                objectMapper
+                objectMapper,
+                Duration.ofMinutes(1),
+                10000
         );
     }
 
@@ -92,14 +96,27 @@ class RoutingControllerTest {
     }
 
     @Test
-    void getFullRoute_shouldReturn202WhenRouteNotYetInRedis() {
+    void getFullRoute_shouldReturn202WhenRouteNotYetInRedisButPending() {
         ValueOperations<String, String> ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
         when(ops.get(anyString())).thenReturn(null);
+        when(redis.hasKey(startsWith("route:pending:"))).thenReturn(true);
 
         ResponseEntity<RoutingResponse> response = controller.getFullRoute("some-route-id");
 
         assertEquals(202, response.getStatusCode().value());
+    }
+
+    @Test
+    void getFullRoute_shouldReturn404WhenRouteNotYetInRedisAndNotPending() {
+        ValueOperations<String, String> ops = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn(null);
+        when(redis.hasKey(startsWith("route:pending:"))).thenReturn(false);
+
+        ResponseEntity<RoutingResponse> response = controller.getFullRoute("some-route-id");
+
+        assertEquals(404, response.getStatusCode().value());
     }
 
     @Test

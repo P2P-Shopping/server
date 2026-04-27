@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.util.Objects;
 
 @Data
 @NoArgsConstructor
@@ -28,31 +27,4 @@ public class RoutingRequest {
      * Only activates lazy behaviour when the store has more than N products.
      */
     private int lazyN = 0;
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        RoutingRequest that = (RoutingRequest) o;
-        return Double.compare(getUserLat(), that.getUserLat()) == 0
-                && Double.compare(getUserLng(), that.getUserLng()) == 0
-                && Objects.equals(getProductIds(), that.getProductIds())
-                && getLazyN() == that.getLazyN();
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(getUserLat(), getUserLng(), getProductIds(), getLazyN());
-    }
-
-    public double getUserLat() { return this.userLat; }
-    public void setUserLat(double userLat) { this.userLat = userLat; }
-
-    public double getUserLng() { return this.userLng; }
-    public void setUserLng(double userLng) { this.userLng = userLng; }
-
-    public List<String> getProductIds() { return this.productIds; }
-    public void setProductIds(List<String> productIds) { this.productIds = productIds; }
-
-    public int getLazyN() { return this.lazyN; }
-    public void setLazyN(int lazyN) { this.lazyN = lazyN; }
 }

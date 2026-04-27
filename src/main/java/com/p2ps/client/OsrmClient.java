@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import java.util.Locale;
+
 
 
 /**
@@ -52,7 +54,7 @@ public class OsrmClient {
                                          double toLat,   double toLng,
                                          String profile) {
         // OSRM: coordinates are lng,lat (not lat,lng)
-        String coordinates = String.format("%f,%f;%f,%f", fromLng, fromLat, toLng, toLat);
+        String coordinates = String.format(Locale.ROOT, "%f,%f;%f,%f", fromLng, fromLat, toLng, toLat);
 
         String url = osrmBaseUrl + "/route/v1/" + profile + "/" + coordinates + "?overview=false";
 
@@ -74,7 +76,7 @@ public class OsrmClient {
 
             double distance = route.path("distance").asDouble();
             double duration = route.path("duration").asDouble();
-            logger.debug("OSRM [{}]: {}m in {}s", profile, (int) distance, (int) duration);
+            logger.debug("OSRM [{}]: {}m in {}s", profile, Math.round(distance), Math.round(duration));
             return new TransportEstimate(distance, duration);
 
         } catch (Exception e) {

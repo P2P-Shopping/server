@@ -5,6 +5,7 @@ import com.p2ps.controller.RoutingResponse;
 import com.p2ps.controller.RoutePoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,13 +26,16 @@ public class RoutingService {
     private final JdbcTemplate jdbcTemplate;
     private final RouteOptimizer optimizer;
     private final RoutingAsyncService asyncService;
+    private final StringRedisTemplate redis;
 
     public RoutingService(JdbcTemplate jdbcTemplate,
                           RouteOptimizer optimizer,
-                          RoutingAsyncService asyncService) {
+                          RoutingAsyncService asyncService,
+                          StringRedisTemplate redis) {
         this.jdbcTemplate = jdbcTemplate;
         this.optimizer = optimizer;
         this.asyncService = asyncService;
+        this.redis = redis;
     }
 
     // -------------------------------------------------------------------------
@@ -95,6 +99,10 @@ public class RoutingService {
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
+
+        // Set pending marker in Redis
+        String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
+        redis.opsForValue().set(pendingKey, "true", RoutingAsyncService.PENDING_TTL);
 
         // Fire-and-forget: 3-opt on full route → Redis
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
@@ -224,23 +232,6 @@ public class RoutingService {
         return locations.stream()
                 .map(l -> new RoutePoint(l.itemId(), l.name(), l.lat(), l.lng()))
                 .toList();
-    }
-
-    // Kept as thin wrappers so existing RoutingServiceTest still compiles without changes
-    double haversine(double lat1, double lng1, double lat2, double lng2) {
-        return optimizer.haversine(lat1, lng1, lat2, lng2);
-    }
-
-    List<RoutePoint> nearestNeighborTSP(RoutePoint start, List<RoutePoint> points) {
-        return optimizer.nearestNeighborTSP(start, points);
-    }
-
-    List<RoutePoint> threeOptImprove(List<RoutePoint> route) {
-        return optimizer.threeOptImprove(route);
-    }
-
-    double routeDistance(List<RoutePoint> route) {
-        return optimizer.routeDistance(route);
     }
 
     public record ProductLocation(String itemId, String name, double lat, double lng, double confidenceScore) {}
