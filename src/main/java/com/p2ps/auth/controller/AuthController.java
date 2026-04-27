@@ -44,14 +44,22 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> me() {
+    public ResponseEntity<Map<String, Object>> me(
+            @RequestHeader(value = "X-Return-Token", required = false) String returnToken) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String email = auth.getName();
         return userService.findByEmail(email)
-                .map(user -> ResponseEntity.ok(toUserResponse(user)))
+                .map(user -> {
+                    Map<String, Object> response = toUserResponse(user);
+                    if ("true".equalsIgnoreCase(returnToken)) {
+                        String token = jwtUtil.generateToken(email, user.getTokenVersion());
+                        response.put("token", token);
+                    }
+                    return ResponseEntity.ok(response);
+                })
                 .orElseGet(() -> {
                     logger.warn("Authenticated user record not found in database.");
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -70,7 +78,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+    public ResponseEntity<Map<String, Object>> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = "X-Return-Token", required = false) String returnToken,
+            HttpServletRequest servletRequest) {
         Authentication auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
@@ -82,11 +93,10 @@ public class AuthController {
                     String token = jwtUtil.generateToken(principalName, user.getTokenVersion());
                     ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
                     Map<String, Object> data = toUserResponse(user);
-                    
-                    if ("true".equalsIgnoreCase(servletRequest.getHeader("X-Return-Token"))) {
+
+                    if ("true".equalsIgnoreCase(returnToken)) {
                         data.put("token", token);
                     }
-                    
                     data.put("message", "Login successful");
                     return ResponseEntity.ok()
                             .header(HttpHeaders.SET_COOKIE, cookie.toString())
