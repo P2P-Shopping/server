@@ -53,9 +53,9 @@ public class AuthController {
         String email = auth.getName();
         return userService.findByEmail(email)
                 .map(user -> {
-                    String token = jwtUtil.generateToken(email, user.getTokenVersion());
                     Map<String, Object> response = toUserResponse(user);
                     if ("true".equalsIgnoreCase(returnToken)) {
+                        String token = jwtUtil.generateToken(email, user.getTokenVersion());
                         response.put("token", token);
                     }
                     return ResponseEntity.ok(response);
