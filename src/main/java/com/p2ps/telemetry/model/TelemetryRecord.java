@@ -30,6 +30,8 @@ public class TelemetryRecord {
     private Double lng;
     private Double accuracyMeters;
 
+    private PingStatus status;
+
     @NotNull
     private Long timestamp;
 
