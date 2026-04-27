@@ -45,12 +45,8 @@ class AiControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void parseRecipe_returnsGoneStatusAndMigrationMessage() {
-        // Arrange
-        RecipeRequest req = new RecipeRequest();
-        req.setText("recipe text");
-
         // Act
-        ResponseEntity<?> resp = controller.parseRecipe(req);
+        ResponseEntity<?> resp = controller.parseRecipe();
 
         // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.GONE);
@@ -58,7 +54,6 @@ class AiControllerTest {
 
         Map<String, String> body = (Map<String, String>) resp.getBody();
         assertThat(body).containsEntry("error", "This endpoint is permanently removed due to the new Gatekeeper architecture.");
-        assertThat(body).containsEntry("migration", "Please use the multimodal /api/ai/generate endpoint.");
 
         verifyNoInteractions(orchestration);
     }

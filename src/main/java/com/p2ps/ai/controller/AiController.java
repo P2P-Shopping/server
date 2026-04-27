@@ -30,7 +30,7 @@ public class AiController {
 
     @Deprecated
     @PostMapping("/recipe-to-list")
-    public ResponseEntity<?> parseRecipe(@Valid @RequestBody RecipeRequest request) {
+    public ResponseEntity<?> parseRecipe() {
         return ResponseEntity.status(HttpStatus.GONE)
                 .header("Deprecation", "true")
                 .body(Map.of(

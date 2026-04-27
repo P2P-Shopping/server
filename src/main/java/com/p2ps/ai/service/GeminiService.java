@@ -1,5 +1,11 @@
 package com.p2ps.ai.service;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.IOException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.catalog.model.ProductCatalog;
@@ -103,35 +109,51 @@ public class GeminiService {
             ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
 
             JsonNode rootNode = objectMapper.readTree(response.getBody());
-            if (rootNode.path("candidates").isMissingNode() || rootNode.path("candidates").isEmpty()) {
+            JsonNode candidates = rootNode.path("candidates");
+            if (candidates.isMissingNode() || candidates.isEmpty()) {
                 throw new AiProcessingException("Google API returned an empty response.");
             }
 
-            // Return the text directly, guarantees a valid JSON
-            return rootNode.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+            JsonNode responseParts = candidates.get(0).path("content").path("parts");
+            if (responseParts.isMissingNode() || responseParts.isEmpty()) {
+                throw new AiProcessingException("Google API returned candidate without text parts.");
+            }
+
+            JsonNode textNode = responseParts.get(0).path("text");
+            if (textNode.isMissingNode() || textNode.asText().trim().isEmpty()) {
+                throw new AiProcessingException("Google API returned an empty text response.");
+            }
+
+            return textNode.asText();
 
         } catch (AiProcessingException e) {
             throw e;
         } catch (Exception e) {
             throw new AiProcessingException("Error during Multimodal AI processing: " + e.getMessage(), e);
         }
-
     }
 
-    // Legacy method
     public String extractIngredientsAsJson(String rawRecipeText) {
         return extractFromMultimodal(null, rawRecipeText);
     }
 
     private String detectMimeTypeSecurely(byte[] bytes) {
-        if (bytes.length >= 8 &&
-                bytes[0] == (byte) 0x89 && bytes[1] == 0x50 &&
-                bytes[2] == 0x4E && bytes[3] == 0x47) {
-            return "image/png";
-        }
-        if (bytes.length >= 2 &&
-                bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8) {
-            return "image/jpeg";
+        try (InputStream is = new ByteArrayInputStream(bytes);
+             ImageInputStream iis = ImageIO.createImageInputStream(is)) {
+            if (iis == null) return null;
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+            if (!readers.hasNext()) return null;
+
+            ImageReader reader = readers.next();
+            try {
+                String format = reader.getFormatName().toLowerCase();
+                if (format.equals("png")) return "image/png";
+                if (format.equals("jpeg") || format.equals("jpg")) return "image/jpeg";
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException ignored) {
+            // Return null if parsing fails
         }
         return null;
     }

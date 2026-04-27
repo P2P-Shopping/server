@@ -33,8 +33,18 @@ class GeminiServiceTest {
     private GeminiService geminiService;
     private RestTemplate restTemplate;
 
+    // Semnătură reală și suficient de lungă de PNG (1x1 pixel transparent)
+    // pentru a trece de validarea strictă cu ImageIO
     private static final byte[] VALID_PNG = new byte[]{
-            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, (byte) 0xC4,
+            (byte) 0x89, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41,
+            0x54, 0x08, (byte) 0x99, 0x63, 0x60, 0x00, 0x02, 0x00,
+            0x00, 0x05, 0x00, 0x01, 0x22, 0x26, 0x05, (byte) 0xC3,
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
+            (byte) 0xAE, 0x42, 0x60, (byte) 0x82
     };
 
     @BeforeEach
@@ -78,6 +88,20 @@ class GeminiServiceTest {
     }
 
     @Test
+    void whenNoParts_shouldThrow() {
+        when(catalogService.getTopPopularProducts()).thenReturn(List.of());
+        // JSON care nu are array-ul de "parts" înăuntru
+        String googleResponse = "{\"candidates\":[{\"content\":{}}]}";
+
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(googleResponse));
+
+        assertThatThrownBy(() -> geminiService.extractIngredientsAsJson("text"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("Google API returned candidate without text parts.");
+    }
+
+    @Test
     void success_withTextOnly_returnsParsedJson() {
         ProductCatalog mockProduct = new ProductCatalog();
         mockProduct.setId(UUID.randomUUID());
@@ -105,18 +129,20 @@ class GeminiServiceTest {
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(googleResponse));
 
+        // Folosim VALID_PNG pentru a trece de noul detector cu ImageIO
         MockMultipartFile mockImage = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
 
-        String result = geminiService.extractFromMultimodal(mockImage, "Ce am in frigider?");
+        String result = geminiService.extractFromMultimodal(mockImage, "Ce am în frigider?");
 
         assertThat(result).isEqualTo(innerJson);
     }
 
     @Test
     void extractFromMultimodal_withInvalidImageSpoofing_throwsException() {
+        // Trimitem date false (care vor pica la parsarea ImageIO)
         MockMultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
 
-        assertThatThrownBy(() -> geminiService.extractFromMultimodal(fakeImage, "Ce am în poza?"))
+        assertThatThrownBy(() -> geminiService.extractFromMultimodal(fakeImage, "Ce am în poză?"))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("Unsupported or corrupted image format");
     }
