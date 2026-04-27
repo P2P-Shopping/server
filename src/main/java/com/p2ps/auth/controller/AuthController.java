@@ -51,7 +51,12 @@ public class AuthController {
         }
         String email = auth.getName();
         return userService.findByEmail(email)
-                .map(user -> ResponseEntity.ok(toUserResponse(user)))
+                .map(user -> {
+                    String token = jwtUtil.generateToken(email, user.getTokenVersion());
+                    Map<String, Object> response = toUserResponse(user);
+                    response.put("token", token);
+                    return ResponseEntity.ok(response);
+                })
                 .orElseGet(() -> {
                     logger.warn("Authenticated user record not found in database.");
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -83,10 +88,7 @@ public class AuthController {
                     ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
                     Map<String, Object> data = toUserResponse(user);
                     
-                    if ("true".equalsIgnoreCase(servletRequest.getHeader("X-Return-Token"))) {
-                        data.put("token", token);
-                    }
-                    
+                    data.put("token", token);
                     data.put("message", "Login successful");
                     return ResponseEntity.ok()
                             .header(HttpHeaders.SET_COOKIE, cookie.toString())
