@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS shopping_lists (
     CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+CREATE TABLE IF NOT EXISTS shopping_list_collaborators (
+    shopping_list_id UUID NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY (shopping_list_id, user_id),
+    CONSTRAINT fk_collaborators_list FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE,
+    CONSTRAINT fk_collaborators_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+
 ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'NORMAL';
 ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
 ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS final_store VARCHAR(255);
@@ -54,3 +63,5 @@ CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_catalog ON items(catalog_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_purchase_count ON p2p_product_catalog(purchase_count DESC);
+CREATE INDEX IF NOT EXISTS idx_collaborators_user ON shopping_list_collaborators(user_id);
+
