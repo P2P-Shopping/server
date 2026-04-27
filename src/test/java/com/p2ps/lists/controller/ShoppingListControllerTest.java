@@ -3,10 +3,13 @@ package com.p2ps.lists.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.exception.GlobalExceptionHandler;
 import com.p2ps.lists.dto.CreateListRequest;
+import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.dto.UpdateListRequest;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
+import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.service.ShoppingListService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -29,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -58,11 +63,13 @@ class ShoppingListControllerTest {
         UUID listId = UUID.randomUUID();
         response.setId(listId);
         response.setTitle("Weekly groceries");
+        response.setCategory(ListCategory.NORMAL);
 
         CreateListRequest request = new CreateListRequest();
         request.setTitle("Weekly groceries");
+        request.setCategory(ListCategory.NORMAL);
 
-        when(shoppingListService.createList("Weekly groceries", "ana@example.com")).thenReturn(response);
+        when(shoppingListService.createList("Weekly groceries", "ana@example.com", ListCategory.NORMAL, null)).thenReturn(response);
 
         mockMvc.perform(post("/api/lists")
                         .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
@@ -72,7 +79,7 @@ class ShoppingListControllerTest {
                 .andExpect(jsonPath("$.id").value(listId.toString()))
                 .andExpect(jsonPath("$.title").value("Weekly groceries"));
 
-        verify(shoppingListService).createList("Weekly groceries", "ana@example.com");
+        verify(shoppingListService).createList("Weekly groceries", "ana@example.com", ListCategory.NORMAL, null);
     }
 
     @Test
@@ -87,7 +94,7 @@ class ShoppingListControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Validation Error"));
 
-        verify(shoppingListService, never()).createList(eq(" "), eq("ana@example.com"));
+        verify(shoppingListService, never()).createList(any(), any(), any(), any());
     }
 
     @Test
@@ -95,7 +102,7 @@ class ShoppingListControllerTest {
         CreateListRequest request = new CreateListRequest();
         request.setTitle("Weekly groceries");
 
-        when(shoppingListService.createList("Weekly groceries", "ana@example.com"))
+        when(shoppingListService.createList("Weekly groceries", "ana@example.com", null, null))
                 .thenThrow(new ListUserNotFoundException("User not found"));
 
         mockMvc.perform(post("/api/lists")
@@ -105,6 +112,34 @@ class ShoppingListControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Unauthorized"))
                 .andExpect(jsonPath("$.details").value("User not found"));
+    }
+    
+    @Test
+    void updateListShouldReturnUpdatedList() throws Exception {
+        UUID listId = UUID.randomUUID();
+        
+        ShoppingListDTO response = new ShoppingListDTO();
+        response.setId(listId);
+        response.setTitle("New Title");
+        response.setFinalStore("Lidl");
+
+        UpdateListRequest request = new UpdateListRequest();
+        request.setTitle("New Title");
+        request.setFinalStore("Lidl");
+
+        when(shoppingListService.updateList(eq(listId), any(ShoppingListDTO.class), eq("ana@example.com")))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/lists/{listId}", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(listId.toString()))
+                .andExpect(jsonPath("$.title").value("New Title"))
+                .andExpect(jsonPath("$.finalStore").value("Lidl"));
+
+        verify(shoppingListService).updateList(eq(listId), any(ShoppingListDTO.class), eq("ana@example.com"));
     }
 
     @Test
@@ -215,4 +250,47 @@ class ShoppingListControllerTest {
         verify(shoppingListService).getListById(listId, "ana@example.com");
     }
 
+    @Test
+    void importItemsShouldReturnUpdatedList() throws Exception {
+        UUID currentListId = UUID.randomUUID();
+        UUID sourceListId = UUID.randomUUID();
+        
+        ShoppingListDTO response = new ShoppingListDTO();
+        response.setId(currentListId);
+        response.setTitle("Merged List");
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sourceListId);
+
+        when(shoppingListService.importItems(eq(currentListId), any(ImportItemsRequestDTO.class), eq("ana@example.com")))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/lists/{currentListId}/import", currentListId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(currentListId.toString()))
+                .andExpect(jsonPath("$.title").value("Merged List"));
+
+        verify(shoppingListService).importItems(eq(currentListId), any(ImportItemsRequestDTO.class), eq("ana@example.com"));
+    }
+    
+    @Test
+    void importItemsShouldReturnBadRequestWhenSourceListIdIsNull() throws Exception {
+        UUID currentListId = UUID.randomUUID();
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        // sourceListId is null
+        request.setSourceListId(null);
+
+        mockMvc.perform(post("/api/lists/{currentListId}/import", currentListId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation Error"));
+
+        verify(shoppingListService, never()).importItems(any(), any(), any());
+    }
 }

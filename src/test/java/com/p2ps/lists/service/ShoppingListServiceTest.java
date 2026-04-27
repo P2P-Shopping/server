@@ -3,12 +3,16 @@ package com.p2ps.lists.service;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import java.math.BigDecimal;
+
+import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
+import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
+import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,11 +25,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +43,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ItemRepository itemRepository;
 
     @InjectMocks
     private ShoppingListService shoppingListService;
@@ -50,14 +59,16 @@ class ShoppingListServiceTest {
         savedList.setId(listId);
         savedList.setTitle("Weekly groceries");
         savedList.setUser(user);
+        savedList.setCategory(ListCategory.NORMAL);
 
         when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
         when(shoppingListRepository.save(any(ShoppingList.class))).thenReturn(savedList);
 
-        ShoppingListDTO result = shoppingListService.createList("Weekly groceries", userEmail);
+        ShoppingListDTO result = shoppingListService.createList("Weekly groceries", userEmail, ListCategory.NORMAL, null);
 
         assertEquals(listId, result.getId());
         assertEquals("Weekly groceries", result.getTitle());
+        assertEquals(ListCategory.NORMAL, result.getCategory());
         verify(shoppingListRepository).save(any(ShoppingList.class));
     }
 
@@ -67,9 +78,65 @@ class ShoppingListServiceTest {
         when(userRepository.findByEmail(userEmail)).thenReturn(Optional.empty());
 
         assertThrows(ListUserNotFoundException.class,
-                () -> shoppingListService.createList("Weekly groceries", userEmail));
+                () -> shoppingListService.createList("Weekly groceries", userEmail, ListCategory.NORMAL, null));
 
         verify(shoppingListRepository, never()).save(any(ShoppingList.class));
+    }
+
+    @Test
+    void updateListShouldUpdateFieldsAndSave() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        UUID listId = UUID.randomUUID();
+
+        ShoppingList existingList = new ShoppingList();
+        existingList.setId(listId);
+        existingList.setTitle("Old Title");
+        existingList.setUser(user);
+        
+        ShoppingListDTO updateDto = new ShoppingListDTO();
+        updateDto.setTitle("New Title");
+        updateDto.setCategory(ListCategory.FREQUENT);
+        updateDto.setSubcategory("Alimente");
+        updateDto.setFinalStore("Kaufland");
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(existingList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        ShoppingListDTO result = shoppingListService.updateList(listId, updateDto, userEmail);
+        
+        assertEquals("New Title", result.getTitle());
+        assertEquals(ListCategory.FREQUENT, result.getCategory());
+        assertEquals("Alimente", result.getSubcategory());
+        assertEquals("Kaufland", result.getFinalStore());
+        verify(shoppingListRepository).save(existingList);
+    }
+
+    @Test
+    void updateListShouldResetOptionalFieldsWhenEmptyString() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        UUID listId = UUID.randomUUID();
+
+        ShoppingList existingList = new ShoppingList();
+        existingList.setId(listId);
+        existingList.setTitle("Old Title");
+        existingList.setUser(user);
+        existingList.setSubcategory("Alimente");
+        existingList.setFinalStore("Kaufland");
+        
+        ShoppingListDTO updateDto = new ShoppingListDTO();
+        updateDto.setSubcategory("");
+        updateDto.setFinalStore("");
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(existingList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        ShoppingListDTO result = shoppingListService.updateList(listId, updateDto, userEmail);
+        
+        assertNull(result.getSubcategory());
+        assertNull(result.getFinalStore());
+        verify(shoppingListRepository).save(existingList);
     }
 
     @Test
@@ -198,6 +265,106 @@ class ShoppingListServiceTest {
 
         assertThrows(ListAccessDeniedException.class,
                 () -> shoppingListService.getListById(listId, "ana@example.com"));
+    }
+    
+    @Test
+    void importItemsShouldCopyAllItemsWhenNoItemIdsProvided() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+
+        UUID currentListId = UUID.randomUUID();
+        ShoppingList currentList = new ShoppingList();
+        currentList.setId(currentListId);
+        currentList.setUser(user);
+
+        UUID sourceListId = UUID.randomUUID();
+        ShoppingList sourceList = new ShoppingList();
+        sourceList.setId(sourceListId);
+        sourceList.setUser(user);
+
+        Item item1 = new Item();
+        item1.setId(UUID.randomUUID());
+        item1.setName("Item 1");
+
+        Item item2 = new Item();
+        item2.setId(UUID.randomUUID());
+        item2.setName("Item 2");
+
+        sourceList.getItems().addAll(List.of(item1, item2));
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sourceListId);
+
+        when(shoppingListRepository.findById(currentListId)).thenReturn(Optional.of(currentList));
+        when(shoppingListRepository.findById(sourceListId)).thenReturn(Optional.of(sourceList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
+
+        verify(itemRepository, times(2)).save(any(Item.class));
+        assertEquals(2, result.getItems().size());
+        assertTrue(result.getItems().stream().anyMatch(i -> i.getName().equals("Item 1")));
+        assertTrue(result.getItems().stream().anyMatch(i -> i.getName().equals("Item 2")));
+    }
+
+    @Test
+    void importItemsShouldCopyOnlySpecificItemsWhenItemIdsProvided() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+
+        UUID currentListId = UUID.randomUUID();
+        ShoppingList currentList = new ShoppingList();
+        currentList.setId(currentListId);
+        currentList.setUser(user);
+
+        UUID sourceListId = UUID.randomUUID();
+        ShoppingList sourceList = new ShoppingList();
+        sourceList.setId(sourceListId);
+        sourceList.setUser(user);
+
+        Item item1 = new Item();
+        item1.setId(UUID.randomUUID());
+        item1.setName("Item 1");
+
+        Item item2 = new Item();
+        item2.setId(UUID.randomUUID());
+        item2.setName("Item 2");
+
+        sourceList.getItems().addAll(List.of(item1, item2));
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sourceListId);
+        request.setItemIds(List.of(item1.getId()));
+
+        when(shoppingListRepository.findById(currentListId)).thenReturn(Optional.of(currentList));
+        when(shoppingListRepository.findById(sourceListId)).thenReturn(Optional.of(sourceList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
+
+        verify(itemRepository, times(1)).save(any(Item.class));
+        assertEquals(1, result.getItems().size());
+        assertEquals("Item 1", result.getItems().get(0).getName());
+    }
+
+    @Test
+    void importItemsShouldThrowWhenSourceListIdIsNull() {
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        // sourceListId is null
+
+        UUID currentListId = UUID.randomUUID();
+        assertThrows(IllegalArgumentException.class,
+            () -> shoppingListService.importItems(currentListId, request, "ana@example.com"));
+    }
+
+    @Test
+    void importItemsShouldThrowWhenImportingToSameList() {
+        UUID sameId = UUID.randomUUID();
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sameId);
+
+        assertThrows(IllegalArgumentException.class,
+            () -> shoppingListService.importItems(sameId, request, "ana@example.com"));
     }
 
     @Test
