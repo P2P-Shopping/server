@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import jakarta.annotation.PostConstruct;
 
 @RestController
 @RequestMapping("/api/routing")
@@ -34,9 +35,13 @@ public class RoutingController {
     private static final Duration DEFAULT_COOLDOWN = Duration.ofMinutes(1);
     private static final int DEFAULT_GUARD_MAX_SIZE = 10000;
 
-    private final Duration recalculationCooldown;
-    private final int recalculationGuardMaxSize;
-    private final Cache<String, Instant> recalculationGuard;
+    @Value("${routing.recalculation.cooldown:" + DEFAULT_COOLDOWN_STR + "}")
+    private Duration recalculationCooldown;
+
+    @Value("${routing.recalculation.guard.max-size:" + DEFAULT_GUARD_MAX_SIZE + "}")
+    private int recalculationGuardMaxSize;
+
+    private Cache<String, Instant> recalculationGuard;
 
     private final RoutingService routingService;
     private final MacroRoutingService macroRoutingService;
@@ -51,19 +56,19 @@ public class RoutingController {
             StoreInventoryMapRepository inventoryMapRepository,
             LocationProcessorWorker locationProcessorWorker,
             StringRedisTemplate redis,
-            ObjectMapper objectMapper,
-            @Value("${routing.recalculation.cooldown:" + DEFAULT_COOLDOWN_STR + "}") Duration recalculationCooldown,
-            @Value("${routing.recalculation.guard.max-size:" + DEFAULT_GUARD_MAX_SIZE + "}") int recalculationGuardMaxSize) {
+            ObjectMapper objectMapper) {
         this.routingService = routingService;
         this.macroRoutingService = macroRoutingService;
         this.inventoryMapRepository = inventoryMapRepository;
         this.locationProcessorWorker = locationProcessorWorker;
         this.redis = redis;
         this.objectMapper = objectMapper;
-        this.recalculationCooldown = recalculationCooldown != null ? recalculationCooldown : DEFAULT_COOLDOWN;
-        this.recalculationGuardMaxSize = recalculationGuardMaxSize;
+    }
+
+    @PostConstruct
+    public void init() {
         this.recalculationGuard = Caffeine.newBuilder()
-                .expireAfterWrite(this.recalculationCooldown)
+                .expireAfterWrite(this.recalculationCooldown != null ? this.recalculationCooldown : DEFAULT_COOLDOWN)
                 .maximumSize(this.recalculationGuardMaxSize)
                 .build();
     }
@@ -108,9 +113,6 @@ public class RoutingController {
             return ResponseEntity.ok(response);
         } catch (JsonProcessingException e) {
             logger.error("Failed to parse route JSON from Redis: routeId={}", routeId, e);
-            return ResponseEntity.internalServerError().build();
-        } catch (IOException e) {
-            logger.error("IO error reading route from Redis: routeId={}", routeId, e);
             return ResponseEntity.internalServerError().build();
         }
     }

@@ -50,7 +50,9 @@ public class MacroRoutingService {
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId.replaceAll("[\r\n]", ""));
+        if (logger.isInfoEnabled()) {
+            logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId.replaceAll("[\r\n]", ""));
+        }
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
                 () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
@@ -81,7 +83,7 @@ public class MacroRoutingService {
         UUID uuid;
         try {
             uuid = UUID.fromString(storeId);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             logger.warn("Invalid storeId UUID: {}", storeId.replaceAll("[\r\n]", ""));
             return new double[0];
         }

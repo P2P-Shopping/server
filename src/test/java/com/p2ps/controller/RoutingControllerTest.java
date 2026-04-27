@@ -5,7 +5,6 @@ import com.p2ps.model.StoreInventoryMap;
 import com.p2ps.repository.StoreInventoryMapRepository;
 import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.service.MacroRoutingService;
-import com.p2ps.service.RoutingAsyncService;
 import com.p2ps.service.RoutingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,10 +50,12 @@ class RoutingControllerTest {
                 inventoryMapRepository,
                 locationProcessorWorker,
                 redis,
-                objectMapper,
-                Duration.ofMinutes(1),
-                10000
+                objectMapper
         );
+        // Manually trigger @PostConstruct for the test
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "recalculationCooldown", Duration.ofMinutes(1));
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "recalculationGuardMaxSize", 10000);
+        controller.init();
     }
 
     @Test
