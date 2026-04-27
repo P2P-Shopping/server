@@ -33,8 +33,6 @@ class GeminiServiceTest {
     private GeminiService geminiService;
     private RestTemplate restTemplate;
 
-    // Semnătură reală și suficient de lungă de PNG (1x1 pixel transparent)
-    // pentru a trece de validarea strictă cu ImageIO
     private static final byte[] VALID_PNG = new byte[]{
             (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
             0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -90,7 +88,6 @@ class GeminiServiceTest {
     @Test
     void whenNoParts_shouldThrow() {
         when(catalogService.getTopPopularProducts()).thenReturn(List.of());
-        // JSON care nu are array-ul de "parts" înăuntru
         String googleResponse = "{\"candidates\":[{\"content\":{}}]}";
 
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
@@ -129,7 +126,6 @@ class GeminiServiceTest {
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(googleResponse));
 
-        // Folosim VALID_PNG pentru a trece de noul detector cu ImageIO
         MockMultipartFile mockImage = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
 
         String result = geminiService.extractFromMultimodal(mockImage, "Ce am în frigider?");
@@ -139,11 +135,41 @@ class GeminiServiceTest {
 
     @Test
     void extractFromMultimodal_withInvalidImageSpoofing_throwsException() {
-        // Trimitem date false (care vor pica la parsarea ImageIO)
         MockMultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
 
         assertThatThrownBy(() -> geminiService.extractFromMultimodal(fakeImage, "Ce am în poză?"))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("Unsupported or corrupted image format");
+    }
+
+    @Test
+    void whenTextIsEmpty_shouldThrow() {
+        when(catalogService.getTopPopularProducts()).thenReturn(List.of());
+
+        String googleResponse = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"   \"}]}}]}";
+
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(googleResponse));
+
+        assertThatThrownBy(() -> geminiService.extractIngredientsAsJson("text"))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("Google API returned an empty text response.");
+    }
+
+    @Test
+    void success_withImageAndNullText_usesFallbackPromptAndReturnsJson() {
+        when(catalogService.getTopPopularProducts()).thenReturn(List.of());
+
+        String innerJson = "{\"listType\":\"RECIPE\",\"items\":[]}";
+        String googleResponse = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"" + innerJson.replace("\"", "\\\"") + "\"}]}}]}";
+
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(googleResponse));
+
+        MockMultipartFile mockImage = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
+
+        String result = geminiService.extractFromMultimodal(mockImage, null);
+
+        assertThat(result).isEqualTo(innerJson);
     }
 }

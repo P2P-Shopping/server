@@ -138,4 +138,20 @@ class AiControllerTest {
         verify(imageValidator, times(1)).detectImageFormat(image);
         verify(orchestration, times(1)).generateShoppingItems(image, "What is this?");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void generateListMultimodal_whenImageIsEmptyByteAndTextIsNull_returnsBadRequest() {
+        MultipartFile emptyImage = new MockMultipartFile("image", new byte[0]);
+
+        // Act
+        ResponseEntity<?> resp = controller.generateListMultimodal(emptyImage, null, principal);
+
+        // Assert
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        Map<String, String> body = (Map<String, String>) resp.getBody();
+        assertThat(body).containsEntry("error", "You have to send a text or an image.");
+        verifyNoInteractions(orchestration);
+    }
 }
