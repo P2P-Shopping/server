@@ -3,6 +3,7 @@ package com.p2ps.lists.controller;
 import com.p2ps.lists.dto.CreateListRequest;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.dto.ShareListRequest;
 import com.p2ps.lists.dto.UpdateListRequest;
 import com.p2ps.lists.service.ShoppingListService;
 import jakarta.validation.Valid;
@@ -33,20 +34,17 @@ public class ShoppingListController {
                 request.getTitle(), userEmail, request.getCategory(), request.getSubcategory());
         return ResponseEntity.status(HttpStatus.CREATED).body(createdList);
     }
-    
     @PatchMapping("/{listId}")
     public ResponseEntity<ShoppingListDTO> updateList(
             @PathVariable UUID listId,
             @Valid @RequestBody UpdateListRequest request,
             Authentication authentication) {
         String userEmail = authentication.getName();
-        
         ShoppingListDTO updateDto = new ShoppingListDTO();
         updateDto.setTitle(request.getTitle());
         updateDto.setCategory(request.getCategory());
         updateDto.setSubcategory(request.getSubcategory());
         updateDto.setFinalStore(request.getFinalStore());
-        
         ShoppingListDTO updatedList = shoppingListService.updateList(listId, updateDto, userEmail);
         return ResponseEntity.ok(updatedList);
     }
@@ -75,7 +73,15 @@ public class ShoppingListController {
         shoppingListService.deleteList(listId, authentication.getName());
         return ResponseEntity.noContent().build();
     }
-    
+
+    @PostMapping("/{listId}/share")
+    public ResponseEntity<Void> shareList(
+            @PathVariable UUID listId,
+            @Valid @RequestBody ShareListRequest request,
+            Authentication authentication) {
+        shoppingListService.shareList(listId, request.getEmail(), authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
     @PostMapping("/{currentListId}/import")
     public ResponseEntity<ShoppingListDTO> importItems(
             @PathVariable UUID currentListId,

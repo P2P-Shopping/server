@@ -40,7 +40,7 @@ public class ItemService {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        if (!list.canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 
@@ -65,7 +65,7 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
-        if (!item.getShoppingList().getUser().getEmail().equals(userEmail)) {
+        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
         }
 
@@ -111,7 +111,7 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
-        if (!item.getShoppingList().getUser().getEmail().equals(userEmail)) {
+        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to delete this item");
         }
 
@@ -148,7 +148,7 @@ public class ItemService {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        if (!list.canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 

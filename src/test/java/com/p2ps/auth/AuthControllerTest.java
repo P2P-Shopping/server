@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,11 +31,11 @@ import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(properties = {
         "jwt.secret=test-secret-key-care-trebuie-sgdughghfyufdhgisjaLEWjroihesiutheroijgtrhyjktrnhjgdfngui54y645t785htguh3uhath4ruhtrsdnfkjzrenrwewnfwekwa-fie-foarte-lunga-32-chars",
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc(addFilters = false)
@@ -105,20 +104,41 @@ class AuthControllerTest {
         when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
+                        .header("X-Return-Token", "true")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Set-Cookie", containsString("jwt-token=mocked-jwt-token-123")))
                 .andExpect(header().string("Set-Cookie", containsString("Path=/")))
                 .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
-                .andExpect(content().json("""
-                        {
-                          "message": "Login successful",
-                          "email": "test@example.com",
-                          "firstName": "John",
-                          "userId": "1"
-                        }
-                        """));
+                .andExpect(jsonPath("$.token").value("mocked-jwt-token-123"))
+                .andExpect(jsonPath("$.message").value("Login successful"))
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.userId").value("1"));
+    }
+
+    @Test
+    void login_ShouldOmitToken_WhenHeaderIsMissing() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@example.com");
+        request.setPassword("Password123!");
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Users mockUser = new Users();
+        mockUser.setEmail(request.getEmail());
+        mockUser.setFirstName("John");
+        mockUser.setId(1);
+
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
+        when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
+        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").doesNotExist());
     }
 
     @Test

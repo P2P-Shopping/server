@@ -26,6 +26,7 @@ public class ShoppingListService {
 
     private final ShoppingListRepository shoppingListRepository;
     private final UserRepository userRepository;
+    private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
     private final ItemRepository itemRepository;
 
     public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository) {
@@ -47,23 +48,21 @@ public class ShoppingListService {
             newList.setCategory(category);
         }
         newList.setSubcategory(subcategory);
-
         ShoppingList savedList = shoppingListRepository.save(newList);
 
         return mapToDTO(savedList);
     }
-    
+
     @Transactional
     public ShoppingListDTO updateList(UUID listId, ShoppingListDTO updateDto, String userEmail) {
         ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
-        
+
         if (updateDto.getTitle() != null) {
             list.setTitle(updateDto.getTitle());
         }
         if (updateDto.getCategory() != null) {
             list.setCategory(updateDto.getCategory());
         }
-        
         // Permite resetarea valorilor optionale (subcategory si finalStore) doar
         // daca se trimit in DTO. Intrucat `UpdateListRequest` e JSON, DTO-ul ar putea sa foloseasca
         // JsonNullable pt a distinge intre explicit null si camp lipsa, dar
@@ -75,14 +74,14 @@ public class ShoppingListService {
         if (updateDto.getFinalStore() != null) {
             list.setFinalStore(updateDto.getFinalStore().isEmpty() ? null : updateDto.getFinalStore());
         }
-        
+
         ShoppingList savedList = shoppingListRepository.save(list);
         return mapToDTO(savedList);
     }
 
     @Transactional(readOnly = true)
     public List<ShoppingListDTO> getUserLists(String userEmail) {
-        return shoppingListRepository.findByUser_Email(userEmail)
+        return shoppingListRepository.findAccessibleByEmail(userEmail)
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
@@ -90,7 +89,13 @@ public class ShoppingListService {
 
     @Transactional
     public void deleteList(java.util.UUID listId, String userEmail) {
-        ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
+
+        if (!list.getUser().getEmail().equals(userEmail)) {
+            throw new ListAccessDeniedException("Only the owner can delete this list");
+        }
+
         shoppingListRepository.delete(list);
     }
 
@@ -99,28 +104,28 @@ public class ShoppingListService {
         ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
         return mapToDTO(list);
     }
-    
+
     @Transactional
     public ShoppingListDTO importItems(UUID currentListId, ImportItemsRequestDTO request, String userEmail) {
         if (request.getSourceListId() == null) {
             throw new IllegalArgumentException("Source list ID cannot be null");
         }
-        
+
         if (currentListId.equals(request.getSourceListId())) {
             throw new IllegalArgumentException("Cannot import items from the same list into itself");
         }
 
         ShoppingList currentList = getListEntityByIdAndUser(currentListId, userEmail);
         ShoppingList sourceList = getListEntityByIdAndUser(request.getSourceListId(), userEmail);
-        
+
         List<Item> itemsToImport = sourceList.getItems();
-        
+
         if (request.getItemIds() != null && !request.getItemIds().isEmpty()) {
             itemsToImport = itemsToImport.stream()
                 .filter(item -> request.getItemIds().contains(item.getId()))
                 .toList();
         }
-        
+
         for (Item item : itemsToImport) {
             Item newItem = new Item();
             newItem.setName(item.getName());
@@ -131,22 +136,46 @@ public class ShoppingListService {
             newItem.setRecurrent(item.isRecurrent());
             newItem.setShoppingList(currentList);
             newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-            
+
             itemRepository.save(newItem);
             currentList.getItems().add(newItem);
         }
-        
+
         return mapToDTO(shoppingListRepository.save(currentList));
     }
-    
+
     private ShoppingList getListEntityByIdAndUser(UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
-        if (!list.getUser().getEmail().equals(userEmail)) {
+        boolean isOwner = list.getUser().getEmail().equals(userEmail);
+        boolean isCollaborator = list.getCollaborators().stream()
+                .anyMatch(c -> c.getEmail().equals(userEmail));
+
+        if (!isOwner && !isCollaborator) {
             throw new ListAccessDeniedException("You do not have permission to view this list");
         }
         return list;
+    }
+
+    @Transactional
+    public void shareList(java.util.UUID listId, String collaboratorEmail, String ownerEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
+
+        if (!list.getUser().getEmail().equals(ownerEmail)) {
+            throw new ListAccessDeniedException("Only the owner can share this list");
+        }
+
+        if (collaboratorEmail.equals(ownerEmail)) {
+            throw new IllegalArgumentException("Cannot share list with owner");
+        }
+
+        Users collaborator = userRepository.findByEmail(collaboratorEmail)
+                .orElseThrow(() -> new ListUserNotFoundException("Collaborator user not found"));
+
+        list.getCollaborators().add(collaborator);
+        shoppingListRepository.save(list);
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {
