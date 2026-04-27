@@ -2,6 +2,7 @@ package com.p2ps.ai.service;
 
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.service.ItemService;
 import com.p2ps.lists.service.ShoppingListService;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class AiPersistenceServiceTest {
         aiPersistenceService.createListAndPopulateItems(existingListId, null, List.of(item), "user@test.com");
 
         // Assert
-        verify(shoppingListService, never()).createList(anyString(), anyString()); // Nu s-a creat listă nouă
+        verify(shoppingListService, never()).createList(anyString(), anyString(), any(), any()); // Nu s-a creat listă nouă
         verify(itemService, times(1)).addItemsToList(eq(existingListId), anyList(), eq("user@test.com"));
     }
 
@@ -57,13 +58,13 @@ class AiPersistenceServiceTest {
         ShoppingListDTO mockNewList = new ShoppingListDTO();
         mockNewList.setId(newListId);
 
-        when(shoppingListService.createList(anyString(), eq("user@test.com"))).thenReturn(mockNewList);
+        when(shoppingListService.createList(anyString(), eq("user@test.com"), eq(ListCategory.NORMAL), isNull())).thenReturn(mockNewList);
 
         // Act
         aiPersistenceService.createListAndPopulateItems(null, "My New List", List.of(item), "user@test.com");
 
         // Assert
-        verify(shoppingListService, times(1)).createList(eq("My New List"), eq("user@test.com"));
+        verify(shoppingListService, times(1)).createList(eq("My New List"), eq("user@test.com"), eq(ListCategory.NORMAL), isNull());
         verify(itemService, times(1)).addItemsToList(eq(newListId), anyList(), eq("user@test.com"));
     }
 }

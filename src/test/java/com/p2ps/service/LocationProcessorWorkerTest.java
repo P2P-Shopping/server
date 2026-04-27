@@ -95,10 +95,15 @@ class LocationProcessorWorkerTest {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
+        reset(dataSource); // Resetați datasource dacă ar exista alte mock-uri preexistente din rulări
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
+        // Initialize the worker to detect database type
+        worker.initialize();
+
+        reset(jdbcTemplate);
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Database error during update"));
 
@@ -123,10 +128,30 @@ class LocationProcessorWorkerTest {
     }
 
     @Test
-    @DisplayName("Trebuie să returneze false dacă apare SQLException")
-    void isPostgreSQL_SQLException() throws Exception {
+    @DisplayName("Trebuie să returneze false dacă apare SQLException la detectDatabaseType")
+    void isPostgreSQL_SQLException_At_Init() throws Exception {
         when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
-        worker.processAndCalculateCenters();
+        
+        // Vrem să creăm un NOU worker specific acestui test, ca să aibă failure count-ul de la 0 la 3 intact
+        LocationProcessorWorker customWorker = new LocationProcessorWorker(jdbcTemplate, dataSource);
+        
+        // Should catch the exception and disable postgres features
+        customWorker.initialize();
+        
+        // This should short-circuit and not execute SQL
+        customWorker.processAndCalculateCenters();
+        verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    @DisplayName("Trebuie să returneze false dacă apare SQLException in runtime")
+    void isPostgreSQL_SQLException_Runtime() throws Exception {
+        // Vrem să creăm un NOU worker specific acestui test
+        LocationProcessorWorker customWorker = new LocationProcessorWorker(jdbcTemplate, dataSource);
+        
+        // Nu chemam initialize, vrem sa vedem cum se comporta isPostgreSQL cand prinde exceptia prima oara la un call de runtime
+        when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
+        customWorker.processAndCalculateCenters();
         verify(jdbcTemplate, never()).update(anyString());
     }
 
@@ -175,6 +200,9 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
+        // Initialize the worker to detect database type
+        worker.initialize();
+
         worker.recalculateSingleItem(storeId, itemId).join();
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
@@ -187,14 +215,22 @@ class LocationProcessorWorkerTest {
         UUID storeId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
+        // Cream un worker nou si curat special pentru a nu mosteni un "postgresDetected = false" din rulari anterioare (static/state bleed)
+        LocationProcessorWorker cleanWorker = new LocationProcessorWorker(jdbcTemplate, dataSource);
+        
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+        
+        // Initialize the worker to detect database type
+        cleanWorker.initialize();
+        
+        reset(jdbcTemplate);
         when(jdbcTemplate.update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId)))
                 .thenThrow(new RuntimeException("Fail"));
 
         long before = LocationProcessorWorker.getRapidRecalculationFailures();
-        CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
+        CompletableFuture<Void> future = cleanWorker.recalculateSingleItem(storeId, itemId);
         assertThrows(CompletionException.class, future::join);
         assertEquals(before + 1, LocationProcessorWorker.getRapidRecalculationFailures());
     }
@@ -208,6 +244,9 @@ class LocationProcessorWorkerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("H2");
+
+        // Initialize the worker to detect database type
+        worker.initialize();
 
         CompletableFuture<Void> future = worker.recalculateSingleItem(storeId, itemId);
 

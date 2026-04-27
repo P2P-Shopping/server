@@ -21,6 +21,16 @@ public class ShoppingList {
     @Column(nullable = false)
     private String title;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category", length = 50, nullable = false)
+    private ListCategory category = ListCategory.NORMAL;
+
+    @Column(name = "subcategory", length = 100)
+    private String subcategory;
+
+    @Column(name = "final_store", length = 255)
+    private String finalStore;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private Users user;
