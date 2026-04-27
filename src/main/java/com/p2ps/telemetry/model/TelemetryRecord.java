@@ -35,7 +35,6 @@ public class TelemetryRecord {
     @NotNull
     private Long timestamp;
 
-    private PingStatus status;
 
     @Indexed(expireAfter = "94608000s") //expires after 3 years
     private Instant serverReceivedTimestamp;
