@@ -50,7 +50,7 @@ public class MacroRoutingService {
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId);
+        logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId.replaceAll("[\r\n]", ""));
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
                 () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
@@ -82,7 +82,7 @@ public class MacroRoutingService {
         try {
             uuid = UUID.fromString(storeId);
         } catch (IllegalArgumentException e) {
-            logger.warn("Invalid storeId UUID: {}", storeId);
+            logger.warn("Invalid storeId UUID: {}", storeId.replaceAll("[\r\n]", ""));
             return new double[0];
         }
 
@@ -93,7 +93,7 @@ public class MacroRoutingService {
         Object lngObj = rows.get(0).get("lng");
 
         if (!(latObj instanceof Number) || !(lngObj instanceof Number)) {
-            logger.warn("Centroid extraction returned null or non-number for storeId={}", storeId);
+            logger.warn("Centroid extraction returned null or non-number for storeId={}", uuid);
             return new double[0];
         }
 
