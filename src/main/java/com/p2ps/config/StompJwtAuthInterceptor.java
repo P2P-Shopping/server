@@ -1,7 +1,7 @@
 package com.p2ps.config;
 
 import com.p2ps.auth.security.JwtAuthFilter;
-import org.jspecify.annotations.Nullable;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
