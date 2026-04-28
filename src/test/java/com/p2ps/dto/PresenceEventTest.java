@@ -21,7 +21,7 @@ class PresenceEventTest {
 
     @Test
     void testEnumValues() {
-        assertEquals(3, PresenceEvent.EventType.values().length);
+        assertEquals(4, PresenceEvent.EventType.values().length);
         assertEquals(PresenceEvent.EventType.JOIN, PresenceEvent.EventType.valueOf("JOIN"));
         assertEquals(PresenceEvent.EventType.LEAVE, PresenceEvent.EventType.valueOf("LEAVE"));
         assertEquals(PresenceEvent.EventType.TYPING, PresenceEvent.EventType.valueOf("TYPING"));
