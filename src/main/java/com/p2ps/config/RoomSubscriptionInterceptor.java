@@ -12,6 +12,7 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.security.core.Authentication;
 
+import jakarta.annotation.Nullable;
 import java.security.Principal;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -42,7 +43,7 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
      * @return the unmodified message if valid, or null to drop the message
      */
     @Override
-    @org.springframework.lang.Nullable
+    @jakarta.annotation.Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         

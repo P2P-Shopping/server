@@ -186,7 +186,7 @@ public class LocationProcessorWorker {
             logger.info("Location recalculation finished successfully. Updated {} unique shelf locations.", insertedRows);
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to process location updates for store locations.", e);
+            throw new IllegalStateException("Failed to process location updates for store locations.", e);
         }
     }
 

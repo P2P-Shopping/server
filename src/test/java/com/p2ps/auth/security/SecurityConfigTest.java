@@ -38,7 +38,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    void authenticationManager_ReturnsProviderManagerWithDaoProvider() throws Exception {
+    void authenticationManager_ReturnsProviderManagerWithDaoProvider() {
         JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
         SecurityConfig config = new SecurityConfig(jwtAuthFilter);
         PasswordEncoder passwordEncoder = config.passwordEncoder();
