@@ -1,9 +1,11 @@
 package com.p2ps.config;
 
 import com.p2ps.lists.repo.ShoppingListRepository;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullUnmarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -22,6 +24,7 @@ import java.util.regex.Pattern;
  * Validates STOMP SUBSCRIBE frames to prevent unauthorized access or malformed topic creation.
  */
 @Component
+@NullUnmarked
 public class RoomSubscriptionInterceptor implements ChannelInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(RoomSubscriptionInterceptor.class);
@@ -43,31 +46,33 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
      * @return the unmodified message if valid, or null to drop the message
      */
     @Override
-    @Nullable
-    public Message<?> preSend(Message<?> message, MessageChannel channel) {
+    @SuppressWarnings("java:S2638")
+    public @Nullable Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-        
-        if (isSubscribeToTopic(accessor) && !handleSubscription(accessor)) {
+
+        String destination = accessor != null ? accessor.getDestination() : null;
+
+        if (isSubscribeToTopic(accessor, destination) && !handleSubscription(accessor, destination)) {
             return null;
         }
         return message;
     }
 
-    private boolean isSubscribeToTopic(StompHeaderAccessor accessor) {
-        return accessor != null && 
-               StompCommand.SUBSCRIBE.equals(accessor.getCommand()) && 
-               accessor.getDestination() != null && 
-               accessor.getDestination().startsWith("/topic/list/");
+    private boolean isSubscribeToTopic(StompHeaderAccessor accessor, String destination) {
+        return accessor != null &&
+               StompCommand.SUBSCRIBE.equals(accessor.getCommand()) &&
+               destination != null &&
+               destination.startsWith("/topic/list/");
     }
 
-    private boolean handleSubscription(StompHeaderAccessor accessor) {
+    private boolean handleSubscription(StompHeaderAccessor accessor, String destination) {
         Authentication auth = getAuthenticatedUser(accessor);
         if (auth == null) {
             logger.warn("Security Alert: Blocked subscription attempt without authenticated principal");
             return false;
         }
 
-        String extractedId = extractListId(accessor.getDestination());
+        String extractedId = extractListId(destination);
         if (!VALID_LIST_ID.matcher(extractedId).matches()) {
             logger.warn("Security Alert: Blocked malformed room subscription attempt");
             return false;
