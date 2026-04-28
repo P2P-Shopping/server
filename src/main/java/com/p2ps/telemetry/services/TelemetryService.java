@@ -2,9 +2,11 @@ package com.p2ps.telemetry.services;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import com.p2ps.telemetry.dto.TelemetryPingDTO;
@@ -20,16 +22,31 @@ public class TelemetryService {
     private final TelemetryRepository telemetryRepository;
     private final AnomalyDetectionService anomalyDetectionService;
 
+    @Value("${telemetry.dedup.window-seconds:60}")
+    private long dedupWindowSeconds;
+
     @Async("telemetryExecutor")
     public void processPing(TelemetryPingDTO pingDTO) {
         log.info("[SERVICE] Processing ping for the product: {}", pingDTO.getItemId());
+
+        long windowStart = pingDTO.getTimestamp() - (dedupWindowSeconds * 1000);
+        Optional<TelemetryRecord> recent = telemetryRepository
+                .findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                        pingDTO.getDeviceId(), pingDTO.getStoreId(), pingDTO.getItemId());
+
+        if (recent.isPresent() && recent.get().getTimestamp() > windowStart) {
+            log.info("[SERVICE] Duplicate ping dropped for device: {}, item: {}",
+                    pingDTO.getDeviceId(), pingDTO.getItemId());
+            return;
+        }
 
         TelemetryRecord telemetryRecord = mapToEntity(pingDTO);
         anomalyDetectionService.evaluateAndSetStatus(telemetryRecord);
 
         try {
             telemetryRepository.save(telemetryRecord);
-            log.info("[SERVICE] Ping successfully saved for product: {} with status: {}", pingDTO.getItemId(), telemetryRecord.getStatus());
+            log.info("[SERVICE] Ping successfully saved for product: {} with status: {}",
+                    pingDTO.getItemId(), telemetryRecord.getStatus());
         } catch (Exception e) {
             log.error("[SERVICE] Failed to save ping: {}", e.getMessage(), e);
         }
