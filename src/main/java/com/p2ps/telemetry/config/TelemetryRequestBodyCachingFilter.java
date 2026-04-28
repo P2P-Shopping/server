@@ -32,7 +32,7 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
             CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(request);
             filterChain.doFilter(cached, response);
         } catch (PayloadTooLargeException _) {
-            response.sendError(HttpStatus.REQUEST_ENTITY_TOO_LARGE.value(), "Payload too large");
+            response.sendError(413, "Payload too large");
         }
     }
 
