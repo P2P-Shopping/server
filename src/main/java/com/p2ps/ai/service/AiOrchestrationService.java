@@ -65,9 +65,9 @@ public class AiOrchestrationService {
     }
 
     // Multimodal and Gatekeeper Flow
-    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text) {
+    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
         // Receive the generated JSON from Gemini
-        String jsonResult = geminiService.extractFromMultimodal(image, text);
+        String jsonResult = geminiService.extractFromMultimodal(image, text, latitude, longitude);
 
         // Map the JSON to the response object
         AiGenerationResponse response;

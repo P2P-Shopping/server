@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.exception.AiProcessingException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -36,8 +37,9 @@ public class GeminiService {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final CatalogService catalogService;
+    private final StoreMatchingEngine storeMatchingEngine;
 
-    public GeminiService(CatalogService catalogService) {
+    public GeminiService(CatalogService catalogService, StoreMatchingEngine storeMatchingEngine) {
         this.objectMapper = new ObjectMapper();
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -46,60 +48,130 @@ public class GeminiService {
 
         this.restTemplate = new RestTemplate(factory);
         this.catalogService = catalogService;
+        this.storeMatchingEngine = storeMatchingEngine;
     }
 
     private static final String SYSTEM_PROMPT =
             "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
             "VISUAL RULES (CRITICAL): " +
-            "1. If the user uploads a photo of a FINISHED DISH, silently deduce the recipe and output the raw ingredients needed to cook it. " +
-            "2. If the user uploads a photo of a FRIDGE or PANTRY, identify the available items. If they ask 'what can I cook?', silently deduce a meal, and output ONLY the missing ingredients they need to buy. If they don't specify, just list all the food items you see. " +
-            "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities accurately. " +
-            "RULE 1 (RAW INGREDIENTS ONLY): NEVER output the names of whole dishes. Output ONLY the raw base ingredients needed. " +
-            "RULE 2 (STRICT CATALOG MATCHING): Below is our 'GLOBAL CATALOG'. For EVERY ingredient you need, you MUST search this catalog first. If the ingredient exists in the catalog (e.g., you need 'milk' and 'Lapte Zuzu' is in the catalog), you MUST replace the generic item with the exact catalog item. Map it by copying the exact 'specificName', 'brand', and 'catalogId' from the catalog. This ensures 'Community-Driven Context Awareness' by mapping generic terms to real-world popular products. " +
-            "RULE 3 (TIERED CATEGORIZATION): Classify the ENTIRE list under ONE 'listType': 'RECIPE' (for cooking), 'FREQUENT' (for recurring favorites/essentials), or 'NORMAL' (standard ad-hoc list). " +
-            "For 'FREQUENT' lists, you MUST assign each item a specific 'category' (e.g., 'Dairy', 'Produce', 'Cleaning Supplies', 'Bakery') to support nested sub-categories. " +
-            "RULE 4 (STRICT LANGUAGE): Detect the primary language of the user's input. The 'genericName', 'category', and 'unit' MUST be translated into that exact detected language. " +
-            "You MUST respond ONLY with a raw JSON object. Do NOT include markdown instructions. " +
-            "Format: {\"listType\": \"string\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\"}]}.";
+            "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
+            "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
+            "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
+            "RULE 1 (DYNAMIC SEARCH): You have access to tools to search our product catalog and find nearby stores. ALWAYS search the catalog for generic ingredients to map them to real-world products. " +
+            "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
+            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
+            "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\"}]}.";
 
-    public String extractFromMultimodal(MultipartFile image, String text) {
+    public String extractFromMultimodal(MultipartFile image, String text, Double latitude, Double longitude) {
         try {
-            List<ProductCatalog> popularProducts = catalogService.getTopPopularProducts();
-            String catalogContext = buildCatalogContext(popularProducts);
-            List<Map<String, Object>> parts = buildRequestParts(image, text, catalogContext);
+            List<Map<String, Object>> messages = new ArrayList<>();
+            List<Map<String, Object>> userParts = buildRequestParts(image, text);
+            messages.add(Map.of("role", "user", "parts", userParts));
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("contents", List.of(Map.of("role", "user", "parts", parts)));
-            requestBody.put("generationConfig", Map.of("responseMimeType", "application/json"));
+            int maxIterations = 5;
+            for (int i = 0; i < maxIterations; i++) {
+                Map<String, Object> requestBody = new HashMap<>();
+                requestBody.put("contents", messages);
+                requestBody.put("tools", List.of(Map.of("function_declarations", getToolDefinitions())));
+                requestBody.put("generationConfig", Map.of("responseMimeType", "application/json"));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("x-goog-api-key", apiKey);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.set("x-goog-api-key", apiKey);
 
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
+                HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+                ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
 
-            return parseTextResponse(response.getBody());
+                JsonNode rootNode = objectMapper.readTree(response.getBody());
+                JsonNode candidate = rootNode.path("candidates").get(0);
+                JsonNode content = candidate.path("content");
+                JsonNode partsNode = content.path("parts");
+
+                messages.add(Map.of("role", "model", "parts", objectMapper.convertValue(partsNode, List.class)));
+
+                JsonNode functionCall = null;
+                for (JsonNode part : partsNode) {
+                    if (part.has("functionCall")) {
+                        functionCall = part.get("functionCall");
+                        break;
+                    }
+                }
+
+                if (functionCall != null) {
+                    String funcName = functionCall.get("name").asText();
+                    Map<String, Object> args = objectMapper.convertValue(functionCall.get("args"), Map.class);
+                    Object result = executeTool(funcName, args, latitude, longitude);
+
+                    Map<String, Object> toolResponsePart = Map.of(
+                            "functionResponse", Map.of(
+                                    "name", funcName,
+                                    "response", Map.of("content", result)
+                            )
+                    );
+                    messages.add(Map.of("role", "function", "parts", List.of(toolResponsePart)));
+                } else {
+                    return parseTextResponse(response.getBody());
+                }
+            }
+            throw new AiProcessingException("AI reached maximum tool-calling iterations.");
         } catch (AiProcessingException e) {
             throw e;
         } catch (Exception e) {
-            throw new AiProcessingException("Error during Multimodal AI processing: " + e.getMessage(), e);
+            throw new AiProcessingException("Error during Tool-Calling AI processing: " + e.getMessage(), e);
         }
     }
 
-    private String buildCatalogContext(List<ProductCatalog> popularProducts) {
-        return "=== GLOBAL CATALOG ===\n" + popularProducts.stream()
-                .map(p -> "ID: " + p.getId() + " | Generic Name: " + p.getGenericName() + " | Specific Name: " + p.getSpecificName() + " | Brand: " + (p.getBrand() != null ? p.getBrand() : "N/A"))
-                .collect(Collectors.joining("\n")) + "\n======================";
+    private List<Map<String, Object>> getToolDefinitions() {
+        return List.of(
+                Map.of(
+                        "name", "search_catalog",
+                        "description", "Search the global product catalog for a specific item or keyword to find brands and real-world names.",
+                        "parameters", Map.of(
+                                "type", "OBJECT",
+                                "properties", Map.of(
+                                        "keyword", Map.of("type", "STRING", "description", "The product name or keyword to search for.")
+                                ),
+                                "required", List.of("keyword")
+                        )
+                ),
+                Map.of(
+                        "name", "find_optimal_store",
+                        "description", "Find the best nearby store based on user location and item availability.",
+                        "parameters", Map.of(
+                                "type", "OBJECT",
+                                "properties", Map.of(
+                                        "radius_meters", Map.of("type", "INTEGER", "description", "Search radius in meters (default 5000)."),
+                                        "item_ids", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "description", "List of catalog product UUIDs to match in inventory.")
+                                ),
+                                "required", List.of("item_ids")
+                        )
+                )
+        );
     }
 
-    private List<Map<String, Object>> buildRequestParts(MultipartFile image, String text, String catalogContext) throws IOException {
+    private Object executeTool(String name, Map<String, Object> args, Double lat, Double lng) {
+        if ("search_catalog".equals(name)) {
+            String keyword = (String) args.get("keyword");
+            return catalogService.searchProductsByName(keyword);
+        }
+        if ("find_optimal_store".equals(name)) {
+            if (lat == null || lng == null) return "User location not provided. Cannot search stores.";
+            int radius = (args.get("radius_meters") != null) ? (Integer) args.get("radius_meters") : 5000;
+            List<String> idStrings = (List<String>) args.get("item_ids");
+            List<UUID> itemIds = idStrings.stream().map(UUID::fromString).collect(Collectors.toList());
+            return storeMatchingEngine.findOptimalStore(lat, lng, radius, itemIds);
+        }
+        return "Unknown tool";
+    }
+
+
+    private List<Map<String, Object>> buildRequestParts(MultipartFile image, String text) throws IOException {
         List<Map<String, Object>> parts = new ArrayList<>();
         String fallbackText = (image != null && !image.isEmpty())
                 ? "I want to cook with what's in the photo."
                 : "Please analyze the text below.";
 
-        String finalPrompt = SYSTEM_PROMPT + "\n\n" + catalogContext + "\n\nUser Text:\n" +
+        String finalPrompt = SYSTEM_PROMPT + "\n\nUser Text:\n" +
                 (text != null && !text.trim().isEmpty() ? text : fallbackText);
         parts.add(Map.of("text", finalPrompt));
 
@@ -139,7 +211,7 @@ public class GeminiService {
     }
 
     public String extractIngredientsAsJson(String rawRecipeText) {
-        return extractFromMultimodal(null, rawRecipeText);
+        return extractFromMultimodal(null, rawRecipeText, null, null);
     }
 
     private String detectMimeTypeSecurely(byte[] bytes) {
