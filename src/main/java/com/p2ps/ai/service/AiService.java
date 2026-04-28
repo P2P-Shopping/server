@@ -30,14 +30,21 @@ public class AiService {
 
     private static final String SYSTEM_PROMPT =
             "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
+            "LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian. " +
             "VISUAL RULES (CRITICAL): " +
             "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
             "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
             "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
             "RULE 1 (DYNAMIC SEARCH): You have access to tools to search our product catalog and find nearby stores. ALWAYS search the catalog for generic ingredients to map them to real-world products. " +
+            "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry instead of leaving them null. Only leave catalogId null if no relevant catalog product exists. " +
+            "RULE 1B (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
             "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
-            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
-            "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\"}]}.";
+            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. If the user describes a dish, dessert, meal, or recipe idea such as negresa, clatite, soup, pasta, cake, or cookies, classify it as 'RECIPE' even if the word 'recipe' is not explicitly used. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
+            "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
+    private static final String FINAL_JSON_PROMPT =
+            "Return ONLY valid JSON matching exactly this schema and nothing else: " +
+            "{\"listType\":\"RECIPE|FREQUENT|NORMAL\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
+            "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. If the user described a dish or recipe, listType must be RECIPE. Do not add markdown, explanations, or prose.";
 
     private static final String DESCRIPTION = "description";
     private static final String KEYWORD = "keyword";
@@ -55,7 +62,7 @@ public class AiService {
     public void initTools() {
         toolRegistry.register(new AiTool(
                 "search_catalog",
-                "Search the global product catalog for a specific item or keyword to find brands and real-world names.",
+                "Search the global product catalog for a generic item or keyword and return the best matching real products with ids, brands, and specific names.",
                 Map.of(
                         "type", "OBJECT",
                         "properties", Map.of(
@@ -144,10 +151,11 @@ public class AiService {
                 }
                 messages.add(new AiMessage("function", toolResponses));
             } else {
-                return response.parts().stream()
+                String rawResponse = response.parts().stream()
                         .filter(p -> p instanceof AiMessage.TextPart)
                         .map(p -> ((AiMessage.TextPart) p).text())
                         .collect(Collectors.joining("\n"));
+                return finalizeStructuredJson(messages, rawResponse);
             }
         }
     }
@@ -175,5 +183,25 @@ public class AiService {
             // IOException expected for invalid/non-image data; return null to indicate unknown type
         }
         return null;
+    }
+
+    private String finalizeStructuredJson(List<AiMessage> messages, String rawResponse) {
+        List<AiMessage> finalMessages = new ArrayList<>(messages);
+        finalMessages.add(new AiMessage("user", List.of(
+                new AiMessage.TextPart(FINAL_JSON_PROMPT + "\n\nPrevious draft:\n" + rawResponse)
+        )));
+
+        AiMessage finalizedResponse = aiClient.generateResponse(finalMessages, Collections.emptyList());
+        String finalizedText = finalizedResponse.parts().stream()
+                .filter(p -> p instanceof AiMessage.TextPart)
+                .map(p -> ((AiMessage.TextPart) p).text())
+                .collect(Collectors.joining("\n"))
+                .trim();
+
+        if (!finalizedText.isEmpty()) {
+            return finalizedText;
+        }
+
+        return rawResponse;
     }
 }

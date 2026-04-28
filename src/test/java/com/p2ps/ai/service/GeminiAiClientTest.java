@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -134,5 +135,18 @@ class GeminiAiClientTest {
         AiMessage response = client.generateResponse(List.of(new AiMessage("user", List.of(new AiMessage.TextPart("Hi")))), null);
 
         assertThat(response.parts()).isEmpty();
+    }
+
+    @Test
+    void generateResponse_withoutTools_requestsJsonMimeType() throws Exception {
+        String responseJson = """
+                {"candidates":[{"content":{"role":"model","parts":[{"text":"{}"}]}}]}
+                """;
+        when(restTemplate.postForEntity(any(String.class), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(responseJson));
+
+        client.generateResponse(List.of(new AiMessage("user", List.of(new AiMessage.TextPart("Return JSON")))), List.of());
+
+        verify(restTemplate).postForEntity(any(String.class), any(HttpEntity.class), eq(String.class));
     }
 }

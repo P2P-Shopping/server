@@ -8,14 +8,19 @@ import com.p2ps.ai.core.AiTool;
 import com.p2ps.exception.AiProcessingException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GeminiAiClient implements AiClient {
+    private static final Pattern RETRY_DELAY_PATTERN = Pattern.compile("\"retryDelay\"\\s*:\\s*\"(\\d+)s\"");
 
     private final String apiKey;
     private final String apiUrl;
@@ -57,6 +62,18 @@ public class GeminiAiClient implements AiClient {
             ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
 
             return parseGeminiResponse(response.getBody());
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            long retryAfterSeconds = extractRetryAfterSeconds(e.getResponseBodyAsString());
+            String message = retryAfterSeconds > 0
+                    ? "Gemini quota exceeded. Please retry in about " + retryAfterSeconds + " seconds."
+                    : "Gemini quota exceeded. Please retry later or check your Gemini billing/quota.";
+            throw new AiProcessingException(message, e, HttpStatus.TOO_MANY_REQUESTS, retryAfterSeconds > 0 ? retryAfterSeconds : null);
+        } catch (HttpClientErrorException e) {
+            throw new AiProcessingException(
+                    "Gemini API error: " + e.getStatusCode() + " " + e.getStatusText(),
+                    e,
+                    HttpStatus.valueOf(e.getStatusCode().value())
+            );
         } catch (Exception e) {
             throw new AiProcessingException("Gemini API error: " + e.getMessage(), e);
         }
@@ -120,5 +137,18 @@ public class GeminiAiClient implements AiClient {
         } catch (Exception e) {
             throw new AiProcessingException("Failed to parse Gemini response", e);
         }
+    }
+
+    private long extractRetryAfterSeconds(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return -1;
+        }
+
+        Matcher matcher = RETRY_DELAY_PATTERN.matcher(responseBody);
+        if (matcher.find()) {
+            return Long.parseLong(matcher.group(1));
+        }
+
+        return -1;
     }
 }

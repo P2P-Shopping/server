@@ -68,11 +68,13 @@ public class AiOrchestrationService {
     public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
         int maxRetries = 2;
         Exception lastException = null;
+        String lastRawResult = null;
 
         for (int i = 0; i <= maxRetries; i++) {
             try {
                 // Receive the generated JSON from AI Service
                 String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude);
+                lastRawResult = rawResult;
                 String jsonResult = extractJson(rawResult);
 
                 // Map the JSON to the response object
@@ -82,13 +84,19 @@ public class AiOrchestrationService {
                 if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
                     return response;
                 }
+            } catch (AiProcessingException e) {
+                if (e.getStatus() != HttpStatus.UNPROCESSABLE_CONTENT) {
+                    throw e;
+                }
+                lastException = e;
             } catch (Exception e) {
                 lastException = e;
             }
         }
 
         throw new AiProcessingException(
-                "AI returned an invalid structure after retries. Expected AiGenerationResponse.",
+                "AI returned an invalid structure after retries. Expected AiGenerationResponse. Raw AI snippet: " +
+                        abbreviate(lastRawResult),
                 lastException,
                 HttpStatus.UNPROCESSABLE_CONTENT
         );
@@ -114,5 +122,12 @@ public class AiOrchestrationService {
             return raw.substring(start, end + 1);
         }
         return raw;
+    }
+
+    private String abbreviate(String raw) {
+        if (raw == null) return "<null>";
+        String sanitized = raw.replaceAll("\\s+", " ").trim();
+        if (sanitized.length() <= 240) return sanitized;
+        return sanitized.substring(0, 240) + "...";
     }
 }

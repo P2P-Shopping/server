@@ -137,6 +137,9 @@ public class GlobalExceptionHandler {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put(MSG_STR, "AI Processing Failed");
         errorResponse.put("details", ex.getMessage());
+        if (ex.getRetryAfterSeconds() != null) {
+            errorResponse.put("retryAfterSeconds", String.valueOf(ex.getRetryAfterSeconds()));
+        }
 
         return ResponseEntity.status(ex.getStatus()).body(errorResponse);
     }

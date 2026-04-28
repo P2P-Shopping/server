@@ -133,7 +133,8 @@ class AiOrchestrationServiceTest {
 
         assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
                 .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("AI returned an invalid structure");
+                .hasMessageContaining("AI returned an invalid structure")
+                .hasMessageContaining("Raw AI snippet");
     }
 
     @Test
