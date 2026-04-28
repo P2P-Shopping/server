@@ -186,7 +186,7 @@ public class ShoppingListService {
         dto.setSubcategory(list.getSubcategory());
         dto.setFinalStore(list.getFinalStore());
         if (list.getUser() != null) {
-            dto.setUserId(list.getUser().getId().toString());
+            dto.setUserId(list.getUser().getId() != null ? list.getUser().getId().toString() : null);
             dto.setOwnerEmail(list.getUser().getEmail());
             String fullName = list.getUser().getFirstName() + " " + list.getUser().getLastName();
             dto.setOwnerName(fullName.trim());
