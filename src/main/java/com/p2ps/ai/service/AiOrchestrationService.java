@@ -30,10 +30,9 @@ public class AiOrchestrationService {
 
         List<ParsedItemResponse> validItems = new ArrayList<>();
         for (ParsedItemResponse aiItem : parsedItems) {
-            if (aiItem == null) continue;
-            String name = aiItem.getName();
-            if (name == null || name.trim().isEmpty()) continue;
-            validItems.add(aiItem);
+            if (aiItem != null && aiItem.getName() != null && !aiItem.getName().trim().isEmpty()) {
+                validItems.add(aiItem);
+            }
         }
 
         if (validItems.isEmpty()) {

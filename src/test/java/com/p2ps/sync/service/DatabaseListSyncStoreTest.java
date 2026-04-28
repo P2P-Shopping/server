@@ -107,4 +107,17 @@ class DatabaseListSyncStoreTest {
         assertSame(payload, result);
         assertNull(result.getStatus());
     }
+
+    @Test
+    void returnsEarlyWhenItemIdIsMissing() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+
+        ListUpdatePayload p1 = new ListUpdatePayload();
+        p1.setItemId(null);
+        assertSame(p1, store.apply("list-1", p1));
+
+        ListUpdatePayload p2 = new ListUpdatePayload();
+        p2.setItemId("");
+        assertSame(p2, store.apply("list-1", p2));
+    }
 }

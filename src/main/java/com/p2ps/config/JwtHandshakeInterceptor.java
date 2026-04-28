@@ -47,17 +47,7 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
         // Try to get token from cookie if not found in query param
         if (token == null || token.isBlank()) {
-            if (request instanceof ServletServerHttpRequest servletRequest) {
-                Cookie[] cookies = servletRequest.getServletRequest().getCookies();
-                if (cookies != null) {
-                    for (Cookie cookie : cookies) {
-                        if ("jwt-token".equals(cookie.getName())) {
-                            token = cookie.getValue();
-                            break;
-                        }
-                    }
-                }
-            }
+            token = extractTokenFromCookies(request);
         }
 
         if (token == null || token.isBlank()) {
@@ -72,6 +62,20 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
         attributes.put(SESSION_TOKEN_ATTRIBUTE, token);
         return true;
+    }
+
+    private String extractTokenFromCookies(ServerHttpRequest request) {
+        if (request instanceof ServletServerHttpRequest servletRequest) {
+            Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if ("jwt-token".equals(cookie.getName())) {
+                        return cookie.getValue();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     @Override

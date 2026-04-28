@@ -23,6 +23,8 @@ repositories {
 val springdocVersion = "3.0.2"
 val jjwtVersion = "0.13.0"
 val testcontainersVersion = "1.21.4"
+val bucket4jVersion = "8.10.1"
+val caffeineVersion = "3.2.0"
 dependencies {
     annotationProcessor("org.projectlombok:lombok")
 
@@ -35,27 +37,28 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("io.jsonwebtoken:jjwt-api:${jjwtVersion}")
-    implementation("com.bucket4j:bucket4j-core:8.10.1")
-    implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
+    implementation("com.bucket4j:bucket4j-core:${bucket4jVersion}")
+    implementation("com.github.ben-manes.caffeine:caffeine:${caffeineVersion}")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.hibernate.orm:hibernate-spatial")
+
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
+    runtimeOnly("org.postgresql:postgresql")
+
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-test-autoconfigure")
     testImplementation("com.h2database:h2")
     testImplementation("org.testcontainers:mongodb:${testcontainersVersion}")
-
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
-    runtimeOnly("org.postgresql:postgresql")
-
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.junit.platform:junit-platform-suite-api")
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
+
     testRuntimeOnly("org.junit.platform:junit-platform-suite-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

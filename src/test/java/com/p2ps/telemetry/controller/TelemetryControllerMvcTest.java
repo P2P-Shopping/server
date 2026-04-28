@@ -1,6 +1,5 @@
 package com.p2ps.telemetry.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.exception.GlobalExceptionHandler;
 import com.p2ps.telemetry.services.TelemetryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +19,6 @@ class TelemetryControllerMvcTest {
 
     private MockMvc mockMvc;
     private TelemetryService telemetryService;
-    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
@@ -36,8 +34,6 @@ class TelemetryControllerMvcTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
-
-        objectMapper = new ObjectMapper();
     }
 
     @Test
