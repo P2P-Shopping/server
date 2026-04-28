@@ -185,6 +185,12 @@ public class ShoppingListService {
         dto.setCategory(list.getCategory());
         dto.setSubcategory(list.getSubcategory());
         dto.setFinalStore(list.getFinalStore());
+        if (list.getUser() != null) {
+            dto.setUserId(list.getUser().getId().toString());
+            dto.setOwnerEmail(list.getUser().getEmail());
+            String fullName = list.getUser().getFirstName() + " " + list.getUser().getLastName();
+            dto.setOwnerName(fullName.trim());
+        }
 
         if (list.getItems() != null) {
             dto.setItems(list.getItems().stream()
