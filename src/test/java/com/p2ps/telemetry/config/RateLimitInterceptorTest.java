@@ -41,7 +41,7 @@ class RateLimitInterceptorTest {
         Bucket bucket = Bucket.builder()
                 .addLimit(io.github.bucket4j.Bandwidth.builder()
                         .capacity(1)
-                        .addLimit(io.github.bucket4j.Refill.intervally(1, java.time.Duration.ofSeconds(1)))
+                        .refillIntervally(1, java.time.Duration.ofSeconds(1))
                         .build())
                 .build();
         when(request.getHeader("X-API-Key")).thenReturn("test-telemetry-api-key");
