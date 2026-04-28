@@ -60,8 +60,8 @@ class RoutingRequestTest {
     void equalsHandlesNullAndDifferentClass() {
         RoutingRequest r = request(1.0, 2.0, List.of("a"));
 
-        assertNotEquals(r, null);
-        assertNotEquals(r, "not a routing request");
+        assertNotEquals(null, r);
+        assertNotEquals("not a routing request", r);
     }
 
     @Test
@@ -74,6 +74,6 @@ class RoutingRequestTest {
 
         RoutingRequest c = request(1.0, 2.0, List.of());
         // null vs empty list should not be equal
-        assertNotEquals(a, c);
+        assertNotEquals(c, a);
     }
 }

@@ -23,7 +23,9 @@ public class ListUpdatePayload {
     /**
      * Default constructor required for JSON deserialization by Jackson.
      */
-    public ListUpdatePayload() {}
+    public ListUpdatePayload() {
+        // Intentionally empty for JSON deserialization by Jackson
+    }
 
     /**
      * Gets the action type.

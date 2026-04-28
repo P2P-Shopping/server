@@ -54,6 +54,7 @@ class ShoppingListServiceTest {
     void createListShouldPersistListForExistingUser() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
         ShoppingList savedList = new ShoppingList();
         UUID listId = UUID.randomUUID();
         savedList.setId(listId);
@@ -88,6 +89,7 @@ class ShoppingListServiceTest {
     void updateListShouldUpdateFieldsAndSave() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
         UUID listId = UUID.randomUUID();
 
         ShoppingList existingList = new ShoppingList();
@@ -117,6 +119,7 @@ class ShoppingListServiceTest {
     void updateListShouldResetOptionalFieldsWhenEmptyString() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
         UUID listId = UUID.randomUUID();
 
         ShoppingList existingList = new ShoppingList();
@@ -189,6 +192,7 @@ class ShoppingListServiceTest {
     void deleteListShouldRemoveOwnedList() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
         UUID listId = UUID.randomUUID();
         ShoppingList list = new ShoppingList();
         list.setId(listId);
@@ -219,6 +223,7 @@ class ShoppingListServiceTest {
     void deleteListShouldThrowWhenUserDoesNotOwnList() {
         UUID listId = UUID.randomUUID();
         Users owner = new Users("owner@example.com", "secret", "Owner", "User");
+        owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
@@ -238,6 +243,7 @@ class ShoppingListServiceTest {
     void getListByIdShouldReturnMappedDTO() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
         UUID listId = UUID.randomUUID();
         ShoppingList list = new ShoppingList();
         list.setId(listId);
@@ -265,6 +271,7 @@ class ShoppingListServiceTest {
     void getListByIdShouldThrowWhenAccessDenied() {
         UUID listId = UUID.randomUUID();
         Users owner = new Users("owner@example.com", "secret", "Owner", "User");
+        owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
@@ -279,6 +286,7 @@ class ShoppingListServiceTest {
     void importItemsShouldCopyAllItemsWhenNoItemIdsProvided() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
 
         UUID currentListId = UUID.randomUUID();
         ShoppingList currentList = new ShoppingList();
@@ -319,6 +327,7 @@ class ShoppingListServiceTest {
     void importItemsShouldCopyOnlySpecificItemsWhenItemIdsProvided() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
 
         UUID currentListId = UUID.randomUUID();
         ShoppingList currentList = new ShoppingList();
@@ -410,7 +419,9 @@ class ShoppingListServiceTest {
         UUID listId = UUID.randomUUID();
         
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
         Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
         
         ShoppingList list = new ShoppingList();
         list.setId(listId);
@@ -432,6 +443,7 @@ class ShoppingListServiceTest {
         UUID listId = UUID.randomUUID();
         
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
@@ -448,6 +460,7 @@ class ShoppingListServiceTest {
         UUID listId = UUID.randomUUID();
         
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
@@ -465,6 +478,7 @@ class ShoppingListServiceTest {
         UUID listId = UUID.randomUUID();
         
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
@@ -480,7 +494,9 @@ class ShoppingListServiceTest {
     void getListByIdShouldAllowCollaboratorAccess() {
         String collabEmail = "collab@example.com";
         Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
         Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
         
         UUID listId = UUID.randomUUID();
         ShoppingList list = new ShoppingList();

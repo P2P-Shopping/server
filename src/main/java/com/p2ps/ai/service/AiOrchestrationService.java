@@ -3,11 +3,13 @@ package com.p2ps.ai.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,15 +27,15 @@ public class AiOrchestrationService {
         this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
 
+    //Legacy parsing method
     public List<ParsedItemResponse> processRecipeAndPopulateList(RecipeRequest request, String userEmail) {
         List<ParsedItemResponse> parsedItems = parseIngredientsFromText(request.getText());
 
         List<ParsedItemResponse> validItems = new ArrayList<>();
         for (ParsedItemResponse aiItem : parsedItems) {
-            if (aiItem == null) continue;
-            String name = aiItem.getName();
-            if (name == null || name.trim().isEmpty()) continue;
-            validItems.add(aiItem);
+            if (aiItem != null && aiItem.getGenericName() != null && !aiItem.getGenericName().trim().isEmpty()) {
+                validItems.add(aiItem);
+            }
         }
 
         if (validItems.isEmpty()) {
@@ -60,5 +62,30 @@ public class AiOrchestrationService {
         }
 
         return parsedItems;
+    }
+
+    // Multimodal and Gatekeeper Flow
+    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text) {
+        // Receive the generated JSON from Gemini
+        String jsonResult = geminiService.extractFromMultimodal(image, text);
+
+        // Map the JSON to the response object
+        AiGenerationResponse response;
+        try {
+            response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
+        } catch (JsonProcessingException e) {
+            throw new AiProcessingException(
+                    "AI returned an invalid structure. Expected AiGenerationResponse.",
+                    e,
+                    HttpStatus.UNPROCESSABLE_CONTENT
+            );
+        }
+
+        // Validation
+        if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
+            throw new AiProcessingException("AI did not return any valid items.", HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+
+        return response;
     }
 }

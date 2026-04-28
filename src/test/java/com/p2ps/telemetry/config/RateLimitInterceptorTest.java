@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.when;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -37,7 +38,12 @@ class RateLimitInterceptorTest {
 
     @Test
     void shouldAllowRequestWithValidApiKeyAndDeviceId() throws Exception {
-        Bucket bucket = Bucket.builder().addLimit(io.github.bucket4j.Bandwidth.simple(1, java.time.Duration.ofSeconds(1))).build();
+        Bucket bucket = Bucket.builder()
+                .addLimit(io.github.bucket4j.Bandwidth.builder()
+                        .capacity(1)
+                        .refillIntervally(1, java.time.Duration.ofSeconds(1))
+                        .build())
+                .build();
         when(request.getHeader("X-API-Key")).thenReturn("test-telemetry-api-key");
         when(request.getHeader("X-Device-Id")).thenReturn("device-1");
         when(rateLimitingService.resolveBucket("device-1")).thenReturn(bucket);
@@ -113,14 +119,14 @@ class RateLimitInterceptorTest {
 
     @Test
     void validateApiKey_missing_throws() {
-        RateLimitInterceptor interceptor = new RateLimitInterceptor(rateLimitingService);
-        assertThrows(IllegalStateException.class, () -> ReflectionTestUtils.invokeMethod(interceptor, "validateApiKey"));
+        RateLimitInterceptor testInterceptor = new RateLimitInterceptor(rateLimitingService);
+        assertThrows(IllegalStateException.class, () -> ReflectionTestUtils.invokeMethod(testInterceptor, "validateApiKey"));
     }
 
     @Test
     void validateApiKey_present_noThrow() {
-        RateLimitInterceptor interceptor = new RateLimitInterceptor(rateLimitingService);
-        ReflectionTestUtils.setField(interceptor, "validApiKey", "present");
-        ReflectionTestUtils.invokeMethod(interceptor, "validateApiKey");
+        RateLimitInterceptor testInterceptor = new RateLimitInterceptor(rateLimitingService);
+        ReflectionTestUtils.setField(testInterceptor, "validApiKey", "present");
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(testInterceptor, "validateApiKey"));
     }
 }

@@ -3,7 +3,6 @@ package com.p2ps.config;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -43,7 +42,6 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
      * @return the unmodified message if valid, or null to drop the message
      */
     @Override
-    @Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         

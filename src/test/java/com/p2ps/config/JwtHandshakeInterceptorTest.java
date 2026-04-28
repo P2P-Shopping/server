@@ -120,4 +120,46 @@ class JwtHandshakeInterceptorTest {
         assertDoesNotThrow(() -> interceptor.afterHandshake(request, response, handler, new RuntimeException("test")));
         assertDoesNotThrow(() -> interceptor.afterHandshake(request, response, handler, null));
     }
+
+    @Test
+    void beforeHandshake_InvalidTokenInCookie_Rejects() {
+        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
+        JwtHandshakeInterceptor interceptor = new JwtHandshakeInterceptor(jwtAuthFilter, false);
+        org.springframework.http.server.ServletServerHttpRequest request = mock(org.springframework.http.server.ServletServerHttpRequest.class);
+        jakarta.servlet.http.HttpServletRequest servletRequest = mock(jakarta.servlet.http.HttpServletRequest.class);
+        ServerHttpResponse response = mock(ServerHttpResponse.class);
+        WebSocketHandler handler = mock(WebSocketHandler.class);
+        HashMap<String, Object> attributes = new HashMap<>();
+
+        jakarta.servlet.http.Cookie[] cookies = {new jakarta.servlet.http.Cookie("jwt-token", "bad-cookie-token")};
+        when(request.getServletRequest()).thenReturn(servletRequest);
+        when(servletRequest.getCookies()).thenReturn(cookies);
+        when(jwtAuthFilter.authenticateToken("bad-cookie-token")).thenReturn(null);
+
+        boolean allowed = interceptor.beforeHandshake(request, response, handler, attributes);
+
+        assertFalse(allowed);
+        verify(response).setStatusCode(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void beforeHandshake_ValidTokenInCookie_Allows() {
+        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
+        JwtHandshakeInterceptor interceptor = new JwtHandshakeInterceptor(jwtAuthFilter, false);
+        org.springframework.http.server.ServletServerHttpRequest request = mock(org.springframework.http.server.ServletServerHttpRequest.class);
+        jakarta.servlet.http.HttpServletRequest servletRequest = mock(jakarta.servlet.http.HttpServletRequest.class);
+        ServerHttpResponse response = mock(ServerHttpResponse.class);
+        WebSocketHandler handler = mock(WebSocketHandler.class);
+        HashMap<String, Object> attributes = new HashMap<>();
+
+        jakarta.servlet.http.Cookie[] cookies = {new jakarta.servlet.http.Cookie("jwt-token", "good-cookie-token")};
+        when(request.getServletRequest()).thenReturn(servletRequest);
+        when(servletRequest.getCookies()).thenReturn(cookies);
+        when(jwtAuthFilter.authenticateToken("good-cookie-token")).thenReturn(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("user@test.com", null, java.util.List.of()));
+
+        boolean allowed = interceptor.beforeHandshake(request, response, handler, attributes);
+
+        assertTrue(allowed);
+        assertEquals("good-cookie-token", attributes.get(JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE));
+    }
 }
