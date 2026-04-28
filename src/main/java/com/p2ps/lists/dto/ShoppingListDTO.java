@@ -14,6 +14,6 @@ public class ShoppingListDTO {
     private String subcategory;
     private String finalStore;
     private List<ItemDTO> items;
-    private String ownerEmail;
-    private List<String> collaboratorEmails;
+    private Integer ownerId;
+    private List<Integer> collaboratorIds;
 }

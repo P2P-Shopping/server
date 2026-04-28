@@ -25,5 +25,6 @@ class PresenceEventTest {
         assertEquals(PresenceEvent.EventType.JOIN, PresenceEvent.EventType.valueOf("JOIN"));
         assertEquals(PresenceEvent.EventType.LEAVE, PresenceEvent.EventType.valueOf("LEAVE"));
         assertEquals(PresenceEvent.EventType.TYPING, PresenceEvent.EventType.valueOf("TYPING"));
+        assertEquals(PresenceEvent.EventType.SYNC, PresenceEvent.EventType.valueOf("SYNC"));
     }
 }

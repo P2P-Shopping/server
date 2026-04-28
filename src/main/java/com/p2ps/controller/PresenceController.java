@@ -37,11 +37,12 @@ public class PresenceController {
      * @param payload the presence payload containing user action and data
      */
     @MessageMapping("/list/{listId}/presence")
-    public void handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
+    public PresenceEvent handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
         if (payload != null) {
             payload.setListId(listId);
             logger.debug("Routing presence event for list: {}", listId);
             messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
         }
+        return payload;
     }
 }

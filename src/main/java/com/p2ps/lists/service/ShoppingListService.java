@@ -206,9 +206,9 @@ public class ShoppingListService {
             dto.setItems(new ArrayList<>());
         }
 
-        dto.setOwnerEmail(list.getUser().getEmail());
-        dto.setCollaboratorEmails(list.getCollaborators().stream()
-                .map(Users::getEmail)
+        dto.setOwnerId(list.getUser().getId());
+        dto.setCollaboratorIds(list.getCollaborators().stream()
+                .map(Users::getId)
                 .toList());
 
         return dto;
