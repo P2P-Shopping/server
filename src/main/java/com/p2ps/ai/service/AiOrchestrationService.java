@@ -17,12 +17,12 @@ import java.util.List;
 @Service
 public class AiOrchestrationService {
 
-    private final GeminiService geminiService;
+    private final AiService aiService;
     private final AiPersistenceService aiPersistenceService;
     private final ObjectMapper objectMapper;
 
-    public AiOrchestrationService(GeminiService geminiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
-        this.geminiService = geminiService;
+    public AiOrchestrationService(AiService aiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
+        this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
         this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
@@ -48,44 +48,71 @@ public class AiOrchestrationService {
     }
 
     private List<ParsedItemResponse> parseIngredientsFromText(String text) {
-        String jsonResult = geminiService.extractIngredientsAsJson(text);
+        int maxRetries = 2;
+        Exception lastException = null;
 
-        List<ParsedItemResponse> parsedItems;
-        try {
-            parsedItems = objectMapper.readValue(jsonResult, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
-            throw new AiProcessingException("AI could not return a correctly structured list", e, HttpStatus.UNPROCESSABLE_CONTENT);
+        for (int i = 0; i <= maxRetries; i++) {
+            try {
+                String rawResult = aiService.extractIngredientsAsJson(text);
+                String jsonResult = extractJson(rawResult);
+                List<ParsedItemResponse> parsedItems = objectMapper.readValue(jsonResult, new TypeReference<>() {});
+                if (parsedItems != null) return parsedItems;
+            } catch (Exception e) {
+                lastException = e;
+            }
         }
-
-        if (parsedItems == null) {
-            throw new AiProcessingException("AI returned a null payload instead of a list of items", HttpStatus.UNPROCESSABLE_CONTENT);
-        }
-
-        return parsedItems;
+        throw new AiProcessingException("AI could not return a correctly structured list after retries", lastException, HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     // Multimodal and Gatekeeper Flow
     public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
-        // Receive the generated JSON from Gemini
-        String jsonResult = geminiService.extractFromMultimodal(image, text, latitude, longitude);
+        int maxRetries = 2;
+        Exception lastException = null;
 
-        // Map the JSON to the response object
-        AiGenerationResponse response;
-        try {
-            response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
-        } catch (JsonProcessingException e) {
-            throw new AiProcessingException(
-                    "AI returned an invalid structure. Expected AiGenerationResponse.",
-                    e,
-                    HttpStatus.UNPROCESSABLE_CONTENT
-            );
+        for (int i = 0; i <= maxRetries; i++) {
+            try {
+                // Receive the generated JSON from AI Service
+                String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude);
+                String jsonResult = extractJson(rawResult);
+
+                // Map the JSON to the response object
+                AiGenerationResponse response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
+
+                // Validation
+                if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
+                    return response;
+                }
+            } catch (Exception e) {
+                lastException = e;
+            }
         }
 
-        // Validation
-        if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
-            throw new AiProcessingException("AI did not return any valid items.", HttpStatus.UNPROCESSABLE_CONTENT);
+        throw new AiProcessingException(
+                "AI returned an invalid structure after retries. Expected AiGenerationResponse.",
+                lastException,
+                HttpStatus.UNPROCESSABLE_CONTENT
+        );
+    }
+
+    private String extractJson(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+
+        int startBrace = raw.indexOf('{');
+        int startBracket = raw.indexOf('[');
+        int start = -1;
+        int end = -1;
+
+        if (startBrace != -1 && (startBracket == -1 || startBrace < startBracket)) {
+            start = startBrace;
+            end = raw.lastIndexOf('}');
+        } else if (startBracket != -1) {
+            start = startBracket;
+            end = raw.lastIndexOf(']');
         }
 
-        return response;
+        if (start != -1 && end != -1 && end > start) {
+            return raw.substring(start, end + 1);
+        }
+        return raw;
     }
 }
