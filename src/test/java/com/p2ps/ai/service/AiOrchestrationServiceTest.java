@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,30 +37,22 @@ class AiOrchestrationServiceTest {
                 .isInstanceOf(AiProcessingException.class);
     }
 
-    @Test
-    void emptyItems_throwsAiProcessingException() {
+    @ParameterizedTest
+    @CsvSource({
+        "'[]', 'AI did not return any valid ingredients'",
+        "'null', 'AI returned a null payload'",
+        "'', 'AI could not return a correctly structured list'"
+    })
+    void invalidAiResponse_throwsAiProcessingException(String aiOutput, String expectedMessage) {
         AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("[]");
+        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn(aiOutput);
 
         RecipeRequest req = new RecipeRequest();
         req.setText("text");
 
         assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
                 .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("AI did not return any valid ingredients");
-    }
-
-    @Test
-    void nullPayload_throwsAiProcessingException() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
-
-        RecipeRequest req = new RecipeRequest();
-        req.setText("text");
-
-        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
-                .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("null payload");
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test
@@ -99,18 +93,5 @@ class AiOrchestrationServiceTest {
         assertThat(result.get(0).getName()).isEqualTo("Tomato");
 
         verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), anyList(), eq("u@e"));
-    }
-
-    @Test
-    void parseIngredientsFromText_WhenParsedItemsIsNull_ThrowsAiProcessingException() {
-        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
-
-        RecipeRequest req = new RecipeRequest();
-        req.setText("some text");
-
-        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
-            .isInstanceOf(AiProcessingException.class)
-            .hasMessageContaining("AI returned a null payload");
     }
 }
