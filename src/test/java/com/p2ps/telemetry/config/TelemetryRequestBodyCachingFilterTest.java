@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TelemetryRequestBodyCachingFilterTest {
 
     @Test
-    void shouldNotFilterNonTelemetryUri() throws Exception {
+    void shouldNotFilterNonTelemetryUri() {
         TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/health");
 

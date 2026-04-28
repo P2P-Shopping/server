@@ -15,7 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,7 +78,7 @@ class AiOrchestrationServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Tomato");
 
-        verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), eq(List.of(result.get(0))), eq("u@e"));
+        verify(aiPersistenceService).createListAndPopulateItems(listId, "New List", List.of(result.get(0)), "u@e");
     }
 
     @Test

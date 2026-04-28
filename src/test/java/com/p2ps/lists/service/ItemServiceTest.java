@@ -19,7 +19,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -237,7 +236,8 @@ class ItemServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
 
-        assertThatThrownBy(() -> itemService.addItemsToList(listId, List.of(req1, req2), userEmail))
+        List<ItemRequest> requests = List.of(req1, req2);
+        assertThatThrownBy(() -> itemService.addItemsToList(listId, requests, userEmail))
                 .isInstanceOf(ListValidationException.class);
 
         verify(itemRepository, never()).saveAll(anyList());

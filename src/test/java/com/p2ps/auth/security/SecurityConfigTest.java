@@ -131,7 +131,7 @@ class SecurityConfigTest {
         verify(sessionConfigurer).sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
         // verify JwtAuthFilter registered before UsernamePasswordAuthenticationFilter
-        verify(http).addFilterBefore(eq(jwtAuthFilter), eq(UsernamePasswordAuthenticationFilter.class));
+        verify(http).addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
     }
 
     private static class MockHttpServletRequest extends org.springframework.mock.web.MockHttpServletRequest {

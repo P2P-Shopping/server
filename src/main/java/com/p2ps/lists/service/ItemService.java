@@ -17,10 +17,11 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.stream.Collectors;
 
 @Service
 public class ItemService {
+
+    private static final String ITEM_NOT_FOUND = "Item not found";
 
     private final ItemRepository itemRepository;
     private final ShoppingListRepository shoppingListRepository;
@@ -63,7 +64,7 @@ public class ItemService {
     @Transactional
     public ItemDTO updateItem(UUID itemId, ItemRequest request, String userEmail) {
         Item item = itemRepository.findById(itemId)
-                .orElseThrow(() -> new ItemNotFoundException("Item not found"));
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
         if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
@@ -98,7 +99,7 @@ public class ItemService {
     @Transactional
     public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {
         Item item = itemRepository.findById(itemId)
-                .orElseThrow(() -> new ItemNotFoundException("Item not found"));
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
         item.setChecked(checked);
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
@@ -109,7 +110,7 @@ public class ItemService {
     @Transactional
     public void deleteItem(UUID itemId, String userEmail) {
         Item item = itemRepository.findById(itemId)
-                .orElseThrow(() -> new ItemNotFoundException("Item not found"));
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
         if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to delete this item");
@@ -174,6 +175,6 @@ public class ItemService {
 
         List<Item> saved = itemRepository.saveAll(items);
 
-        return saved.stream().map(this::mapToDTO).collect(Collectors.toList());
+        return saved.stream().map(this::mapToDTO).toList();
     }
 }

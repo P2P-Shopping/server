@@ -31,8 +31,8 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
         try {
             CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(request);
             filterChain.doFilter(cached, response);
-        } catch (PayloadTooLargeException ex) {
-            response.sendError(HttpStatus.PAYLOAD_TOO_LARGE.value(), "Payload too large");
+        } catch (PayloadTooLargeException _) {
+            response.sendError(HttpStatus.REQUEST_ENTITY_TOO_LARGE.value(), "Payload too large");
         }
     }
 
@@ -43,11 +43,12 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
         private final byte[] cachedBody;
 
         private CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
-            super(request);
             long contentLength = request.getContentLengthLong();
             if (contentLength > MAX_BODY_BYTES) {
                 throw new PayloadTooLargeException("Declared content-length exceeds limit: " + contentLength);
             }
+
+            super(request);
 
             if (contentLength > 0) {
                 byte[] body = StreamUtils.copyToByteArray(request.getInputStream());

@@ -40,12 +40,12 @@ public class DatabaseListSyncStore implements ListSyncStore {
             return payload;
         }
 
-        boolean checked = payload.getChecked() != null ? payload.getChecked() : true;
+        boolean checked = !Boolean.FALSE.equals(payload.getChecked());
 
         UUID uuid;
         try {
             uuid = UUID.fromString(itemId);
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException _) {
             logger.warn("Ignoring sync update for non-UUID itemId={}, listId={}", itemId, listId);
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
