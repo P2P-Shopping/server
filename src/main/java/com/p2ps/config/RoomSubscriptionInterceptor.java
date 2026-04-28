@@ -43,7 +43,6 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
      * @return the unmodified message if valid, or null to drop the message
      */
     @Override
-    @Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         

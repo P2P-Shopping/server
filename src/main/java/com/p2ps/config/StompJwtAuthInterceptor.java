@@ -25,7 +25,6 @@ public class StompJwtAuthInterceptor implements ChannelInterceptor {
     }
 
     @Override
-    @Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
 
