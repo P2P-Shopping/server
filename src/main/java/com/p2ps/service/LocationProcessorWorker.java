@@ -186,6 +186,7 @@ public class LocationProcessorWorker {
             logger.info("Location recalculation finished successfully. Updated {} unique shelf locations.", insertedRows);
 
         } catch (Exception e) {
+            logger.error("Scheduled location centroid recalculation failed.", e);
             throw new IllegalStateException("Failed to process location updates for store locations.", e);
         }
     }
