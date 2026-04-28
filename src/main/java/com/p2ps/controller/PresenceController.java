@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -36,22 +37,8 @@ public class PresenceController {
      * @param payload the presence payload containing user action and data
      */
     @MessageMapping("/list/{listId}/presence")
-    public void handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
-        if (payload == null) {
-            logger.warn("Received null presence payload for listId length {}", listId != null ? listId.length() : 0);
-            return;
-        }
-
-        payload.setListId(listId);
-
-        if (logger.isDebugEnabled()) {
-            logger.debug("Routing presence event type {} for listId length {}",
-                payload.getEventType() != null ? payload.getEventType().name() : "UNKNOWN", 
-                listId != null ? listId.length() : 0);
-        }
-        
-        // Prevent raw logging of user inputs based on CI/CD constraints
-        
-        messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
+    @SendTo("/topic/list/{listId}/presence")
+    public PresenceEvent handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
+        return payload;
     }
 }

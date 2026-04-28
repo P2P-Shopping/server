@@ -9,6 +9,7 @@ import java.util.UUID;
 public class ItemDTO {
     private UUID id;
     private String name;
+    @com.fasterxml.jackson.annotation.JsonProperty("isChecked")
     private boolean isChecked;
     private String brand;
     private String quantity;

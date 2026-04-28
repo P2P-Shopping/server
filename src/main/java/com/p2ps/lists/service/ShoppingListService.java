@@ -206,6 +206,11 @@ public class ShoppingListService {
             dto.setItems(new ArrayList<>());
         }
 
+        dto.setOwnerEmail(list.getUser().getEmail());
+        dto.setCollaboratorEmails(list.getCollaborators().stream()
+                .map(Users::getEmail)
+                .toList());
+
         return dto;
     }
 }
