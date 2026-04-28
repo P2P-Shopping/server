@@ -35,11 +35,17 @@ public class GeminiAiClient implements AiClient {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("contents", messages.stream().map(this::mapToGeminiContent).collect(Collectors.toList()));
             
+            Map<String, Object> generationConfig = new HashMap<>();
+            
             if (tools != null && !tools.isEmpty()) {
                 requestBody.put("tools", List.of(Map.of("function_declarations", tools.stream().map(this::mapToGeminiTool).collect(Collectors.toList()))));
+            } else {
+                generationConfig.put("responseMimeType", "application/json");
             }
             
-            requestBody.put("generationConfig", Map.of("responseMimeType", "application/json"));
+            if (!generationConfig.isEmpty()) {
+                requestBody.put("generationConfig", generationConfig);
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
