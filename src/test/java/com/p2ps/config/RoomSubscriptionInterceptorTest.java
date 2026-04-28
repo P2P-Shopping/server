@@ -227,20 +227,20 @@ class RoomSubscriptionInterceptorTest {
 
     @Test
     void extractListId_withPresenceSuffix_removesSuffix() throws Exception {
-        RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
-        java.lang.reflect.Method method = interceptor.getClass().getDeclaredMethod("extractListId", String.class);
+        RoomSubscriptionInterceptor testInterceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
+        java.lang.reflect.Method method = testInterceptor.getClass().getDeclaredMethod("extractListId", String.class);
         method.setAccessible(true);
-        String result = (String) method.invoke(interceptor, "/topic/list/123/presence");
+        String result = (String) method.invoke(testInterceptor, "/topic/list/123/presence");
 
         assertThat(result).isEqualTo("123");
     }
 
     @Test
     void extractListId_withoutPresenceSuffix_returnsFullId() throws Exception {
-        RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
-        java.lang.reflect.Method method = interceptor.getClass().getDeclaredMethod("extractListId", String.class);
+        RoomSubscriptionInterceptor testInterceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
+        java.lang.reflect.Method method = testInterceptor.getClass().getDeclaredMethod("extractListId", String.class);
         method.setAccessible(true);
-        String result = (String) method.invoke(interceptor, "/topic/list/123");
+        String result = (String) method.invoke(testInterceptor, "/topic/list/123");
 
         assertThat(result).isEqualTo("123");
     }

@@ -103,7 +103,8 @@ class GeminiAiClientTest {
         when(restTemplate.postForEntity(any(String.class), any(HttpEntity.class), eq(String.class)))
                 .thenThrow(new RuntimeException("API error"));
 
-        assertThatThrownBy(() -> client.generateResponse(List.of(), null))
+        List<AiMessage> messages = List.of();
+        assertThatThrownBy(() -> client.generateResponse(messages, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("Gemini API error");
     }

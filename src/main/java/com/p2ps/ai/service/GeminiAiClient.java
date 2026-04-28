@@ -22,6 +22,8 @@ public class GeminiAiClient implements AiClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
+    private static final String FUNCTION_CALL = "functionCall";
+
     public GeminiAiClient(String apiKey, String apiUrl, RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.apiKey = apiKey;
         this.apiUrl = apiUrl;
@@ -33,12 +35,12 @@ public class GeminiAiClient implements AiClient {
     public AiMessage generateResponse(List<AiMessage> messages, List<AiTool> tools) {
         try {
             Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("contents", messages.stream().map(this::mapToGeminiContent).collect(Collectors.toList()));
+            requestBody.put("contents", messages.stream().map(this::mapToGeminiContent).toList());
             
             Map<String, Object> generationConfig = new HashMap<>();
             
             if (tools != null && !tools.isEmpty()) {
-                requestBody.put("tools", List.of(Map.of("function_declarations", tools.stream().map(this::mapToGeminiTool).collect(Collectors.toList()))));
+                requestBody.put("tools", List.of(Map.of("function_declarations", tools.stream().map(this::mapToGeminiTool).toList())));
             } else {
                 generationConfig.put("responseMimeType", "application/json");
             }
@@ -70,7 +72,7 @@ public class GeminiAiClient implements AiClient {
                         "data", Base64.getEncoder().encodeToString(imagePart.data())
                 ));
             } else if (part instanceof AiMessage.ToolCallPart toolCallPart) {
-                return Map.of("functionCall", Map.of(
+                return Map.of(FUNCTION_CALL, Map.of(
                         "name", toolCallPart.name(),
                         "args", toolCallPart.arguments()
                 ));
@@ -81,7 +83,7 @@ public class GeminiAiClient implements AiClient {
                 ));
             }
             return Collections.<String, Object>emptyMap();
-        }).collect(Collectors.toList());
+        }).toList();
 
         return Map.of("role", message.role(), "parts", parts);
     }
@@ -94,25 +96,29 @@ public class GeminiAiClient implements AiClient {
         );
     }
 
-    private AiMessage parseGeminiResponse(String responseBody) throws Exception {
-        JsonNode rootNode = objectMapper.readTree(responseBody);
-        JsonNode candidate = rootNode.path("candidates").get(0);
-        JsonNode content = candidate.path("content");
-        String role = content.path("role").asText("model");
-        JsonNode partsNode = content.path("parts");
+    private AiMessage parseGeminiResponse(String responseBody) {
+        try {
+            JsonNode rootNode = objectMapper.readTree(responseBody);
+            JsonNode candidate = rootNode.path("candidates").get(0);
+            JsonNode content = candidate.path("content");
+            String role = content.path("role").asText("model");
+            JsonNode partsNode = content.path("parts");
 
-        List<AiMessage.Part> parts = new ArrayList<>();
-        for (JsonNode partNode : partsNode) {
-            if (partNode.has("text")) {
-                parts.add(new AiMessage.TextPart(partNode.get("text").asText()));
-            } else if (partNode.has("functionCall")) {
-                JsonNode fc = partNode.get("functionCall");
-                String name = fc.get("name").asText();
-                Map<String, Object> args = objectMapper.convertValue(fc.get("args"), Map.class);
-                parts.add(new AiMessage.ToolCallPart(name, args));
+            List<AiMessage.Part> parts = new ArrayList<>();
+            for (JsonNode partNode : partsNode) {
+                if (partNode.has("text")) {
+                    parts.add(new AiMessage.TextPart(partNode.get("text").asText()));
+                } else if (partNode.has(FUNCTION_CALL)) {
+                    JsonNode fc = partNode.get(FUNCTION_CALL);
+                    String name = fc.get("name").asText();
+                    Map<String, Object> args = objectMapper.convertValue(fc.get("args"), Map.class);
+                    parts.add(new AiMessage.ToolCallPart(name, args));
+                }
             }
-        }
 
-        return new AiMessage(role, parts);
+            return new AiMessage(role, parts);
+        } catch (Exception e) {
+            throw new AiProcessingException("Failed to parse Gemini response", e);
+        }
     }
 }

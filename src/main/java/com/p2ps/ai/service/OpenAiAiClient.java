@@ -20,13 +20,17 @@ import java.util.stream.Collectors;
  */
 public class OpenAiAiClient implements AiClient {
 
-    private final String apiKey;
-    private final String apiUrl;
-    private final String model;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+     private final String apiKey;
+     private final String apiUrl;
+     private final String model;
+     private final RestTemplate restTemplate;
+     private final ObjectMapper objectMapper;
 
-    public OpenAiAiClient(String apiKey, String apiUrl, String model, RestTemplate restTemplate, ObjectMapper objectMapper) {
+     private static final String FUNCTION = "function";
+     private static final String CONTENT = "content";
+     private static final String TOOL_CALLS = "tool_calls";
+
+     public OpenAiAiClient(String apiKey, String apiUrl, String model, RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.apiKey = apiKey;
         this.apiUrl = apiUrl;
         this.model = model;
@@ -39,10 +43,10 @@ public class OpenAiAiClient implements AiClient {
         try {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            requestBody.put("messages", messages.stream().map(this::mapToOpenAiMessage).collect(Collectors.toList()));
+            requestBody.put("messages", messages.stream().map(this::mapToOpenAiMessage).toList());
             
             if (tools != null && !tools.isEmpty()) {
-                requestBody.put("tools", tools.stream().map(this::mapToOpenAiTool).collect(Collectors.toList()));
+                requestBody.put("tools", tools.stream().map(this::mapToOpenAiTool).toList());
                 requestBody.put("tool_choice", "auto");
             }
 
@@ -86,24 +90,24 @@ public class OpenAiAiClient implements AiClient {
                 toolCalls.add(Map.of(
                         "id", "call_" + toolCallPart.name() + "_" + UUID.randomUUID().toString().substring(0, 8),
                         "type", "function",
-                        "function", Map.of(
+                        FUNCTION, Map.of(
                                 "name", toolCallPart.name(),
                                 "arguments", serializeArgs(toolCallPart.arguments())
                         )
                 ));
             } else if (part instanceof AiMessage.ToolResponsePart toolResponsePart) {
                 // For 'tool' role, we need tool_call_id
-                map.put("tool_call_id", "call_" + toolResponsePart.name()); // This is a bit tricky since we don't track IDs perfectly yet
-                map.put("content", String.valueOf(toolResponsePart.content()));
+                map.put("tool_call_id", "call_" + toolResponsePart.name());
+                map.put(CONTENT, String.valueOf(toolResponsePart.content()));
                 return map;
             }
         }
 
         if (!content.isEmpty()) {
-            map.put("content", content);
+            map.put(CONTENT, content);
         }
         if (!toolCalls.isEmpty()) {
-            map.put("tool_calls", toolCalls);
+            map.put(TOOL_CALLS, toolCalls);
         }
 
         return map;
@@ -112,7 +116,7 @@ public class OpenAiAiClient implements AiClient {
     private String serializeArgs(Map<String, Object> args) {
         try {
             return objectMapper.writeValueAsString(args);
-        } catch (Exception e) {
+        } catch (Exception _) {
             return "{}";
         }
     }
@@ -120,7 +124,7 @@ public class OpenAiAiClient implements AiClient {
     private Map<String, Object> mapToOpenAiTool(AiTool tool) {
         return Map.of(
                 "type", "function",
-                "function", Map.of(
+                FUNCTION, Map.of(
                         "name", tool.name(),
                         "description", tool.description(),
                         "parameters", tool.parameters()
@@ -128,27 +132,31 @@ public class OpenAiAiClient implements AiClient {
         );
     }
 
-    private AiMessage parseOpenAiResponse(String responseBody) throws Exception {
-        JsonNode rootNode = objectMapper.readTree(responseBody);
-        JsonNode choice = rootNode.path("choices").get(0);
-        JsonNode messageNode = choice.path("message");
-        
-        String role = messageNode.path("role").asText("assistant");
-        List<AiMessage.Part> parts = new ArrayList<>();
+    private AiMessage parseOpenAiResponse(String responseBody) {
+        try {
+            JsonNode rootNode = objectMapper.readTree(responseBody);
+            JsonNode choice = rootNode.path("choices").get(0);
+            JsonNode messageNode = choice.path("message");
+            
+            String role = messageNode.path("role").asText("assistant");
+            List<AiMessage.Part> parts = new ArrayList<>();
 
-        if (messageNode.has("content") && !messageNode.get("content").isNull()) {
-            parts.add(new AiMessage.TextPart(messageNode.get("content").asText()));
-        }
-
-        if (messageNode.has("tool_calls")) {
-            for (JsonNode tc : messageNode.get("tool_calls")) {
-                String name = tc.path("function").path("name").asText();
-                String argsStr = tc.path("function").path("arguments").asText();
-                Map<String, Object> args = objectMapper.readValue(argsStr, Map.class);
-                parts.add(new AiMessage.ToolCallPart(name, args));
+            if (messageNode.has(CONTENT) && !messageNode.get(CONTENT).isNull()) {
+                parts.add(new AiMessage.TextPart(messageNode.get(CONTENT).asText()));
             }
-        }
 
-        return new AiMessage(role, parts);
+            if (messageNode.has(TOOL_CALLS)) {
+                for (JsonNode tc : messageNode.get(TOOL_CALLS)) {
+                    String name = tc.path(FUNCTION).path("name").asText();
+                    String argsStr = tc.path(FUNCTION).path("arguments").asText();
+                    Map<String, Object> args = objectMapper.readValue(argsStr, Map.class);
+                    parts.add(new AiMessage.ToolCallPart(name, args));
+                }
+            }
+
+            return new AiMessage(role, parts);
+        } catch (Exception e) {
+            throw new AiProcessingException("Failed to parse OpenAI response", e);
+        }
     }
 }

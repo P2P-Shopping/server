@@ -8,7 +8,6 @@ import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.exception.AiProcessingException;
 import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -40,6 +39,11 @@ public class AiService {
             "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
             "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\"}]}.";
 
+    private static final String DESCRIPTION = "description";
+    private static final String KEYWORD = "keyword";
+    private static final String RADIUS_METERS = "radius_meters";
+    private static final String ITEM_IDS = "item_ids";
+
     public AiService(AiClient aiClient, CatalogService catalogService, StoreMatchingEngine storeMatchingEngine) {
         this.aiClient = aiClient;
         this.toolRegistry = new ToolRegistry();
@@ -55,12 +59,12 @@ public class AiService {
                 Map.of(
                         "type", "OBJECT",
                         "properties", Map.of(
-                                "keyword", Map.of("type", "STRING", "description", "The product name or keyword to search for.")
+                                KEYWORD, Map.of("type", "STRING", DESCRIPTION, "The product name or keyword to search for.")
                         ),
-                        "required", List.of("keyword")
+                        "required", List.of(KEYWORD)
                 ),
                 (args, context) -> {
-                    String keyword = (String) args.get("keyword");
+                    String keyword = (String) args.get(KEYWORD);
                     return catalogService.searchProductsByName(keyword);
                 }
         ));
@@ -71,18 +75,18 @@ public class AiService {
                 Map.of(
                         "type", "OBJECT",
                         "properties", Map.of(
-                                "radius_meters", Map.of("type", "INTEGER", "description", "Search radius in meters (default 5000)."),
-                                "item_ids", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "description", "List of catalog product UUIDs to match in inventory.")
+                                RADIUS_METERS, Map.of("type", "INTEGER", DESCRIPTION, "Search radius in meters (default 5000)."),
+                                ITEM_IDS, Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), DESCRIPTION, "List of catalog product UUIDs to match in inventory.")
                         ),
-                        "required", List.of("item_ids")
+                        "required", List.of(ITEM_IDS)
                 ),
                 (args, context) -> {
                     Double lat = (Double) context.get("latitude");
                     Double lng = (Double) context.get("longitude");
                     if (lat == null || lng == null) return "User location not provided. Cannot search stores.";
-                    int radius = (args.get("radius_meters") != null) ? (Integer) args.get("radius_meters") : 5000;
-                    List<String> idStrings = (List<String>) args.get("item_ids");
-                    List<UUID> itemIds = idStrings.stream().map(UUID::fromString).collect(Collectors.toList());
+                    int radius = (args.get(RADIUS_METERS) != null) ? (Integer) args.get(RADIUS_METERS) : 5000;
+                    List<String> idStrings = (List<String>) args.get(ITEM_IDS);
+                    List<UUID> itemIds = idStrings.stream().map(UUID::fromString).toList();
                     return storeMatchingEngine.findOptimalStore(lat, lng, radius, itemIds);
                 }
         ));
@@ -119,6 +123,10 @@ public class AiService {
         context.put("latitude", latitude);
         context.put("longitude", longitude);
 
+        return processAiResponseLoop(messages, context);
+    }
+
+    private String processAiResponseLoop(List<AiMessage> messages, Map<String, Object> context) {
         while (true) {
             AiMessage response = aiClient.generateResponse(messages, toolRegistry.getAvailableTools());
             messages.add(response);
@@ -126,7 +134,7 @@ public class AiService {
             List<AiMessage.ToolCallPart> toolCalls = response.parts().stream()
                     .filter(p -> p instanceof AiMessage.ToolCallPart)
                     .map(p -> (AiMessage.ToolCallPart) p)
-                    .collect(Collectors.toList());
+                    .toList();
 
             if (!toolCalls.isEmpty()) {
                 List<AiMessage.Part> toolResponses = new ArrayList<>();
@@ -142,7 +150,6 @@ public class AiService {
                         .collect(Collectors.joining("\n"));
             }
         }
-
     }
 
     public String extractIngredientsAsJson(String rawRecipeText) {
@@ -164,7 +171,9 @@ public class AiService {
             } finally {
                 reader.dispose();
             }
-        } catch (IOException _) {}
+        } catch (IOException e) {
+            // IOException expected for invalid/non-image data; return null to indicate unknown type
+        }
         return null;
     }
 }

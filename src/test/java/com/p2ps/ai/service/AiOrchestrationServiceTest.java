@@ -1,15 +1,16 @@
 package com.p2ps.ai.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2ps.ai.core.AiMessage;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -18,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -176,41 +178,24 @@ class AiOrchestrationServiceTest {
         verify(aiService).extractFromMultimodal(null, "text", 45.0, 25.0);
     }
 
-    @Test
-    void extractJson_withBraces_returnsJsonObject() throws Exception {
+    @ParameterizedTest(name = "extractJson: input={0}, expected={1}")
+    @MethodSource("extractJsonTestCases")
+    void extractJson_returnsExpected(String input, String expected) throws Exception {
         java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
         method.setAccessible(true);
-
-        String result = (String) method.invoke(svc, "Here is the data: {\"key\":\"value\"} done.");
-        assertThat(result).isEqualTo("{\"key\":\"value\"}");
+        String result = (String) method.invoke(svc, input);
+        assertThat(result).isEqualTo(expected);
     }
 
-    @Test
-    void extractJson_withBrackets_returnsJsonArray() throws Exception {
-        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
-        method.setAccessible(true);
-
-        String result = (String) method.invoke(svc, "Data: [1,2,3] end.");
-        assertThat(result).isEqualTo("[1,2,3]");
-    }
-
-    @Test
-    void extractJson_nullOrBlank_returnsOriginal() throws Exception {
-        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
-        method.setAccessible(true);
-
-        assertThat(method.invoke(svc, (String) null)).isNull();
-        assertThat(method.invoke(svc, "")).isEqualTo("");
-        assertThat(method.invoke(svc, "   ")).isEqualTo("   ");
-    }
-
-    @Test
-    void extractJson_noJson_returnsOriginal() throws Exception {
-        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
-        method.setAccessible(true);
-
-        String result = (String) method.invoke(svc, "No JSON here");
-        assertThat(result).isEqualTo("No JSON here");
+    static Stream<Arguments> extractJsonTestCases() {
+        return Stream.of(
+                Arguments.of("Here is the data: {\"key\":\"value\"} done.", "{\"key\":\"value\"}"),
+                Arguments.of("Data: [1,2,3] end.", "[1,2,3]"),
+                Arguments.of(null, null),
+                Arguments.of("", ""),
+                Arguments.of("   ", "   "),
+                Arguments.of("No JSON here", "No JSON here")
+        );
     }
 
     @Test
