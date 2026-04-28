@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,6 +69,23 @@ class AiServiceTest {
     }
 
     @Test
+    void extractIngredientsAsJson_withToolCall_loopExecutesTool() {
+        AiMessage toolCallResponse = new AiMessage("model", List.of(
+                new AiMessage.ToolCallPart("search_catalog", Map.of("keyword", "milk"))
+        ));
+        AiMessage finalResponse = new AiMessage("model", List.of(
+                new AiMessage.TextPart("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}")
+        ));
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(toolCallResponse)
+                .thenReturn(finalResponse);
+
+        String result = aiService.extractIngredientsAsJson("milk recipe");
+
+        assertThat(result).contains("\"genericName\":\"Milk\"");
+    }
+
+    @Test
     void extractFromMultimodal_withInvalidImage_throwsException() {
         MultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
 
@@ -84,5 +102,54 @@ class AiServiceTest {
         String result = aiService.extractFromMultimodal(image, "Ce am in frigider?", null, null);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
+    }
+
+    @Test
+    void extractFromMultimodal_withLocation_passesContextToTools() {
+        MultipartFile image = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
+        AiMessage toolCallResponse = new AiMessage("model", List.of(
+                new AiMessage.ToolCallPart("find_optimal_store", Map.of("item_ids", List.of("id1")))
+        ));
+        AiMessage finalResponse = new AiMessage("model", List.of(
+                new AiMessage.TextPart("{\"listType\":\"NORMAL\",\"items\":[]}")
+        ));
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(toolCallResponse)
+                .thenReturn(finalResponse);
+
+        String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0);
+
+        assertThat(result).contains("\"listType\":\"NORMAL\"");
+    }
+
+    @Test
+    void extractFromMultimodal_noImageTextOnly_usesFallbackText() {
+        when(aiClient.generateResponse(any(), any())).thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("result"))));
+
+        String result = aiService.extractFromMultimodal(null, null, null, null);
+
+        assertThat(result).isEqualTo("result");
+    }
+
+    @Test
+    void detectMimeTypeSecurely_jpeg_returnsImageJpeg() throws Exception {
+        byte[] jpegHeader = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
+        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+        java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(service, jpegHeader);
+
+        assertThat(result).isEqualTo("image/jpeg");
+    }
+
+    @Test
+    void detectMimeTypeSecurely_invalidBytes_returnsNull() throws Exception {
+        byte[] invalid = "not-an-image".getBytes();
+        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+        java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(service, invalid);
+
+        assertThat(result).isNull();
     }
 }

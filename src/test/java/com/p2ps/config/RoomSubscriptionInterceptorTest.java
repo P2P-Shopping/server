@@ -13,9 +13,11 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -183,5 +185,63 @@ class RoomSubscriptionInterceptorTest {
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNull(result);
+    }
+
+    @Test
+    void preSend_NullDestination_ReturnsMessage() {
+        Message<?> message = createMessage(StompCommand.SUBSCRIBE, null);
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertSame(message, result);
+    }
+
+    @Test
+    void preSend_NonListTopic_PassesThrough() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/other/topic",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertSame(message, result);
+    }
+
+    @Test
+    void preSend_InvalidUuidFormat_ReturnsNull() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/list/not-a-uuid",
+                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
+    @Test
+    void extractListId_withPresenceSuffix_removesSuffix() throws Exception {
+        RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
+        java.lang.reflect.Method method = interceptor.getClass().getDeclaredMethod("extractListId", String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(interceptor, "/topic/list/123/presence");
+
+        assertThat(result).isEqualTo("123");
+    }
+
+    @Test
+    void extractListId_withoutPresenceSuffix_returnsFullId() throws Exception {
+        RoomSubscriptionInterceptor interceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class));
+        java.lang.reflect.Method method = interceptor.getClass().getDeclaredMethod("extractListId", String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(interceptor, "/topic/list/123");
+
+        assertThat(result).isEqualTo("123");
     }
 }

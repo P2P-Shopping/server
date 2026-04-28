@@ -162,4 +162,84 @@ class AiOrchestrationServiceTest {
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure");
     }
+
+    @Test
+    void generateShoppingItems_withLatLong_passesToAiService() {
+        String validJson = """
+                {"listType":"NORMAL","items":[{"genericName":"Milk"}]}
+                """;
+        when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0))).thenReturn(validJson);
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0);
+
+        assertThat(response.getItems()).hasSize(1);
+        verify(aiService).extractFromMultimodal(null, "text", 45.0, 25.0);
+    }
+
+    @Test
+    void extractJson_withBraces_returnsJsonObject() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(svc, "Here is the data: {\"key\":\"value\"} done.");
+        assertThat(result).isEqualTo("{\"key\":\"value\"}");
+    }
+
+    @Test
+    void extractJson_withBrackets_returnsJsonArray() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(svc, "Data: [1,2,3] end.");
+        assertThat(result).isEqualTo("[1,2,3]");
+    }
+
+    @Test
+    void extractJson_nullOrBlank_returnsOriginal() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
+        method.setAccessible(true);
+
+        assertThat(method.invoke(svc, (String) null)).isNull();
+        assertThat(method.invoke(svc, "")).isEqualTo("");
+        assertThat(method.invoke(svc, "   ")).isEqualTo("   ");
+    }
+
+    @Test
+    void extractJson_noJson_returnsOriginal() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("extractJson", String.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(svc, "No JSON here");
+        assertThat(result).isEqualTo("No JSON here");
+    }
+
+    @Test
+    void processRecipeAndPopulateList_retriesOnFailure() {
+        when(aiService.extractIngredientsAsJson(anyString()))
+                .thenThrow(new RuntimeException("Try again"))
+                .thenReturn("[{\"genericName\":\"Tomato\",\"quantity\":2}]");
+
+        RecipeRequest req = new RecipeRequest();
+        req.setText("text");
+        req.setNewListTitle("New List");
+        UUID listId = UUID.randomUUID();
+        req.setListId(listId);
+
+        var result = svc.processRecipeAndPopulateList(req, "u@e");
+
+        assertThat(result).hasSize(1);
+        verify(aiService, times(2)).extractIngredientsAsJson(anyString());
+    }
+
+    @Test
+    void generateShoppingItems_retriesOnFailure() {
+        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Fail"))
+                .thenReturn("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}");
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null);
+
+        assertThat(response.getItems()).hasSize(1);
+        verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any());
+    }
 }
