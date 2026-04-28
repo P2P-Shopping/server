@@ -37,7 +37,7 @@ public class AiPersistenceService {
         List<ItemRequest> batchItems = new ArrayList<>();
         for (ParsedItemResponse aiItem : validItems) {
             ItemRequest newItem = new ItemRequest();
-            newItem.setName(aiItem.getName().trim());
+            newItem.setName(aiItem.getGenericName().trim());
             String quantityStr = (aiItem.getQuantity() != null ? String.valueOf(aiItem.getQuantity()) : "");
             String unitStr = (aiItem.getUnit() != null ? aiItem.getUnit() : "");
             newItem.setQuantity((quantityStr + " " + unitStr).trim());

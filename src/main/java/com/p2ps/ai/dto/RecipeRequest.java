@@ -1,4 +1,5 @@
 package com.p2ps.ai.dto;
+//OBSOLETE since we dont use just JSON text anymore
 
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;

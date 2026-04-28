@@ -51,12 +51,12 @@ class CatalogServiceTest {
 
         // Verify upsert was called correctly
         verify(catalogRepository).upsertProduct(genericName, specificName, brand, category, price);
-        
+
         // Verify the service returns the product found after upsert
         assertNotNull(result);
         assertEquals(specificName, result.getSpecificName());
     }
-    
+
     @Test
     void recordPurchaseShouldHandleNullGenericName() {
         String specificName = "Product without generic name";
@@ -75,9 +75,9 @@ class CatalogServiceTest {
         p1.setSpecificName("P1");
         ProductCatalog p2 = new ProductCatalog();
         p2.setSpecificName("P2");
-        
+
         List<ProductCatalog> expectedList = List.of(p1, p2);
-        
+
         when(catalogRepository.findTop50ByOrderByPurchaseCountDesc()).thenReturn(expectedList);
 
         List<ProductCatalog> result = catalogService.getTopPopularProducts();
@@ -92,9 +92,9 @@ class CatalogServiceTest {
         UUID catalogId = UUID.randomUUID();
         UUID store1 = UUID.randomUUID();
         UUID store2 = UUID.randomUUID();
-        
+
         List<UUID> expectedStores = List.of(store1, store2);
-        
+
         when(catalogRepository.findBestStoresForCatalogProduct(catalogId)).thenReturn(expectedStores);
 
         List<UUID> result = catalogService.getBestStoresForCatalogProduct(catalogId);
@@ -102,5 +102,47 @@ class CatalogServiceTest {
         assertEquals(2, result.size());
         assertEquals(expectedStores, result);
         verify(catalogRepository).findBestStoresForCatalogProduct(catalogId);
+    }
+    @Test
+    void recordPurchaseShouldThrowExceptionWhenProductNotFoundAfterUpsert() {
+        String specificName = "Ghost Product";
+        String brand = "Ghost Brand";
+
+        when(catalogRepository.findBySpecificNameAndBrand(specificName, brand)).thenReturn(Optional.empty());
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            catalogService.recordPurchase("Generic", specificName, brand, "Category", BigDecimal.TEN);
+        });
+
+        assertTrue(exception.getMessage().contains("Product should have been created by upsert"));
+    }
+
+    @Test
+    void searchProductsByNameShouldReturnEmptyListWhenKeywordIsNull() {
+        List<ProductCatalog> result = catalogService.searchProductsByName(null);
+
+        assertTrue(result.isEmpty());
+        verify(catalogRepository, never()).findByGenericNameContainingIgnoreCase(any());
+    }
+
+    @Test
+    void searchProductsByNameShouldReturnEmptyListWhenKeywordIsBlank() {
+        List<ProductCatalog> result = catalogService.searchProductsByName("   ");
+
+        assertTrue(result.isEmpty());
+        verify(catalogRepository, never()).findByGenericNameContainingIgnoreCase(any());
+    }
+
+    @Test
+    void searchProductsByNameShouldReturnMatchesWhenKeywordIsValid() {
+        ProductCatalog p1 = new ProductCatalog();
+        p1.setGenericName("Lapte");
+
+        when(catalogRepository.findByGenericNameContainingIgnoreCase("lapte")).thenReturn(List.of(p1));
+
+        List<ProductCatalog> result = catalogService.searchProductsByName("  lapte  ");
+
+        assertEquals(1, result.size());
+        verify(catalogRepository).findByGenericNameContainingIgnoreCase("lapte");
     }
 }
