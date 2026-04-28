@@ -29,15 +29,17 @@ public class TelemetryService {
     public void processPing(TelemetryPingDTO pingDTO) {
         log.info("[SERVICE] Processing ping for the product: {}", pingDTO.getItemId());
 
-        long windowStart = pingDTO.getTimestamp() - (dedupWindowSeconds * 1000);
-        Optional<TelemetryRecord> recent = telemetryRepository
-                .findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
-                        pingDTO.getDeviceId(), pingDTO.getStoreId(), pingDTO.getItemId());
+        if (pingDTO.getTimestamp() != null) {
+            long windowStart = pingDTO.getTimestamp() - (dedupWindowSeconds * 1000);
+            Optional<TelemetryRecord> recent = telemetryRepository
+                    .findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                            pingDTO.getDeviceId(), pingDTO.getStoreId(), pingDTO.getItemId());
 
-        if (recent.isPresent() && recent.get().getTimestamp() > windowStart) {
-            log.info("[SERVICE] Duplicate ping dropped for device: {}, item: {}",
-                    pingDTO.getDeviceId(), pingDTO.getItemId());
-            return;
+            if (recent.isPresent() && recent.get().getTimestamp() > windowStart) {
+                log.info("[SERVICE] Duplicate ping dropped for device: {}, item: {}",
+                        pingDTO.getDeviceId(), pingDTO.getItemId());
+                return;
+            }
         }
 
         TelemetryRecord telemetryRecord = mapToEntity(pingDTO);
