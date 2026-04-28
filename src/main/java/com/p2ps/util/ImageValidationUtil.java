@@ -25,7 +25,7 @@ public class ImageValidationUtil {
             } finally {
                 reader.dispose();
             }
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             return null;
         }
     }

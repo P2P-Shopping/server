@@ -62,43 +62,12 @@ public class GeminiService {
 
     public String extractFromMultimodal(MultipartFile image, String text) {
         try {
-            // Smart prompting: bring Top Products
             List<ProductCatalog> popularProducts = catalogService.getTopPopularProducts();
+            String catalogContext = buildCatalogContext(popularProducts);
+            List<Map<String, Object>> parts = buildRequestParts(image, text, catalogContext);
 
-            // Transform the catalog in a formatted text for AI
-            String catalogContext = "=== GLOBAL CATALOG ===\n" + popularProducts.stream()
-                    .map(p -> "ID: " + p.getId() + " | Generic Name: " + p.getGenericName() + " | Specific Name: " + p.getSpecificName() + " | Brand: " + (p.getBrand() != null ? p.getBrand() : "N/A"))
-                    .collect(Collectors.joining("\n")) + "\n======================";
-
-            // Combine the instruction catalog with user text
-            List<Map<String, Object>> parts = new ArrayList<>();
-            String fallbackText = (image != null && !image.isEmpty())
-                    ? "I want to cook with what's in the photo."
-                    : "Please analyze the text below.";
-
-            String finalPrompt = SYSTEM_PROMPT + "\n\n" + catalogContext + "\n\nUser Text:\n" +
-                    (text != null && !text.trim().isEmpty() ? text : fallbackText);
-            parts.add(Map.of("text", finalPrompt));
-
-            if (image != null && !image.isEmpty()) {
-                byte[] imageBytes = image.getBytes();
-                String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                String secureMimeType = detectMimeTypeSecurely(imageBytes);
-                if (secureMimeType == null) {
-                    throw new AiProcessingException("Unsupported or corrupted image format. Only actual JPEG/PNG files are allowed.");
-                }
-
-                parts.add(Map.of("inlineData", Map.of(
-                        "mimeType", secureMimeType,
-                        "data", base64Image
-                )));
-            }
-
-            // Build request
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("contents", List.of(Map.of("role", "user", "parts", parts)));
-
             requestBody.put("generationConfig", Map.of("responseMimeType", "application/json"));
 
             HttpHeaders headers = new HttpHeaders();
@@ -108,29 +77,63 @@ public class GeminiService {
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
 
-            JsonNode rootNode = objectMapper.readTree(response.getBody());
-            JsonNode candidates = rootNode.path("candidates");
-            if (candidates.isMissingNode() || candidates.isEmpty()) {
-                throw new AiProcessingException("Google API returned an empty response.");
-            }
-
-            JsonNode responseParts = candidates.get(0).path("content").path("parts");
-            if (responseParts.isMissingNode() || responseParts.isEmpty()) {
-                throw new AiProcessingException("Google API returned candidate without text parts.");
-            }
-
-            JsonNode textNode = responseParts.get(0).path("text");
-            if (textNode.isMissingNode() || textNode.asText().trim().isEmpty()) {
-                throw new AiProcessingException("Google API returned an empty text response.");
-            }
-
-            return textNode.asText();
-
+            return parseTextResponse(response.getBody());
         } catch (AiProcessingException e) {
             throw e;
         } catch (Exception e) {
             throw new AiProcessingException("Error during Multimodal AI processing: " + e.getMessage(), e);
         }
+    }
+
+    private String buildCatalogContext(List<ProductCatalog> popularProducts) {
+        return "=== GLOBAL CATALOG ===\n" + popularProducts.stream()
+                .map(p -> "ID: " + p.getId() + " | Generic Name: " + p.getGenericName() + " | Specific Name: " + p.getSpecificName() + " | Brand: " + (p.getBrand() != null ? p.getBrand() : "N/A"))
+                .collect(Collectors.joining("\n")) + "\n======================";
+    }
+
+    private List<Map<String, Object>> buildRequestParts(MultipartFile image, String text, String catalogContext) throws IOException {
+        List<Map<String, Object>> parts = new ArrayList<>();
+        String fallbackText = (image != null && !image.isEmpty())
+                ? "I want to cook with what's in the photo."
+                : "Please analyze the text below.";
+
+        String finalPrompt = SYSTEM_PROMPT + "\n\n" + catalogContext + "\n\nUser Text:\n" +
+                (text != null && !text.trim().isEmpty() ? text : fallbackText);
+        parts.add(Map.of("text", finalPrompt));
+
+        if (image != null && !image.isEmpty()) {
+            byte[] imageBytes = image.getBytes();
+            String secureMimeType = detectMimeTypeSecurely(imageBytes);
+            if (secureMimeType == null) {
+                throw new AiProcessingException("Unsupported or corrupted image format. Only actual JPEG/PNG files are allowed.");
+            }
+
+            parts.add(Map.of("inlineData", Map.of(
+                    "mimeType", secureMimeType,
+                    "data", Base64.getEncoder().encodeToString(imageBytes)
+            )));
+        }
+        return parts;
+    }
+
+    private String parseTextResponse(String responseBody) throws IOException {
+        JsonNode rootNode = objectMapper.readTree(responseBody);
+        JsonNode candidates = rootNode.path("candidates");
+        if (candidates.isMissingNode() || candidates.isEmpty()) {
+            throw new AiProcessingException("Google API returned an empty response.");
+        }
+
+        JsonNode responseParts = candidates.get(0).path("content").path("parts");
+        if (responseParts.isMissingNode() || responseParts.isEmpty()) {
+            throw new AiProcessingException("Google API returned candidate without text parts.");
+        }
+
+        JsonNode textNode = responseParts.get(0).path("text");
+        if (textNode.isMissingNode() || textNode.asText().trim().isEmpty()) {
+            throw new AiProcessingException("Google API returned an empty text response.");
+        }
+
+        return textNode.asText();
     }
 
     public String extractIngredientsAsJson(String rawRecipeText) {
@@ -152,7 +155,7 @@ public class GeminiService {
             } finally {
                 reader.dispose();
             }
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // Return null if parsing fails
         }
         return null;

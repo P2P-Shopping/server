@@ -6,6 +6,8 @@ import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.exception.AiProcessingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,40 +41,21 @@ class AiOrchestrationServiceTest {
         svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
     }
 
-    @Test
-    void processRecipe_invalidJson_throwsAiProcessingException() {
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("invalid-json");
+    @ParameterizedTest
+    @CsvSource({
+            "invalid-json, AI could not return a correctly structured list",
+            "'[]', AI did not return any valid ingredients",
+            "null, null payload"
+    })
+    void processRecipe_fails_throwsAiProcessingException(String aiOutput, String expectedErrorMessage) {
+        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn(aiOutput);
 
         RecipeRequest req = new RecipeRequest();
         req.setText("text");
 
         assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
                 .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("AI could not return a correctly structured list");
-    }
-
-    @Test
-    void processRecipe_emptyItems_throwsAiProcessingException() {
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("[]");
-
-        RecipeRequest req = new RecipeRequest();
-        req.setText("text");
-
-        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
-                .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("AI did not return any valid ingredients");
-    }
-
-    @Test
-    void processRecipe_nullPayload_throwsAiProcessingException() {
-        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
-
-        RecipeRequest req = new RecipeRequest();
-        req.setText("text");
-
-        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
-                .isInstanceOf(AiProcessingException.class)
-                .hasMessageContaining("null payload");
+                .hasMessageContaining(expectedErrorMessage);
     }
 
     @Test

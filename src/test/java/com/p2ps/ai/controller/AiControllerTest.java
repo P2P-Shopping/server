@@ -1,8 +1,6 @@
 package com.p2ps.ai.controller;
 
 import com.p2ps.ai.dto.AiGenerationResponse;
-import com.p2ps.ai.dto.ParsedItemResponse;
-import com.p2ps.ai.dto.RecipeRequest;
 import com.p2ps.ai.service.AiOrchestrationService;
 import com.p2ps.util.ImageValidationUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +15,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,21 +39,6 @@ class AiControllerTest {
         principal = () -> "user@test.com";
     }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    void parseRecipe_returnsGoneStatusAndMigrationMessage() {
-        // Act
-        ResponseEntity<?> resp = controller.parseRecipe();
-
-        // Assert
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.GONE);
-        assertThat(resp.getHeaders().getFirst("Deprecation")).isEqualTo("true");
-
-        Map<String, String> body = (Map<String, String>) resp.getBody();
-        assertThat(body).containsEntry("error", "This endpoint is permanently removed due to the new Gatekeeper architecture.");
-
-        verifyNoInteractions(orchestration);
-    }
 
     @Test
     @SuppressWarnings("unchecked")
