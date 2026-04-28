@@ -12,6 +12,7 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.security.core.Authentication;
 
+import org.springframework.lang.Nullable;
 import java.security.Principal;
 import java.util.UUID;
 import java.util.regex.Pattern;
