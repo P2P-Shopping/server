@@ -2,7 +2,6 @@ package com.p2ps.telemetry.services;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.stereotype.Service;
@@ -25,7 +24,10 @@ public class RateLimitingService {
 
     private Bucket newBucket(String ignoredDeviceId) {
         // Maximum requests per second aligned with allowed batch size
-        Bandwidth limit = Bandwidth.classic(MAX_BATCH_SIZE, Refill.greedy(MAX_BATCH_SIZE, Duration.ofSeconds(1)));
+        Bandwidth limit = Bandwidth.builder()
+                .capacity(MAX_BATCH_SIZE)
+                .refillGreedy(MAX_BATCH_SIZE, Duration.ofSeconds(1))
+                .build();
         return Bucket.builder().addLimit(limit).build();
     }
 }
