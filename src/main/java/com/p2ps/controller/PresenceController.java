@@ -36,22 +36,12 @@ public class PresenceController {
      * @param payload the presence payload containing user action and data
      */
     @MessageMapping("/list/{listId}/presence")
-    public void handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
-        if (payload == null) {
-            logger.warn("Received null presence payload for listId length {}", listId != null ? listId.length() : 0);
-            return;
+    public PresenceEvent handlePresenceEvent(@DestinationVariable String listId, PresenceEvent payload) {
+        if (payload != null) {
+            payload.setListId(listId);
+            logger.debug("Routing presence event for list: {}", listId);
+            messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
         }
-
-        payload.setListId(listId);
-
-        if (logger.isDebugEnabled()) {
-            logger.debug("Routing presence event type {} for listId length {}",
-                payload.getEventType() != null ? payload.getEventType().name() : "UNKNOWN", 
-                listId != null ? listId.length() : 0);
-        }
-        
-        // Prevent raw logging of user inputs based on CI/CD constraints
-        
-        messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
+        return payload;
     }
 }

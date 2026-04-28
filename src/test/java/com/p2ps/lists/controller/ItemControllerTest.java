@@ -9,6 +9,7 @@ import com.p2ps.lists.service.ItemService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.junit.jupiter.api.Assertions.*;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -125,7 +126,7 @@ class ItemControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(itemId.toString()))
                 .andExpect(jsonPath("$.name").value("Oat Milk"))
-                .andExpect(jsonPath("$.checked").value(true));
+                .andExpect(jsonPath("$.isChecked").value(true));
 
         verify(itemService).updateItem(itemId, request, "ana@example.com");
     }
@@ -140,6 +141,20 @@ class ItemControllerTest {
 
         verify(itemService).deleteItem(itemId, "ana@example.com");
     }
+
+    @Test
+    void testItemSerializationRoundTrip() throws Exception {
+        ItemDTO dto = new ItemDTO();
+        dto.setName("Test Item");
+        dto.setChecked(true);
+
+        String json = objectMapper.writeValueAsString(dto);
+        assertTrue(json.contains("\"isChecked\":true"), "JSON should contain isChecked:true");
+
+        ItemDTO deserialized = objectMapper.readValue(json, ItemDTO.class);
+        assertTrue(deserialized.isChecked(), "Deserialized object should have isChecked=true");
+    }
+
 
     private ItemRequest buildRequest() {
         ItemRequest request = new ItemRequest();

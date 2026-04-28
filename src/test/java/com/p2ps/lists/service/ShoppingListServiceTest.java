@@ -70,6 +70,7 @@ class ShoppingListServiceTest {
         assertEquals(listId, result.getId());
         assertEquals("Weekly groceries", result.getTitle());
         assertEquals(ListCategory.NORMAL, result.getCategory());
+        assertEquals(user.getId(), result.getOwnerId());
         verify(shoppingListRepository).save(any(ShoppingList.class));
     }
 
@@ -152,6 +153,10 @@ class ShoppingListServiceTest {
         ShoppingList secondList = new ShoppingList();
         secondList.setId(UUID.randomUUID());
         secondList.setTitle("Hardware");
+        Users owner = new Users(userEmail, "pass", "Ana", "Ionescu");
+        owner.setId(1);
+        firstList.setUser(owner);
+        secondList.setUser(owner);
 
         when(shoppingListRepository.findAccessibleByEmail(userEmail)).thenReturn(List.of(firstList, secondList));
 
@@ -160,8 +165,8 @@ class ShoppingListServiceTest {
         assertEquals(2, result.size());
         assertEquals("Groceries", result.get(0).getTitle());
         assertEquals("Hardware", result.get(1).getTitle());
-        assertTrue(result.stream().map(ShoppingListDTO::getId).toList().contains(firstList.getId()));
         assertTrue(result.stream().map(ShoppingListDTO::getId).toList().contains(secondList.getId()));
+        assertEquals(1, result.get(0).getOwnerId());
     }
 
     @Test
@@ -171,6 +176,9 @@ class ShoppingListServiceTest {
         list.setId(UUID.randomUUID());
         list.setTitle("Groceries");
         list.setItems(null);
+        Users owner = new Users(userEmail, "pass", "Ana", "Ionescu");
+        owner.setId(1);
+        list.setUser(owner);
 
         when(shoppingListRepository.findAccessibleByEmail(userEmail)).thenReturn(List.of(list));
 

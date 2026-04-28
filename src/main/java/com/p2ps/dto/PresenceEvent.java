@@ -21,22 +21,23 @@ public class PresenceEvent {
         /**
          * Represents a user actively typing in a room.
          */
-        TYPING
+        TYPING,
+        /**
+         * Represents a request for current room state.
+         */
+        SYNC
     }
 
     /**
      * The username of the user triggering the event.
      */
+    @com.fasterxml.jackson.annotation.JsonProperty("username")
     private String username;
 
-    /**
-     * The type of the event triggered.
-     */
+    @com.fasterxml.jackson.annotation.JsonProperty("eventType")
     private EventType eventType;
 
-    /**
-     * The unique identifier of the list/room.
-     */
+    @com.fasterxml.jackson.annotation.JsonProperty("listId")
     private String listId;
 
     /**

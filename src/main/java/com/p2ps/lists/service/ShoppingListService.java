@@ -212,6 +212,11 @@ public class ShoppingListService {
             dto.setItems(new ArrayList<>());
         }
 
+        dto.setOwnerId(list.getUser().getId());
+        dto.setCollaboratorIds(list.getCollaborators().stream()
+                .map(Users::getId)
+                .toList());
+
         return dto;
     }
 }

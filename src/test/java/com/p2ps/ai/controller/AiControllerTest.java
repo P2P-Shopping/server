@@ -43,10 +43,8 @@ class AiControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void generateListMultimodal_whenBothInputsAreEmpty_returnsBadRequest() {
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(null, "   ", principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(null, "   ", null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         assertThat((Map<String, String>) resp.getBody()).containsEntry("error", "You have to send a text or an image.");
@@ -56,14 +54,11 @@ class AiControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void generateListMultimodal_whenImageIsInvalidFormat_returnsUnsupportedMediaType() {
-        // Arrange
         MultipartFile image = new MockMultipartFile("image", "test.gif", "image/gif", "fake-data".getBytes());
         when(imageValidator.detectImageFormat(image)).thenReturn("gif");
 
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(image, null, principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(image, null, null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
         assertThat((Map<String, String>) resp.getBody()).containsEntry("error", "Invalid file. Only JPEG and PNG images allowed.");
@@ -72,29 +67,23 @@ class AiControllerTest {
 
     @Test
     void generateListMultimodal_whenImageFormatCannotBeDetected_returnsUnsupportedMediaType() {
-        // Arrange
         MultipartFile image = new MockMultipartFile("image", "corrupted.jpg", "image/jpeg", "fake-data".getBytes());
         when(imageValidator.detectImageFormat(image)).thenReturn(null);
 
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(image, "am si text", principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(image, "am si text", null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         verifyNoInteractions(orchestration);
     }
 
     @Test
     void generateListMultimodal_whenValidTextOnly_returnsOk() {
-        // Arrange
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("RECIPE");
-        when(orchestration.generateShoppingItems(null, "Valid recipe text")).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(null, "Valid recipe text", null, null)).thenReturn(aiResp);
 
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(null, "Valid recipe text", principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(null, "Valid recipe text", null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(aiResp);
 
@@ -103,22 +92,19 @@ class AiControllerTest {
 
     @Test
     void generateListMultimodal_whenValidImageAndText_returnsOk() {
-        // Arrange
         MultipartFile image = new MockMultipartFile("image", "photo.png", "image/png", "fake-data".getBytes());
         when(imageValidator.detectImageFormat(image)).thenReturn("png");
 
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("FREQUENT");
-        when(orchestration.generateShoppingItems(image, "What is this?")).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(image, "What is this?", null, null)).thenReturn(aiResp);
 
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(image, "What is this?", principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(image, "What is this?", null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(aiResp);
         verify(imageValidator, times(1)).detectImageFormat(image);
-        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?");
+        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?", null, null);
     }
 
     @Test
@@ -126,10 +112,8 @@ class AiControllerTest {
     void generateListMultimodal_whenImageIsEmptyByteAndTextIsNull_returnsBadRequest() {
         MultipartFile emptyImage = new MockMultipartFile("image", new byte[0]);
 
-        // Act
-        ResponseEntity<?> resp = controller.generateListMultimodal(emptyImage, null, principal);
+        ResponseEntity<?> resp = controller.generateListMultimodal(emptyImage, null, null, null, principal);
 
-        // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         Map<String, String> body = (Map<String, String>) resp.getBody();

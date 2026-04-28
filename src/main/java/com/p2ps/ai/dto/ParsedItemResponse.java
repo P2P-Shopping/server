@@ -1,7 +1,6 @@
 package com.p2ps.ai.dto;
 
 import lombok.Data;
-import java.util.UUID;
 
 @Data
 public class ParsedItemResponse {
@@ -10,6 +9,6 @@ public class ParsedItemResponse {
    private String brand;        // ex: Zuzu
    private Double quantity;
    private String unit;
-   private UUID catalogId;      // ID-ul din baza de date catalog
+   private String catalogId;      // ID-ul din baza de date catalog
    private String category;     // ex: Lactate
 }

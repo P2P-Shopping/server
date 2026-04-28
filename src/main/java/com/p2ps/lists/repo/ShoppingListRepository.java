@@ -12,7 +12,7 @@ import java.util.UUID;
 public interface ShoppingListRepository extends JpaRepository<ShoppingList, UUID> {
     List<ShoppingList> findByUser_Email(String email);
 
-    @Query("SELECT DISTINCT l FROM ShoppingList l LEFT JOIN l.collaborators c WHERE l.user.email = :email OR c.email = :email")
+    @Query("SELECT DISTINCT l FROM ShoppingList l LEFT JOIN FETCH l.user LEFT JOIN FETCH l.collaborators c WHERE l.user.email = :email OR c.email = :email")
     List<ShoppingList> findAccessibleByEmail(@Param("email") String email);
 
     @Query("SELECT COUNT(l) > 0 FROM ShoppingList l LEFT JOIN l.collaborators c WHERE l.id = :id AND (l.user.email = :email OR c.email = :email)")

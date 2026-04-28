@@ -45,6 +45,8 @@ public class AiController {
     public ResponseEntity<Object> generateListMultimodal(
             @RequestParam(value = "image", required = false) MultipartFile image,
             @RequestParam(value = "text", required = false) String text,
+            @RequestParam(value = "latitude", required = false) Double latitude,
+            @RequestParam(value = "longitude", required = false) Double longitude,
             Principal principal) {
 
         // Has to send at least text or image
@@ -63,7 +65,7 @@ public class AiController {
 
         // Send data towards Orchestrator for AI processing
         // (Gatekeeper returns a response directly, not saving anything in database)
-        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(image, text);
+        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(image, text, latitude, longitude);
 
         return ResponseEntity.ok(response);
     }
