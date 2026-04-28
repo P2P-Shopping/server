@@ -100,4 +100,17 @@ class AiOrchestrationServiceTest {
 
         verify(aiPersistenceService).createListAndPopulateItems(eq(listId), eq("New List"), anyList(), eq("u@e"));
     }
+
+    @Test
+    void parseIngredientsFromText_WhenParsedItemsIsNull_ThrowsAiProcessingException() {
+        AiOrchestrationService svc = new AiOrchestrationService(geminiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+        when(geminiService.extractIngredientsAsJson(anyString())).thenReturn("null");
+
+        RecipeRequest req = new RecipeRequest();
+        req.setText("some text");
+
+        assertThatThrownBy(() -> svc.processRecipeAndPopulateList(req, "u@e"))
+            .isInstanceOf(AiProcessingException.class)
+            .hasMessageContaining("AI returned a null payload");
+    }
 }
