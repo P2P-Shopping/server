@@ -81,7 +81,7 @@ class GlobalExceptionHandlerTest {
         ListUserNotFoundException ex = new ListUserNotFoundException("user missing");
         var resp = handler.handleListUserNotFoundException(ex);
         assertThat(resp.getBody()).isNotNull();
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody()).extracting(ErrorResponse::getDetails).isEqualTo("user missing");
     }
 
@@ -94,6 +94,30 @@ class GlobalExceptionHandlerTest {
                 .isNotNull()
                 .containsEntry("message", "AI Processing Failed")
                 .containsEntry("details", "ai bad");
+    }
+
+    @Test
+    void handleAiProcessingException_withRetryAfterSeconds() {
+        AiProcessingException ex = new AiProcessingException("ai bad", null, HttpStatus.TOO_MANY_REQUESTS, 30L);
+        var resp = handler.handleAiProcessingException(ex);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(resp.getBody())
+                .isNotNull()
+                .containsEntry("message", "AI Processing Failed")
+                .containsEntry("details", "ai bad")
+                .containsEntry("retryAfterSeconds", "30");
+    }
+
+    @Test
+    void handleAiProcessingException_withRetryAfterSecondsNull() {
+        AiProcessingException ex = new AiProcessingException("ai bad", HttpStatus.INTERNAL_SERVER_ERROR);
+        var resp = handler.handleAiProcessingException(ex);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(resp.getBody())
+                .isNotNull()
+                .containsEntry("message", "AI Processing Failed")
+                .containsEntry("details", "ai bad")
+                .doesNotContainKey("retryAfterSeconds");
     }
 
     @Test

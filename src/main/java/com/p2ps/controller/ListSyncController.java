@@ -40,7 +40,7 @@ public class ListSyncController {
             throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
         }
 
-        logger.debug("Routing action for room");
+        logger.debug("Routing action {} for room {}", payload.getAction(), listId);
         return listSyncRouterService.route(listId, payload);
     }
 }

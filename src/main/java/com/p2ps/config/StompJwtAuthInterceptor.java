@@ -1,6 +1,8 @@
 package com.p2ps.config;
 
 import com.p2ps.auth.security.JwtAuthFilter;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -24,7 +26,8 @@ public class StompJwtAuthInterceptor implements ChannelInterceptor {
     }
 
     @Override
-    public Message<?> preSend(Message<?> message, MessageChannel channel) {
+    @SuppressWarnings("java:S2638")
+    public @Nullable Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
 
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {

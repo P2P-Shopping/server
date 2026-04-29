@@ -1,0 +1,161 @@
+package com.p2ps.ai.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2ps.ai.core.AiClient;
+import com.p2ps.ai.core.AiMessage;
+import com.p2ps.ai.core.AiTool;
+import com.p2ps.exception.AiProcessingException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.*;
+
+/**
+ * AI Client for OpenAI-compatible APIs.
+ */
+public class OpenAiAiClient implements AiClient {
+
+     private final String apiKey;
+     private final String apiUrl;
+     private final String model;
+     private final RestTemplate restTemplate;
+     private final ObjectMapper objectMapper;
+
+     private static final String FUNCTION = "function";
+     private static final String CONTENT = "content";
+     private static final String TOOL_CALLS = "tool_calls";
+
+     public OpenAiAiClient(String apiKey, String apiUrl, String model, RestTemplate restTemplate, ObjectMapper objectMapper) {
+        this.apiKey = apiKey;
+        this.apiUrl = apiUrl;
+        this.model = model;
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public AiMessage generateResponse(List<AiMessage> messages, List<AiTool> tools) {
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", messages.stream().map(this::mapToOpenAiMessage).toList());
+            
+            if (tools != null && !tools.isEmpty()) {
+                requestBody.put("tools", tools.stream().map(this::mapToOpenAiTool).toList());
+                requestBody.put("tool_choice", "auto");
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity, String.class);
+
+            return parseOpenAiResponse(response.getBody());
+        } catch (Exception e) {
+            throw new AiProcessingException("OpenAI API error: " + e.getMessage(), e);
+        }
+    }
+
+    private Map<String, Object> mapToOpenAiMessage(AiMessage message) {
+        Map<String, Object> map = new HashMap<>();
+        
+        // Map roles: model -> assistant, function -> tool
+        String role = message.role();
+        if ("model".equalsIgnoreCase(role)) role = "assistant";
+        if (FUNCTION.equalsIgnoreCase(role)) role = "tool";
+        
+        map.put("role", role);
+
+        List<Map<String, Object>> content = new ArrayList<>();
+        List<Map<String, Object>> toolCalls = new ArrayList<>();
+
+        for (AiMessage.Part part : message.parts()) {
+            if (part instanceof AiMessage.TextPart(String text)) {
+                content.add(Map.of("type", "text", "text", text));
+            } else if (part instanceof AiMessage.ImagePart(byte[] data, String mimeType)) {
+                String base64 = Base64.getEncoder().encodeToString(data);
+                content.add(Map.of(
+                        "type", "image_url",
+                        "image_url", Map.of("url", "data:" + mimeType + ";base64," + base64)
+                ));
+            } else if (part instanceof AiMessage.ToolCallPart(String name, Map<String, Object> arguments)) {
+                // In OpenAI, tool calls are separate from content
+                toolCalls.add(Map.of(
+                        "id", "call_" + name + "_" + UUID.randomUUID().toString().substring(0, 8),
+                        "type", FUNCTION,
+                        FUNCTION, Map.of(
+                                "name", name,
+                                "arguments", serializeArgs(arguments)
+                        )
+                ));
+            } else if (part instanceof AiMessage.ToolResponsePart(String name, Object toolContent)) {
+                // For 'tool' role, we need tool_call_id
+                map.put("tool_call_id", "call_" + name);
+                map.put(CONTENT, String.valueOf(toolContent));
+                return map;
+            }
+        }
+
+        if (!content.isEmpty()) {
+            map.put(CONTENT, content);
+        }
+        if (!toolCalls.isEmpty()) {
+            map.put(TOOL_CALLS, toolCalls);
+        }
+
+        return map;
+    }
+
+    private String serializeArgs(Map<String, Object> args) {
+        try {
+            return objectMapper.writeValueAsString(args);
+        } catch (Exception _) {
+            return "{}";
+        }
+    }
+
+    private Map<String, Object> mapToOpenAiTool(AiTool tool) {
+        return Map.of(
+                "type", FUNCTION,
+                FUNCTION, Map.of(
+                        "name", tool.name(),
+                        "description", tool.description(),
+                        "parameters", tool.parameters()
+                )
+        );
+    }
+
+    private AiMessage parseOpenAiResponse(String responseBody) {
+        try {
+            JsonNode rootNode = objectMapper.readTree(responseBody);
+            JsonNode choice = rootNode.path("choices").get(0);
+            JsonNode messageNode = choice.path("message");
+            
+            String role = messageNode.path("role").asText("assistant");
+            List<AiMessage.Part> parts = new ArrayList<>();
+
+            if (messageNode.has(CONTENT) && !messageNode.get(CONTENT).isNull()) {
+                parts.add(new AiMessage.TextPart(messageNode.get(CONTENT).asText()));
+            }
+
+            if (messageNode.has(TOOL_CALLS)) {
+                for (JsonNode tc : messageNode.get(TOOL_CALLS)) {
+                    String name = tc.path(FUNCTION).path("name").asText();
+                    String argsStr = tc.path(FUNCTION).path("arguments").asText();
+                    Map<String, Object> args = objectMapper.readValue(argsStr, Map.class);
+                    parts.add(new AiMessage.ToolCallPart(name, args));
+                }
+            }
+
+            return new AiMessage(role, parts);
+        } catch (Exception e) {
+            throw new AiProcessingException("Failed to parse OpenAI response", e);
+        }
+    }
+}

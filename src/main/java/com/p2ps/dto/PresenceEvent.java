@@ -21,23 +21,31 @@ public class PresenceEvent {
         /**
          * Represents a user actively typing in a room.
          */
-        TYPING
+        TYPING,
+        /**
+         * Represents a request for current room state.
+         */
+        SYNC,
+        /**
+         * Represents a server-authoritative roster update.
+         */
+        ROSTER_UPDATE
     }
 
     /**
      * The username of the user triggering the event.
      */
+    @com.fasterxml.jackson.annotation.JsonProperty("username")
     private String username;
 
-    /**
-     * The type of the event triggered.
-     */
+    @com.fasterxml.jackson.annotation.JsonProperty("eventType")
     private EventType eventType;
 
-    /**
-     * The unique identifier of the list/room.
-     */
+    @com.fasterxml.jackson.annotation.JsonProperty("listId")
     private String listId;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("activeUsers")
+    private java.util.Set<String> activeUsers;
 
     /**
      * Default no-args constructor required for Jackson deserialization.
@@ -98,5 +106,23 @@ public class PresenceEvent {
      */
     public void setListId(String listId) {
         this.listId = listId;
+    }
+
+    /**
+     * Gets the active users in the room.
+     *
+     * @return the set of active users
+     */
+    public java.util.Set<String> getActiveUsers() {
+        return activeUsers;
+    }
+
+    /**
+     * Sets the active users in the room.
+     *
+     * @param activeUsers the set of active users
+     */
+    public void setActiveUsers(java.util.Set<String> activeUsers) {
+        this.activeUsers = activeUsers;
     }
 }

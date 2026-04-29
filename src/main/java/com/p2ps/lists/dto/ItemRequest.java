@@ -4,11 +4,13 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Data
 public class ItemRequest {
 
     private String name;
+    @JsonProperty("isChecked")
     private Boolean isChecked;
     private String brand;
     private String quantity;
