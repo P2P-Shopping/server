@@ -5,6 +5,9 @@ import com.p2ps.service.PresenceStateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,6 +24,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -56,20 +61,16 @@ class WebSocketEventListenerTest {
         assertDoesNotThrow(() -> listener.handleWebSocketConnectListener(event));
     }
 
-    @Test
-    void shouldHandleDisconnectEventWhenSessionIdIsNull() {
-        Message<byte[]> message = MessageBuilder.withPayload(new byte[0]).build();
-        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "session-1", CloseStatus.NORMAL);
-
-        assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
-    }
-
-    @Test
-    void shouldHandleDisconnectEventWhenSessionIdIsShort() {
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"abc", "12345678", "very-long-session-id-12345"})
+    void shouldHandleDisconnectWithVariousSessionIds(String sessionId) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
-        accessor.setSessionId("abc");
+        if (sessionId != null) {
+            accessor.setSessionId(sessionId);
+        }
         Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "abc", CloseStatus.NORMAL);
+        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, sessionId != null ? sessionId : "unknown", CloseStatus.NORMAL);
 
         assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
     }
@@ -115,8 +116,8 @@ class WebSocketEventListenerTest {
 
         listener.handleWebSocketDisconnectListener(event);
 
-        assert(!roster.contains("user1"));
-        assert(roster.contains("user2"));
+        assertFalse(roster.contains("user1"));
+        assertTrue(roster.contains("user2"));
     }
 
     @Test
@@ -180,23 +181,4 @@ class WebSocketEventListenerTest {
         assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
     }
 
-    @Test
-    void sessionPreview_shouldHandleLongSessionId() {
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
-        accessor.setSessionId("very-long-session-id-12345");
-        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "very-long-session-id-12345", CloseStatus.NORMAL);
-
-        assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
-    }
-
-    @Test
-    void sessionPreview_shouldHandleSessionIdOfLengthEight() {
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
-        accessor.setSessionId("12345678");
-        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "12345678", CloseStatus.NORMAL);
-
-        assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
-    }
 }
