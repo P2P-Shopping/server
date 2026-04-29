@@ -2,6 +2,7 @@ package com.p2ps.catalog.repository;
 
 import com.p2ps.catalog.model.ProductCatalog;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "telemetry.api.key=test-telemetry-key-for-tests",
         "app.scheduling.enabled=false"
 })
+@ActiveProfiles("test")
 @Transactional
 class ProductCatalogRepositoryTest {
 
