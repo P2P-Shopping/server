@@ -17,7 +17,6 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class GeminiAiClient implements AiClient {
     private static final Pattern RETRY_DELAY_PATTERN = Pattern.compile("\"retryDelay\"\\s*:\\s*\"(\\d+)s\"");
@@ -81,22 +80,22 @@ public class GeminiAiClient implements AiClient {
 
     private Map<String, Object> mapToGeminiContent(AiMessage message) {
         List<Map<String, Object>> parts = message.parts().stream().<Map<String, Object>>map(part -> {
-            if (part instanceof AiMessage.TextPart textPart) {
-                return Map.of("text", textPart.text());
-            } else if (part instanceof AiMessage.ImagePart imagePart) {
+            if (part instanceof AiMessage.TextPart(String text)) {
+                return Map.of("text", text);
+            } else if (part instanceof AiMessage.ImagePart(byte[] data, String mimeType)) {
                 return Map.of("inlineData", Map.of(
-                        "mimeType", imagePart.mimeType(),
-                        "data", Base64.getEncoder().encodeToString(imagePart.data())
+                        "mimeType", mimeType,
+                        "data", Base64.getEncoder().encodeToString(data)
                 ));
-            } else if (part instanceof AiMessage.ToolCallPart toolCallPart) {
+            } else if (part instanceof AiMessage.ToolCallPart(String name, Map<String, Object> arguments)) {
                 return Map.of(FUNCTION_CALL, Map.of(
-                        "name", toolCallPart.name(),
-                        "args", toolCallPart.arguments()
+                        "name", name,
+                        "args", arguments
                 ));
-            } else if (part instanceof AiMessage.ToolResponsePart toolResponsePart) {
+            } else if (part instanceof AiMessage.ToolResponsePart(String name, Object content)) {
                 return Map.of("functionResponse", Map.of(
-                        "name", toolResponsePart.name(),
-                        "response", Map.of("content", toolResponsePart.content())
+                        "name", name,
+                        "response", Map.of("content", content)
                 ));
             }
             return Collections.<String, Object>emptyMap();

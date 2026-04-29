@@ -179,7 +179,7 @@ public class AiService {
             } finally {
                 reader.dispose();
             }
-        } catch (IOException e) {
+        } catch (IOException _) {
             // IOException expected for invalid/non-image data; return null to indicate unknown type
         }
         return null;

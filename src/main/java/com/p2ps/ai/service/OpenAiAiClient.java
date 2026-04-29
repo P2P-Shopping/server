@@ -13,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * AI Client for OpenAI-compatible APIs.
@@ -69,7 +68,7 @@ public class OpenAiAiClient implements AiClient {
         // Map roles: model -> assistant, function -> tool
         String role = message.role();
         if ("model".equalsIgnoreCase(role)) role = "assistant";
-        if ("function".equalsIgnoreCase(role)) role = "tool";
+        if (FUNCTION.equalsIgnoreCase(role)) role = "tool";
         
         map.put("role", role);
 
@@ -77,28 +76,28 @@ public class OpenAiAiClient implements AiClient {
         List<Map<String, Object>> toolCalls = new ArrayList<>();
 
         for (AiMessage.Part part : message.parts()) {
-            if (part instanceof AiMessage.TextPart textPart) {
-                content.add(Map.of("type", "text", "text", textPart.text()));
-            } else if (part instanceof AiMessage.ImagePart imagePart) {
-                String base64 = Base64.getEncoder().encodeToString(imagePart.data());
+            if (part instanceof AiMessage.TextPart(String text)) {
+                content.add(Map.of("type", "text", "text", text));
+            } else if (part instanceof AiMessage.ImagePart(byte[] data, String mimeType)) {
+                String base64 = Base64.getEncoder().encodeToString(data);
                 content.add(Map.of(
                         "type", "image_url",
-                        "image_url", Map.of("url", "data:" + imagePart.mimeType() + ";base64," + base64)
+                        "image_url", Map.of("url", "data:" + mimeType + ";base64," + base64)
                 ));
-            } else if (part instanceof AiMessage.ToolCallPart toolCallPart) {
+            } else if (part instanceof AiMessage.ToolCallPart(String name, Map<String, Object> arguments)) {
                 // In OpenAI, tool calls are separate from content
                 toolCalls.add(Map.of(
-                        "id", "call_" + toolCallPart.name() + "_" + UUID.randomUUID().toString().substring(0, 8),
+                        "id", "call_" + name + "_" + UUID.randomUUID().toString().substring(0, 8),
                         "type", "function",
                         FUNCTION, Map.of(
-                                "name", toolCallPart.name(),
-                                "arguments", serializeArgs(toolCallPart.arguments())
+                                "name", name,
+                                "arguments", serializeArgs(arguments)
                         )
                 ));
-            } else if (part instanceof AiMessage.ToolResponsePart toolResponsePart) {
+            } else if (part instanceof AiMessage.ToolResponsePart(String name, Object toolContent)) {
                 // For 'tool' role, we need tool_call_id
-                map.put("tool_call_id", "call_" + toolResponsePart.name());
-                map.put(CONTENT, String.valueOf(toolResponsePart.content()));
+                map.put("tool_call_id", "call_" + name);
+                map.put(CONTENT, String.valueOf(toolContent));
                 return map;
             }
         }
