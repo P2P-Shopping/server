@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -127,5 +128,100 @@ class PresenceControllerTest {
         } finally {
             controllerLogger.setLevel(originalLevel);
         }
+    }
+
+    @Test
+    void handlePresenceEvent_LeaveEvent_ShouldRemoveUserFromRoster() {
+        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
+        
+        roomRosters.computeIfAbsent("1234-abcd", k -> ConcurrentHashMap.newKeySet()).add("testUser");
+        roomRosters.get("1234-abcd").add("otherUser");
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/1234-abcd/presence"), eventCaptor.capture());
+        
+        PresenceEvent sentEvent = eventCaptor.getValue();
+        assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
+        assertFalse(sentEvent.getActiveUsers().contains("testUser"));
+        assertTrue(sentEvent.getActiveUsers().contains("otherUser"));
+    }
+
+    @Test
+    void handlePresenceEvent_LeaveEvent_ShouldRemoveFromSessionTracker() {
+        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
+        
+        when(headerAccessor.getSessionId()).thenReturn("session-123");
+        sessionTracker.put("session-123", samplePayload);
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        assertFalse(sessionTracker.containsKey("session-123"));
+    }
+
+    @Test
+    void handlePresenceEvent_LeaveEvent_WhenRosterDoesNotExist() {
+        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
+
+        presenceController.handlePresenceEvent("nonexistent-list", samplePayload, headerAccessor);
+
+        verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_TypingEvent_ShouldPassThrough() {
+        samplePayload.setEventType(PresenceEvent.EventType.TYPING);
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/1234-abcd/presence"), eq(samplePayload));
+        verifyNoMoreInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_LeaveEvent_WhenSessionIdIsNull() {
+        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
+        
+        roomRosters.computeIfAbsent("1234-abcd", k -> ConcurrentHashMap.newKeySet()).add("testUser");
+
+        when(headerAccessor.getSessionId()).thenReturn(null);
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/1234-abcd/presence"), eventCaptor.capture());
+        
+        PresenceEvent sentEvent = eventCaptor.getValue();
+        assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
+        assertFalse(sentEvent.getActiveUsers().contains("testUser"));
+    }
+
+    @Test
+    void handlePresenceEvent_JoinEvent_ShouldTrackSession() {
+        samplePayload.setEventType(PresenceEvent.EventType.JOIN);
+        
+        when(headerAccessor.getSessionId()).thenReturn("session-123");
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        assertTrue(sessionTracker.containsKey("session-123"));
+        assertEquals(samplePayload, sessionTracker.get("session-123"));
+    }
+
+    @Test
+    void handlePresenceEvent_JoinEvent_WhenSessionIdIsNull() {
+        samplePayload.setEventType(PresenceEvent.EventType.JOIN);
+        
+        when(headerAccessor.getSessionId()).thenReturn(null);
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/1234-abcd/presence"), eventCaptor.capture());
+        
+        PresenceEvent sentEvent = eventCaptor.getValue();
+        assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
+        assertTrue(sentEvent.getActiveUsers().contains("testUser"));
     }
 }

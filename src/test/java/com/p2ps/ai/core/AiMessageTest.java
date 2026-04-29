@@ -67,4 +67,71 @@ class AiMessageTest {
         assertThat(toolCallPart).isInstanceOf(AiMessage.Part.class);
         assertThat(toolResponsePart).isInstanceOf(AiMessage.Part.class);
     }
+
+    @Test
+    void imagePart_equals_sameObject() {
+        byte[] data = "image".getBytes();
+        AiMessage.ImagePart part = new AiMessage.ImagePart(data, "image/png");
+        assertThat(part.equals(part)).isTrue();
+    }
+
+    @Test
+    void imagePart_equals_equalObjects() {
+        byte[] data = "image".getBytes();
+        AiMessage.ImagePart part1 = new AiMessage.ImagePart(data, "image/png");
+        AiMessage.ImagePart part2 = new AiMessage.ImagePart(data.clone(), "image/png");
+        assertThat(part1).isEqualTo(part2);
+    }
+
+    @Test
+    void imagePart_equals_differentData() {
+        AiMessage.ImagePart part1 = new AiMessage.ImagePart("image1".getBytes(), "image/png");
+        AiMessage.ImagePart part2 = new AiMessage.ImagePart("image2".getBytes(), "image/png");
+        assertThat(part1).isNotEqualTo(part2);
+    }
+
+    @Test
+    void imagePart_equals_differentMimeType() {
+        byte[] data = "image".getBytes();
+        AiMessage.ImagePart part1 = new AiMessage.ImagePart(data, "image/png");
+        AiMessage.ImagePart part2 = new AiMessage.ImagePart(data.clone(), "image/jpeg");
+        assertThat(part1).isNotEqualTo(part2);
+    }
+
+    @Test
+    void imagePart_equals_null() {
+        AiMessage.ImagePart part = new AiMessage.ImagePart("image".getBytes(), "image/png");
+        assertThat(part.equals(null)).isFalse();
+    }
+
+    @Test
+    void imagePart_equals_differentType() {
+        AiMessage.ImagePart part = new AiMessage.ImagePart("image".getBytes(), "image/png");
+        assertThat(part.equals("string")).isFalse();
+    }
+
+    @Test
+    void imagePart_hashCode_equalObjects() {
+        byte[] data = "image".getBytes();
+        AiMessage.ImagePart part1 = new AiMessage.ImagePart(data, "image/png");
+        AiMessage.ImagePart part2 = new AiMessage.ImagePart(data.clone(), "image/png");
+        assertThat(part1.hashCode()).isEqualTo(part2.hashCode());
+    }
+
+    @Test
+    void imagePart_toString_containsDataAndMimeType() {
+        AiMessage.ImagePart part = new AiMessage.ImagePart("image".getBytes(), "image/png");
+        String str = part.toString();
+        assertThat(str).contains("data=");
+        assertThat(str).contains("mimeType=");
+        assertThat(str).contains("image/png");
+    }
+
+    @Test
+    void imagePart_toString_emptyData() {
+        AiMessage.ImagePart part = new AiMessage.ImagePart(new byte[0], "image/png");
+        String str = part.toString();
+        assertThat(str).contains("data=");
+        assertThat(str).contains("mimeType=image/png");
+    }
 }

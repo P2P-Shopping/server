@@ -14,6 +14,8 @@ import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.ai.dto.ParsedItemResponse;
+import com.p2ps.catalog.model.ProductCatalog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -509,5 +512,276 @@ class ShoppingListServiceTest {
         ShoppingListDTO result = shoppingListService.getListById(listId, collabEmail);
         
         assertEquals(listId, result.getId());
+    }
+
+    @Test
+    void finishShopping_shouldSetFinalStoreAndReturnDTO() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.finishShopping(listId, "Kaufland", userEmail);
+
+        assertEquals("Kaufland", result.getFinalStore());
+        verify(shoppingListRepository).save(list);
+    }
+
+    @Test
+    void finishShopping_shouldTrimStoreName() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.finishShopping(listId, "  Kaufland  ", userEmail);
+
+        assertEquals("Kaufland", result.getFinalStore());
+    }
+
+    @Test
+    void finishShopping_shouldThrowWhenStoreNameIsNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> shoppingListService.finishShopping(UUID.randomUUID(), null, "ana@example.com"));
+    }
+
+    @Test
+    void finishShopping_shouldThrowWhenStoreNameIsEmpty() {
+        assertThrows(IllegalArgumentException.class,
+            () -> shoppingListService.finishShopping(UUID.randomUUID(), "", "ana@example.com"));
+    }
+
+    @Test
+    void finishShopping_shouldThrowWhenStoreNameIsBlank() {
+        assertThrows(IllegalArgumentException.class,
+            () -> shoppingListService.finishShopping(UUID.randomUUID(), "   ", "ana@example.com"));
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldMarkMatchingItem() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setChecked(false);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+        receiptItem.setSpecificName("Lapte Zuzu");
+        receiptItem.setBrand("Zuzu");
+        receiptItem.setPrice(new BigDecimal("10.50"));
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        org.mockito.Mockito.lenient().when(shoppingListRepository.save(any(ShoppingList.class))).thenReturn(list);
+        org.mockito.Mockito.lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertTrue(item.isChecked());
+        assertEquals("Zuzu", item.getBrand());
+        assertEquals(new BigDecimal("10.50"), item.getPrice());
+        verify(itemRepository).save(item);
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldReturnEarlyWhenReceiptItemIsNull() {
+        shoppingListService.markReceiptItemPurchased(UUID.randomUUID(), null, null, "ana@example.com");
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldUpdateFromCatalogProduct() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setChecked(false);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setGenericName("Lapte");
+        catalogProduct.setSpecificName("Lapte Zuzu");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, catalogProduct, userEmail);
+
+        assertTrue(item.isChecked());
+        assertEquals(catalogProduct, item.getCatalogItem());
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldNotUpdateAlreadyCheckedItemFirst() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item checkedItem = new Item();
+        checkedItem.setId(UUID.randomUUID());
+        checkedItem.setName("Lapte");
+        checkedItem.setChecked(true);
+
+        Item uncheckedItem = new Item();
+        uncheckedItem.setId(UUID.randomUUID());
+        uncheckedItem.setName("Lapte");
+        uncheckedItem.setChecked(false);
+
+        list.getItems().add(checkedItem);
+        list.getItems().add(uncheckedItem);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertTrue(uncheckedItem.isChecked());
+        verify(itemRepository).save(uncheckedItem);
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldUpdateCategoryFromReceipt() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setChecked(false);
+        item.setCategory(null);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+        receiptItem.setCategory("Dairy");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertEquals("Dairy", item.getCategory());
+    }
+
+    @Test
+    void normalize_shouldReturnEmptyStringForNull() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("normalize", String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(shoppingListService, (String) null);
+        assertEquals("", result);
+    }
+
+    @Test
+    void normalize_shouldTrimAndLowercase() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("normalize", String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(shoppingListService, "  HELLO World  ");
+        assertEquals("hello world", result);
+    }
+
+    @Test
+    void firstNonBlank_shouldReturnPrimary() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(shoppingListService, "primary", "fallback");
+        assertEquals("primary", result);
+    }
+
+    @Test
+    void firstNonBlank_shouldReturnFallbackWhenPrimaryBlank() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(shoppingListService, "", "fallback");
+        assertEquals("fallback", result);
+    }
+
+    @Test
+    void firstNonBlank_shouldReturnNullWhenBothBlank() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(shoppingListService, null, "");
+        assertNull(result);
+    }
+
+    @Test
+    void containsEither_shouldReturnTrueWhenLeftContainsRight() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("containsEither", String.class, String.class);
+        method.setAccessible(true);
+        Boolean result = (Boolean) method.invoke(shoppingListService, "hello world", "world");
+        assertTrue(result);
+    }
+
+    @Test
+    void containsEither_shouldReturnTrueWhenRightContainsLeft() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("containsEither", String.class, String.class);
+        method.setAccessible(true);
+        Boolean result = (Boolean) method.invoke(shoppingListService, "world", "hello world");
+        assertTrue(result);
+    }
+
+    @Test
+    void containsEither_shouldReturnFalseWhenNoMatch() throws Exception {
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("containsEither", String.class, String.class);
+        method.setAccessible(true);
+        Boolean result = (Boolean) method.invoke(shoppingListService, "hello", "world");
+        assertFalse(result);
+    }
+
+    @Test
+    void mapToDTO_shouldHandleNullUser() throws Exception {
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Test");
+        list.setUser(null);
+
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("mapToDTO", ShoppingList.class);
+        method.setAccessible(true);
+        ShoppingListDTO result = (ShoppingListDTO) method.invoke(shoppingListService, list);
+
+        assertNull(result.getOwnerId());
+        assertNull(result.getOwnerEmail());
+        assertNull(result.getOwnerName());
     }
 }

@@ -295,6 +295,7 @@ public class ShoppingListService {
             dto.setOwnerEmail(list.getUser().getEmail());
             String fullName = list.getUser().getFirstName() + " " + list.getUser().getLastName();
             dto.setOwnerName(fullName.trim());
+            dto.setOwnerId(list.getUser().getId());
         }
 
         if (list.getItems() != null) {
@@ -317,7 +318,6 @@ public class ShoppingListService {
             dto.setItems(new ArrayList<>());
         }
 
-        dto.setOwnerId(list.getUser().getId());
         dto.setCollaboratorIds(list.getCollaborators().stream()
                 .map(Users::getId)
                 .toList());
