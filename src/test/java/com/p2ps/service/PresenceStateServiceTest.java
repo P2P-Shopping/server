@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,36 +24,34 @@ class PresenceStateServiceTest {
     }
 
     @Test
-    void getRoomRosters_shouldReturnConcurrentHashMap() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+    void getRoomRosters_shouldReturnConcurrentMap() {
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
         assertNotNull(roomRosters);
-        assertTrue(roomRosters instanceof ConcurrentHashMap);
     }
 
     @Test
-    void getSessionTracker_shouldReturnConcurrentHashMap() {
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+    void getSessionTracker_shouldReturnConcurrentMap() {
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         assertNotNull(sessionTracker);
-        assertTrue(sessionTracker instanceof ConcurrentHashMap);
     }
 
     @Test
     void getRoomRosters_shouldReturnSameInstance() {
-        ConcurrentHashMap<String, Set<String>> firstCall = presenceStateService.getRoomRosters();
-        ConcurrentHashMap<String, Set<String>> secondCall = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> firstCall = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> secondCall = presenceStateService.getRoomRosters();
         assertSame(firstCall, secondCall);
     }
 
     @Test
     void getSessionTracker_shouldReturnSameInstance() {
-        ConcurrentHashMap<String, PresenceEvent> firstCall = presenceStateService.getSessionTracker();
-        ConcurrentHashMap<String, PresenceEvent> secondCall = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, PresenceEvent> firstCall = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, PresenceEvent> secondCall = presenceStateService.getSessionTracker();
         assertSame(firstCall, secondCall);
     }
 
     @Test
     void roomRosters_shouldAllowAddingMembers() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
         roomRosters.computeIfAbsent("list-1", k -> ConcurrentHashMap.newKeySet()).add("user1");
         roomRosters.computeIfAbsent("list-1", k -> ConcurrentHashMap.newKeySet()).add("user2");
 
@@ -63,7 +62,7 @@ class PresenceStateServiceTest {
 
     @Test
     void roomRosters_shouldAllowRemovingMembers() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
         roomRosters.computeIfAbsent("list-1", k -> ConcurrentHashMap.newKeySet()).add("user1");
         roomRosters.computeIfAbsent("list-1", k -> ConcurrentHashMap.newKeySet()).add("user2");
 
@@ -75,7 +74,7 @@ class PresenceStateServiceTest {
 
     @Test
     void sessionTracker_shouldAllowAddingSessions() {
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         PresenceEvent event = new PresenceEvent();
         event.setEventType(PresenceEvent.EventType.JOIN);
         event.setUsername("user1");
@@ -89,7 +88,7 @@ class PresenceStateServiceTest {
 
     @Test
     void sessionTracker_shouldAllowRemovingSessions() {
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         PresenceEvent event = new PresenceEvent();
         event.setEventType(PresenceEvent.EventType.JOIN);
         event.setUsername("user1");
@@ -102,8 +101,8 @@ class PresenceStateServiceTest {
 
     @Test
     void roomRosters_and_sessionTracker_shouldBeIndependent() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
 
         roomRosters.put("list-1", ConcurrentHashMap.newKeySet());
         sessionTracker.put("session-1", new PresenceEvent());
@@ -114,7 +113,7 @@ class PresenceStateServiceTest {
 
     @Test
     void shouldHandleMultipleLists() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
 
         roomRosters.computeIfAbsent("list-1", k -> ConcurrentHashMap.newKeySet()).add("user1");
         roomRosters.computeIfAbsent("list-2", k -> ConcurrentHashMap.newKeySet()).add("user2");
@@ -126,13 +125,13 @@ class PresenceStateServiceTest {
 
     @Test
     void getRoomRosters_shouldReturnEmptyMapInitially() {
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
         assertTrue(roomRosters.isEmpty());
     }
 
     @Test
     void getSessionTracker_shouldReturnEmptyMapInitially() {
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         assertTrue(sessionTracker.isEmpty());
     }
 

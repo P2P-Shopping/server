@@ -185,27 +185,16 @@ class ShoppingControllerTest {
         verify(catalogService, org.mockito.Mockito.never()).recordPurchase(any(), any(), any(), any(), any());
     }
 
-    @Test
-    void firstNonBlank_shouldReturnPrimaryWhenNotBlank() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(value = {
+        "primary, fallback, primary",
+        "'', fallback, fallback",
+        "null, '', null"
+    }, nullValues = {"null"})
+    void firstNonBlank_parameterized(String primary, String fallback, String expected) throws Exception {
         java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
         method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, "primary", "fallback");
-        assertEquals("primary", result);
-    }
-
-    @Test
-    void firstNonBlank_shouldReturnFallbackWhenPrimaryBlank() throws Exception {
-        java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, "", "fallback");
-        assertEquals("fallback", result);
-    }
-
-    @Test
-    void firstNonBlank_shouldReturnNullWhenBothBlank() throws Exception {
-        java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, null, "");
-        assertEquals(null, result);
+        String result = (String) method.invoke(shoppingController, primary, fallback);
+        assertEquals(expected, result);
     }
 }

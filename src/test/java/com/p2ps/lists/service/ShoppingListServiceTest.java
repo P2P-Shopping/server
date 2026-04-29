@@ -553,20 +553,23 @@ class ShoppingListServiceTest {
 
     @Test
     void finishShopping_shouldThrowWhenStoreNameIsNull() {
+        UUID listId = UUID.randomUUID();
         assertThrows(IllegalArgumentException.class,
-            () -> shoppingListService.finishShopping(UUID.randomUUID(), null, "ana@example.com"));
+            () -> shoppingListService.finishShopping(listId, null, "ana@example.com"));
     }
 
     @Test
     void finishShopping_shouldThrowWhenStoreNameIsEmpty() {
+        UUID listId = UUID.randomUUID();
         assertThrows(IllegalArgumentException.class,
-            () -> shoppingListService.finishShopping(UUID.randomUUID(), "", "ana@example.com"));
+            () -> shoppingListService.finishShopping(listId, "", "ana@example.com"));
     }
 
     @Test
     void finishShopping_shouldThrowWhenStoreNameIsBlank() {
+        UUID listId = UUID.randomUUID();
         assertThrows(IllegalArgumentException.class,
-            () -> shoppingListService.finishShopping(UUID.randomUUID(), "   ", "ana@example.com"));
+            () -> shoppingListService.finishShopping(listId, "   ", "ana@example.com"));
     }
 
     @Test

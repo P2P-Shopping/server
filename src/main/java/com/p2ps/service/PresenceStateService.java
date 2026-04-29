@@ -5,18 +5,19 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class PresenceStateService {
 
-    private final ConcurrentHashMap<String, Set<String>> roomRosters = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, PresenceEvent> sessionTracker = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Set<String>> roomRosters = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, PresenceEvent> sessionTracker = new ConcurrentHashMap<>();
 
-    public ConcurrentHashMap<String, Set<String>> getRoomRosters() {
+    public ConcurrentMap<String, Set<String>> getRoomRosters() {
         return roomRosters;
     }
 
-    public ConcurrentHashMap<String, PresenceEvent> getSessionTracker() {
+    public ConcurrentMap<String, PresenceEvent> getSessionTracker() {
         return sessionTracker;
     }
 }

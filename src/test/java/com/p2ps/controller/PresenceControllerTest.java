@@ -79,28 +79,26 @@ class PresenceControllerTest {
         verifyNoMoreInteractions(messagingTemplate);
     }
 
-    @Test
-    void handlePresenceEvent_WithNullEventType_ShouldRouteCorrectlyWithoutDatabase() {
-        String testListId = "1234-abcd";
-        samplePayload.setEventType(null);
-
-        presenceController.handlePresenceEvent(testListId, samplePayload, headerAccessor);
-
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("provideNullScenarios")
+    void handlePresenceEvent_NullScenarios_ShouldNotSendMessage(String listId, PresenceEvent payload) {
+        presenceController.handlePresenceEvent(listId, payload, headerAccessor);
         verifyNoInteractions(messagingTemplate);
     }
 
-    @Test
-    void handlePresenceEvent_WithNullListId_ShouldHandleGracefully() {
-        presenceController.handlePresenceEvent(null, samplePayload, headerAccessor);
-
-        verifyNoInteractions(messagingTemplate);
-    }
-
-    @Test
-    void handlePresenceEvent_WithNullPayload_ShouldNotSendMessage() {
-        presenceController.handlePresenceEvent("1234-abcd", null, headerAccessor);
-
-        verifyNoInteractions(messagingTemplate);
+    private static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> provideNullScenarios() {
+        PresenceEvent nullTypeEvent = new PresenceEvent();
+        nullTypeEvent.setEventType(null);
+        
+        PresenceEvent leaveEvent = new PresenceEvent();
+        leaveEvent.setEventType(PresenceEvent.EventType.LEAVE);
+        
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of("1234-abcd", nullTypeEvent),
+            org.junit.jupiter.params.provider.Arguments.of(null, new PresenceEvent()),
+            org.junit.jupiter.params.provider.Arguments.of("1234-abcd", null),
+            org.junit.jupiter.params.provider.Arguments.of("nonexistent-list", leaveEvent)
+        );
     }
 
     @Test
@@ -160,14 +158,6 @@ class PresenceControllerTest {
         assertFalse(sessionTracker.containsKey("session-123"));
     }
 
-    @Test
-    void handlePresenceEvent_LeaveEvent_WhenRosterDoesNotExist() {
-        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
-
-        presenceController.handlePresenceEvent("nonexistent-list", samplePayload, headerAccessor);
-
-        verifyNoInteractions(messagingTemplate);
-    }
 
     @Test
     void handlePresenceEvent_TypingEvent_ShouldPassThrough() {
@@ -175,7 +165,7 @@ class PresenceControllerTest {
 
         presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
 
-        verify(messagingTemplate).convertAndSend(eq("/topic/list/1234-abcd/presence"), eq(samplePayload));
+        verify(messagingTemplate).convertAndSend("/topic/list/1234-abcd/presence", samplePayload);
         verifyNoMoreInteractions(messagingTemplate);
     }
 

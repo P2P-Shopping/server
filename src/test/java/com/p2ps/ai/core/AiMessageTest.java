@@ -96,6 +96,7 @@ class AiMessageTest {
         AiMessage.ImagePart part1 = new AiMessage.ImagePart(data, "image/png");
         AiMessage.ImagePart part2 = new AiMessage.ImagePart(data.clone(), "image/jpeg");
         assertThat(part1).isNotEqualTo(part2);
+        assertThat(part2).isNotEqualTo(part1);
     }
 
     @Test
@@ -115,23 +116,20 @@ class AiMessageTest {
         byte[] data = "image".getBytes();
         AiMessage.ImagePart part1 = new AiMessage.ImagePart(data, "image/png");
         AiMessage.ImagePart part2 = new AiMessage.ImagePart(data.clone(), "image/png");
-        assertThat(part1.hashCode()).isEqualTo(part2.hashCode());
+        assertThat(part1).hasSameHashCodeAs(part2);
     }
 
     @Test
     void imagePart_toString_containsDataAndMimeType() {
         AiMessage.ImagePart part = new AiMessage.ImagePart("image".getBytes(), "image/png");
         String str = part.toString();
-        assertThat(str).contains("data=");
-        assertThat(str).contains("mimeType=");
-        assertThat(str).contains("image/png");
+        assertThat(str).contains("data=", "mimeType=", "image/png");
     }
 
     @Test
     void imagePart_toString_emptyData() {
         AiMessage.ImagePart part = new AiMessage.ImagePart(new byte[0], "image/png");
         String str = part.toString();
-        assertThat(str).contains("data=");
-        assertThat(str).contains("mimeType=image/png");
+        assertThat(str).contains("data=", "mimeType=image/png");
     }
 }

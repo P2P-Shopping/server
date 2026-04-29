@@ -2,8 +2,6 @@ package com.p2ps.controller;
 
 import com.p2ps.dto.PresenceEvent;
 import com.p2ps.service.PresenceStateService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -12,6 +10,7 @@ import org.springframework.stereotype.Controller;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Controller responsible for routing low-latency presence events.
@@ -19,8 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Controller
 public class PresenceController {
-
-    private static final Logger logger = LoggerFactory.getLogger(PresenceController.class);
 
     private final SimpMessagingTemplate messagingTemplate;
     private final PresenceStateService presenceStateService;
@@ -39,8 +36,8 @@ public class PresenceController {
         if (listId == null) return;
 
         // Fetch the global state maps instead of using local isolated variables
-        ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
-        ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
+        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
+        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         String sessionId = accessor.getSessionId();
 
         if (payload.getEventType() == PresenceEvent.EventType.JOIN) {

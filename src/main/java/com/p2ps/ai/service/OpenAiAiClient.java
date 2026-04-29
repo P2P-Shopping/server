@@ -88,7 +88,7 @@ public class OpenAiAiClient implements AiClient {
                 // In OpenAI, tool calls are separate from content
                 toolCalls.add(Map.of(
                         "id", "call_" + name + "_" + UUID.randomUUID().toString().substring(0, 8),
-                        "type", "function",
+                        "type", FUNCTION,
                         FUNCTION, Map.of(
                                 "name", name,
                                 "arguments", serializeArgs(arguments)
@@ -122,7 +122,7 @@ public class OpenAiAiClient implements AiClient {
 
     private Map<String, Object> mapToOpenAiTool(AiTool tool) {
         return Map.of(
-                "type", "function",
+                "type", FUNCTION,
                 FUNCTION, Map.of(
                         "name", tool.name(),
                         "description", tool.description(),
