@@ -1,7 +1,6 @@
 package com.p2ps.ai.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
 import com.p2ps.ai.core.AiTool;
 import com.p2ps.exception.AiProcessingException;
@@ -109,7 +108,8 @@ class OpenAiAiClientTest {
         when(restTemplate.postForEntity(any(String.class), any(HttpEntity.class), eq(String.class)))
                 .thenThrow(new RuntimeException("API down"));
 
-        assertThatThrownBy(() -> client.generateResponse(List.of(), null))
+        List<AiMessage> emptyList = List.of();
+        assertThatThrownBy(() -> client.generateResponse(emptyList, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("OpenAI API error");
     }
