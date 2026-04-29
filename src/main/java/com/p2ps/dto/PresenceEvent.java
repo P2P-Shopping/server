@@ -25,7 +25,11 @@ public class PresenceEvent {
         /**
          * Represents a request for current room state.
          */
-        SYNC
+        SYNC,
+        /**
+         * Represents a server-authoritative roster update.
+         */
+        ROSTER_UPDATE
     }
 
     /**
@@ -39,6 +43,9 @@ public class PresenceEvent {
 
     @com.fasterxml.jackson.annotation.JsonProperty("listId")
     private String listId;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("activeUsers")
+    private java.util.Set<String> activeUsers;
 
     /**
      * Default no-args constructor required for Jackson deserialization.
@@ -99,5 +106,23 @@ public class PresenceEvent {
      */
     public void setListId(String listId) {
         this.listId = listId;
+    }
+
+    /**
+     * Gets the active users in the room.
+     *
+     * @return the set of active users
+     */
+    public java.util.Set<String> getActiveUsers() {
+        return activeUsers;
+    }
+
+    /**
+     * Sets the active users in the room.
+     *
+     * @param activeUsers the set of active users
+     */
+    public void setActiveUsers(java.util.Set<String> activeUsers) {
+        this.activeUsers = activeUsers;
     }
 }
