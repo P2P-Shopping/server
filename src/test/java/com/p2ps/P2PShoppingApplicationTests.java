@@ -11,7 +11,9 @@ import org.springframework.test.context.ActiveProfiles;
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "ai.api.key=test-key",
+        "ai.api.url=https://api.test.com"
 })
 @ActiveProfiles("test")
 class P2PShoppingApplicationTests {

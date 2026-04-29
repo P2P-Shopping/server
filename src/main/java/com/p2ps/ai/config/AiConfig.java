@@ -13,10 +13,10 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class AiConfig {
 
-    @Value("${ai.api.key}")
+    @Value("${ai.api.key:}")
     private String apiKey;
 
-    @Value("${ai.api.url}")
+    @Value("${ai.api.url:}")
     private String apiUrl;
 
     @Value("${ai.model:gemini-2.5-flash-lite}")
