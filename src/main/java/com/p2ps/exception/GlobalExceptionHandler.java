@@ -88,10 +88,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ListUserNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleListUserNotFoundException(ListUserNotFoundException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
-                "Unauthorized",
+                "User Not Found",
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
