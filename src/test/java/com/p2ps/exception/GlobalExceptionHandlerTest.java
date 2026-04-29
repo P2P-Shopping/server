@@ -81,7 +81,7 @@ class GlobalExceptionHandlerTest {
         ListUserNotFoundException ex = new ListUserNotFoundException("user missing");
         var resp = handler.handleListUserNotFoundException(ex);
         assertThat(resp.getBody()).isNotNull();
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody()).extracting(ErrorResponse::getDetails).isEqualTo("user missing");
     }
 

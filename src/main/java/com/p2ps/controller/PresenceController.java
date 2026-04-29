@@ -35,6 +35,9 @@ public class PresenceController {
         if (payload == null || payload.getEventType() == null) return;
         payload.setListId(listId);
 
+        // Skip processing if listId is null
+        if (listId == null) return;
+
         // Fetch the global state maps instead of using local isolated variables
         ConcurrentHashMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
         ConcurrentHashMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();

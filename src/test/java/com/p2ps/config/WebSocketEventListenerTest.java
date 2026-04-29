@@ -15,7 +15,12 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class WebSocketEventListenerTest {
@@ -31,6 +36,8 @@ class WebSocketEventListenerTest {
     @BeforeEach
     void setUp() {
         listener = new WebSocketEventListener(presenceStateService, messagingTemplate);
+        lenient().when(presenceStateService.getSessionTracker()).thenReturn(new ConcurrentHashMap<>());
+        lenient().when(presenceStateService.getRoomRosters()).thenReturn(new ConcurrentHashMap<>());
     }
 
     @Test

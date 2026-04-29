@@ -18,10 +18,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class PresenceControllerTest {
@@ -52,8 +56,8 @@ class PresenceControllerTest {
         roomRosters = new ConcurrentHashMap<>();
         sessionTracker = new ConcurrentHashMap<>();
 
-        when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
-        when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
+        lenient().when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
+        lenient().when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
     }
 
     @Test
@@ -64,7 +68,13 @@ class PresenceControllerTest {
         presenceController.handlePresenceEvent(testListId, samplePayload, headerAccessor);
 
         assertEquals(testListId, samplePayload.getListId());
-        verify(messagingTemplate).convertAndSend("/topic/list/" + testListId + "/presence", samplePayload);
+        
+        ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/" + testListId + "/presence"), eventCaptor.capture());
+        PresenceEvent sentEvent = eventCaptor.getValue();
+        assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
+        assertEquals(testListId, sentEvent.getListId());
+        assertTrue(sentEvent.getActiveUsers().contains("testUser"));
         verifyNoMoreInteractions(messagingTemplate);
     }
 
@@ -82,8 +92,7 @@ class PresenceControllerTest {
     void handlePresenceEvent_WithNullListId_ShouldHandleGracefully() {
         presenceController.handlePresenceEvent(null, samplePayload, headerAccessor);
 
-        verify(messagingTemplate).convertAndSend("/topic/list/null/presence", samplePayload);
-        verifyNoMoreInteractions(messagingTemplate);
+        verifyNoInteractions(messagingTemplate);
     }
 
     @Test
@@ -107,7 +116,13 @@ class PresenceControllerTest {
             presenceController.handlePresenceEvent(testListId, samplePayload, headerAccessor);
 
             assertEquals(testListId, samplePayload.getListId());
-            verify(messagingTemplate).convertAndSend("/topic/list/" + testListId + "/presence", samplePayload);
+            
+            ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+            verify(messagingTemplate).convertAndSend(eq("/topic/list/" + testListId + "/presence"), eventCaptor.capture());
+            PresenceEvent sentEvent = eventCaptor.getValue();
+            assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
+            assertEquals(testListId, sentEvent.getListId());
+            assertTrue(sentEvent.getActiveUsers().contains("testUser"));
             verifyNoMoreInteractions(messagingTemplate);
         } finally {
             controllerLogger.setLevel(originalLevel);
