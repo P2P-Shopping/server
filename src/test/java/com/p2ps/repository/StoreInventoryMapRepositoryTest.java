@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest(properties = {
     "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
     "telemetry.api.key=test-telemetry-key-for-tests",
-    "app.scheduling.enabled=false"
+    "app.scheduling.enabled=false",
+    "ai.api.key=test-key",
+    "ai.api.url=https://api.test.com"
 })
 @Transactional
 class StoreInventoryMapRepositoryTest {

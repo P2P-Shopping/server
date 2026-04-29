@@ -2,7 +2,6 @@ package com.p2ps.catalog.repository;
 
 import com.p2ps.catalog.model.ProductCatalog;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,9 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
         "telemetry.api.key=test-telemetry-key-for-tests",
-        "app.scheduling.enabled=false"
+        "app.scheduling.enabled=false",
+        "ai.api.key=test-key",
+        "ai.api.url=https://api.test.com"
 })
-@ActiveProfiles("test")
 @Transactional
 class ProductCatalogRepositoryTest {
 
