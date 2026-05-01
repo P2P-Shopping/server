@@ -109,8 +109,8 @@ class ShoppingListControllerTest {
                         .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Unauthorized"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("User Not Found"))
                 .andExpect(jsonPath("$.details").value("User not found"));
     }
     

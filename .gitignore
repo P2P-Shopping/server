@@ -44,3 +44,4 @@ pgdata/
 node_modules/
 dist/
 
+.local

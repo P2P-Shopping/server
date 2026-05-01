@@ -179,6 +179,55 @@ class TelemetryServiceTest {
         verify(telemetryRepository).insert(org.mockito.ArgumentMatchers.anyList());
     }
 
+    @Test
+    void shouldDropDuplicatePingWithinDedupWindow() {
+        TelemetryPingDTO dto = buildPingDto();
+        ReflectionTestUtils.setField(telemetryService, "dedupWindowSeconds", 60L);
+
+        TelemetryRecord recentRecord = new TelemetryRecord();
+        ReflectionTestUtils.setField(recentRecord, "timestamp", 1711888658000L); // același timestamp
+
+        when(telemetryRepository.findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                "device-1", "store-7", "item-101"))
+                .thenReturn(java.util.Optional.of(recentRecord));
+
+        telemetryService.processPing(dto);
+
+        verify(telemetryRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldAllowPingAfterDedupWindowExpired() {
+        TelemetryPingDTO dto = buildPingDto(); // timestamp = 1711888658000L
+        ReflectionTestUtils.setField(telemetryService, "dedupWindowSeconds", 60L);
+
+        TelemetryRecord oldRecord = new TelemetryRecord();
+        // timestamp mai vechi de 60 secunde față de ping
+        ReflectionTestUtils.setField(oldRecord, "timestamp", 1711888658000L - 120_000L);
+
+        when(telemetryRepository.findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                "device-1", "store-7", "item-101"))
+                .thenReturn(java.util.Optional.of(oldRecord));
+
+        telemetryService.processPing(dto);
+
+        verify(telemetryRepository).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldAllowPingWhenNoRecentRecordExists() {
+        TelemetryPingDTO dto = buildPingDto();
+        ReflectionTestUtils.setField(telemetryService, "dedupWindowSeconds", 60L);
+
+        when(telemetryRepository.findTopByDeviceIdAndStoreIdAndItemIdOrderByTimestampDesc(
+                "device-1", "store-7", "item-101"))
+                .thenReturn(java.util.Optional.empty());
+
+        telemetryService.processPing(dto);
+
+        verify(telemetryRepository).save(org.mockito.ArgumentMatchers.any());
+    }
+
 
 
 }

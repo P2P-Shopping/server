@@ -1,8 +1,10 @@
 package com.p2ps.lists.service;
 
 
+import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
+import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
@@ -144,6 +146,109 @@ public class ShoppingListService {
         return mapToDTO(shoppingListRepository.save(currentList));
     }
 
+    @Transactional
+    public ShoppingListDTO finishShopping(UUID listId, String storeName, String userEmail) {
+        if (storeName == null || storeName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Store name cannot be empty");
+        }
+
+        ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
+        list.setFinalStore(storeName.trim());
+
+        return mapToDTO(shoppingListRepository.save(list));
+    }
+
+    @Transactional
+    public void markReceiptItemPurchased(
+            UUID listId,
+            ParsedItemResponse receiptItem,
+            ProductCatalog catalogProduct,
+            String userEmail) {
+        if (receiptItem == null) {
+            return;
+        }
+
+        ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
+        Item matchedItem = list.getItems().stream()
+                .filter(item -> !item.isChecked())
+                .filter(item -> matchesReceiptItem(item, receiptItem, catalogProduct))
+                .findFirst()
+                .orElseGet(() -> list.getItems().stream()
+                        .filter(item -> matchesReceiptItem(item, receiptItem, catalogProduct))
+                        .findFirst()
+                        .orElse(null));
+
+        if (matchedItem == null) {
+            return;
+        }
+
+        matchedItem.setChecked(true);
+        matchedItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+        if (catalogProduct != null) {
+            matchedItem.setCatalogItem(catalogProduct);
+        }
+        if (receiptItem.getPrice() != null) {
+            matchedItem.setPrice(receiptItem.getPrice());
+        }
+        if ((matchedItem.getBrand() == null || matchedItem.getBrand().isBlank()) && receiptItem.getBrand() != null) {
+            matchedItem.setBrand(receiptItem.getBrand().trim());
+        }
+        if ((matchedItem.getCategory() == null || matchedItem.getCategory().isBlank()) && receiptItem.getCategory() != null) {
+            matchedItem.setCategory(receiptItem.getCategory().trim());
+        }
+
+        itemRepository.save(matchedItem);
+    }
+
+    private boolean matchesReceiptItem(Item item, ParsedItemResponse receiptItem, ProductCatalog catalogProduct) {
+        String itemName = normalize(item.getName());
+        String itemBrand = normalize(item.getBrand());
+        String receiptSpecific = normalize(firstNonBlank(
+                receiptItem.getSpecificName(),
+                catalogProduct != null ? catalogProduct.getSpecificName() : null
+        ));
+        String receiptGeneric = normalize(firstNonBlank(
+                receiptItem.getGenericName(),
+                catalogProduct != null ? catalogProduct.getGenericName() : null
+        ));
+        String receiptBrand = normalize(firstNonBlank(
+                receiptItem.getBrand(),
+                catalogProduct != null ? catalogProduct.getBrand() : null
+        ));
+
+        boolean brandMatches = receiptBrand.isBlank() || itemBrand.isBlank() || itemBrand.equals(receiptBrand);
+        if (!brandMatches) {
+            return false;
+        }
+
+        return containsEither(itemName, receiptSpecific)
+                || containsEither(itemName, receiptGeneric)
+                || containsEither(receiptSpecific, itemName)
+                || containsEither(receiptGeneric, itemName);
+    }
+
+    private boolean containsEither(String left, String right) {
+        return !left.isBlank() && !right.isBlank() && (left.contains(right) || right.contains(left));
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase();
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback.trim();
+        }
+        return null;
+    }
+
     private ShoppingList getListEntityByIdAndUser(UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
@@ -190,6 +295,7 @@ public class ShoppingListService {
             dto.setOwnerEmail(list.getUser().getEmail());
             String fullName = list.getUser().getFirstName() + " " + list.getUser().getLastName();
             dto.setOwnerName(fullName.trim());
+            dto.setOwnerId(list.getUser().getId());
         }
 
         if (list.getItems() != null) {
@@ -211,6 +317,10 @@ public class ShoppingListService {
         } else {
             dto.setItems(new ArrayList<>());
         }
+
+        dto.setCollaboratorIds(list.getCollaborators().stream()
+                .map(Users::getId)
+                .toList());
 
         return dto;
     }

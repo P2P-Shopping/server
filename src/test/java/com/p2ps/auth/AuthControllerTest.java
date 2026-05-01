@@ -36,7 +36,9 @@ import static org.hamcrest.Matchers.containsString;
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "ai.api.key=test-key",
+        "ai.api.url=https://api.test.com"
 })
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")

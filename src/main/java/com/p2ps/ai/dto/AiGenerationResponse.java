@@ -10,4 +10,7 @@ public class AiGenerationResponse {
 
     // List of parsed items
     private List<ParsedItemResponse> items;
+
+    // Optional AI suggested store based on location and inventory
+    private String suggestedStore;
 }
