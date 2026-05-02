@@ -250,4 +250,26 @@ class RoutingServiceTest {
         assertFalse(response.getWarnings().isEmpty());
         assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("incredere scazut")));
     }
+
+    @Test
+    void calculateOptimalRoute_shouldExposeRouteMetrics() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertNotNull(response.getTotalDistanceMeters());
+        assertNotNull(response.getEstimatedTimeSeconds());
+        assertNotNull(response.getTotalStops());
+
+        assertTrue(response.getTotalDistanceMeters() > 0);
+        assertTrue(response.getEstimatedTimeSeconds() > 0);
+        assertTrue(response.getTotalStops() > 0);
+    }
 }
