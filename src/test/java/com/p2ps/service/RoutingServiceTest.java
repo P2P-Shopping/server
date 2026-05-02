@@ -250,4 +250,78 @@ class RoutingServiceTest {
         assertFalse(response.getWarnings().isEmpty());
         assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("incredere scazut")));
     }
+
+    // -------------------------------------------------------------------------
+    // Issue #154 — Closed-Loop TSP (start = user, end = checkout)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldEndAtCheckoutWhenExitPointExists() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "P2", 47.1558, 27.5865, 0.8);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1, p2));
+
+        RoutePoint checkout = new RoutePoint("checkout", "Casa de marcat", 47.1569, 27.5880, "CHECKOUT");
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
+                .thenReturn(checkout);
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_2), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        List<RoutePoint> route = response.getRoute();
+        assertFalse(route.isEmpty());
+
+        // First node must be the user position
+        assertEquals("user_loc", route.get(0).getItemId());
+        assertEquals("USER", route.get(0).getType());
+
+        // Last node must be the checkout counter -- closed loop
+        RoutePoint last = route.get(route.size() - 1);
+        assertEquals("checkout", last.getItemId());
+        assertEquals("CHECKOUT", last.getType());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldWorkWithoutExitPoint() {
+        // Backward-compatibility: stores without exit_point still work.
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+        // queryForObject not mocked -> returns null -> no checkout node appended
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertFalse(response.getRoute().isEmpty());
+
+        // Route must NOT end with a checkout node
+        RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+        assertNotEquals("checkout", last.getItemId());
+    }
+
+    @Test
+    void routePoint_shouldDefaultTypeToProduct() {
+        RoutePoint p = new RoutePoint("id123", "Lapte", 47.156, 27.587);
+        assertEquals("PRODUCT", p.getType());
+    }
+
+    @Test
+    void routePoint_shouldSupportExplicitType() {
+        RoutePoint checkout = new RoutePoint("checkout", "Casa de marcat", 47.156, 27.587, "CHECKOUT");
+        assertEquals("CHECKOUT", checkout.getType());
+
+        RoutePoint user = new RoutePoint("user_loc", "Tu", 47.156, 27.587, "USER");
+        assertEquals("USER", user.getType());
+    }
 }

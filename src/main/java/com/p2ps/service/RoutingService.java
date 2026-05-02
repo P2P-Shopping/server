@@ -5,6 +5,7 @@ import com.p2ps.controller.RoutingResponse;
 import com.p2ps.controller.RoutePoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -61,21 +62,38 @@ public class RoutingService {
             return RoutingResponse.error("Niciunul din produsele cerute nu a fost gasit in magazin.");
         }
 
-        RoutePoint userPoint = new RoutePoint("user_loc", "Tu", request.getUserLat(), request.getUserLng());
+        // Issue #154 — Closed-Loop TSP:
+        // Fetch the store's exit point (checkout counters).
+        // If the store doesn't have one yet (column is NULL) we fall back
+        // gracefully to the old open-path behaviour.
+        RoutePoint checkoutPoint = fetchExitPoint(storeId);
 
-        // Full NN route (fast — always computed eagerly)
+        RoutePoint userPoint = new RoutePoint("user_loc", "Tu",
+                request.getUserLat(), request.getUserLng(), "USER");
+
+        // NN route: user → products (nearest-neighbour order)
         List<RoutePoint> nnRoute = new ArrayList<>();
         nnRoute.add(userPoint);
         nnRoute.addAll(optimizer.nearestNeighborTSP(userPoint, toRoutePoints(locations)));
 
+        // Pin checkout as the fixed last node.
+        // RouteOptimizer.threeOptImprove() never moves index 0 (user) or the
+        // last index (checkout) — segA and segD are always preserved as-is.
+        if (checkoutPoint != null) {
+            nnRoute.add(checkoutPoint);
+            logger.info("Ruta inchisa: {} → {} produse → Casa de marcat", "user_loc", locations.size());
+        } else {
+            logger.info("Ruta deschisa (magazinul nu are exit_point configurat).");
+        }
+
         int lazyN = request.getLazyN();
-        boolean goLazy = lazyN > 0 && nnRoute.size() > lazyN + 1; // +1 for user point
+        boolean goLazy = lazyN > 0 && nnRoute.size() > lazyN + 1;
 
         if (goLazy) {
             return handleLazyRoute(nnRoute, lazyN, warnings);
         }
 
-        // Eager path — same as before
+        // Eager path — 3-opt on the full route (start and end pinned)
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
@@ -87,7 +105,9 @@ public class RoutingService {
      *
      * Returns the first lazyN stops immediately (NN order, no 3-opt yet).
      * Schedules full 3-opt optimization in the background.
-     * The frontend polls GET /api/routing/full/{routeId} when it needs the rest.
+     * The checkout point is always part of the full (background) route but is
+     * intentionally excluded from the partial response — it will appear at the
+     * end when the frontend polls GET /api/routing/full/{routeId}.
      */
     private RoutingResponse handleLazyRoute(List<RoutePoint> fullNnRoute,
                                              int lazyN,
@@ -95,7 +115,7 @@ public class RoutingService {
         String routeId = UUID.randomUUID().toString();
 
         // Partial response: user point + first lazyN products
-        List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+        List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1);
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
@@ -104,14 +124,14 @@ public class RoutingService {
         String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
         redis.opsForValue().set(pendingKey, "true", RoutingAsyncService.PENDING_TTL);
 
-        // Fire-and-forget: 3-opt on full route → Redis
+        // Fire-and-forget: 3-opt on full route (checkout pinned at end) → Redis
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
         return RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
     }
 
     // -------------------------------------------------------------------------
-    // DB queries (unchanged from original)
+    // DB queries
     // -------------------------------------------------------------------------
 
     private String findStoreForUser(double lat, double lng) {
@@ -119,6 +139,38 @@ public class RoutingService {
                 "WHERE ST_Contains(boundary_polygon, ST_SetSRID(ST_MakePoint(?, ?), 4326)) LIMIT 1";
         List<String> results = jdbcTemplate.queryForList(sql, String.class, lng, lat);
         return results.isEmpty() ? null : results.get(0);
+    }
+
+    /**
+     * Issue #154 — fetches the checkout / exit point for a store.
+     *
+     * Returns {@code null} when:
+     * <ul>
+     *   <li>the store's {@code exit_point} column is NULL (not yet configured), or</li>
+     *   <li>the store_id doesn't exist (shouldn't happen, but safe).</li>
+     * </ul>
+     * In both cases the caller falls back to the open-path behaviour.
+     */
+    private RoutePoint fetchExitPoint(String storeId) {
+        String sql = "SELECT ST_Y(exit_point) AS lat, ST_X(exit_point) AS lng " +
+                     "FROM store_geofences " +
+                     "WHERE store_id::text = ? AND exit_point IS NOT NULL";
+        try {
+            return jdbcTemplate.queryForObject(sql,
+                    (rs, rowNum) -> new RoutePoint(
+                            "checkout",
+                            "Casa de marcat",
+                            rs.getDouble("lat"),
+                            rs.getDouble("lng"),
+                            "CHECKOUT"),
+                    storeId);
+        } catch (EmptyResultDataAccessException e) {
+            logger.info("Magazinul {} nu are un exit_point configurat — ruta ramane deschisa.", storeId);
+            return null;
+        } catch (Exception e) {
+            logger.warn("Nu am putut prelua exit_point pentru magazinul {}: {}", storeId, e.getMessage());
+            return null;
+        }
     }
 
     private List<ProductLocation> getProductLocations(List<String> productIds, String storeId, List<String> warnings) {
