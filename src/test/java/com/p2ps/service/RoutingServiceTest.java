@@ -264,10 +264,7 @@ class RoutingServiceTest {
         RoutingResponse response = service.calculateOptimalRoute(request);
 
         assertEquals("success", response.getStatus());
-        assertNotNull(response.getTotalDistanceMeters());
-        assertNotNull(response.getEstimatedTimeSeconds());
-        assertNotNull(response.getTotalStops());
-
+        // primitives can't be null; assert they have sensible positive values
         assertTrue(response.getTotalDistanceMeters() > 0);
         assertTrue(response.getEstimatedTimeSeconds() > 0);
         assertTrue(response.getTotalStops() > 0);
