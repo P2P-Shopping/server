@@ -126,6 +126,7 @@ class RoutingServiceTest {
         assertTrue(after <= before + 1e-9);
         assertEquals(route.size(), improved.size());
     }
+    
 
     @Test
     void threeOptImprove_shouldReturnAllSamePoints() {
@@ -252,9 +253,28 @@ class RoutingServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // Issue #154 — Closed-Loop TSP (start = user, end = checkout)
+    // Issue 154
     // -------------------------------------------------------------------------
+    @Test
+    @SuppressWarnings("unchecked")
+        void calculateOptimalRoute_shouldHandleEmptyResultExceptionFromExitPoint() {
+    when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+            .thenReturn(List.of(STORE_ID));
 
+    RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+    when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+            .thenReturn(List.of(p1));
+
+    when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
+            .thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
+
+    RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+    RoutingResponse response = service.calculateOptimalRoute(request);
+
+    assertEquals("success", response.getStatus());
+    RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+    assertNotEquals("checkout", last.getItemId());
+    }
     @Test
     @SuppressWarnings("unchecked")
     void calculateOptimalRoute_shouldEndAtCheckoutWhenExitPointExists() {
