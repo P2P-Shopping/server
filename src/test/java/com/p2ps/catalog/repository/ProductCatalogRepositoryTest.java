@@ -202,6 +202,7 @@ class ProductCatalogRepositoryTest {
 
     @Test
     void shouldFindProductsUsingFuzzyKeywordSearch() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
         ProductCatalog product = new ProductCatalog();
         product.setGenericName("Oua");
         product.setSpecificName("Oua de gaina M");
