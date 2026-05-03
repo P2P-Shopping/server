@@ -57,6 +57,7 @@ public class ItemService {
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        item.setCreatedAt(System.currentTimeMillis());
 
         return mapToDTO(itemRepository.save(item));
     }
@@ -137,6 +138,7 @@ public class ItemService {
         dto.setCategory(item.getCategory());
         dto.setRecurrent(item.isRecurrent());
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
+        dto.setCreatedAt(item.getCreatedAt());
         return dto;
     }
 
@@ -169,6 +171,7 @@ public class ItemService {
             item.setCategory(request.getCategory());
             item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
             item.setLastUpdatedTimestamp(System.currentTimeMillis());
+            item.setCreatedAt(System.currentTimeMillis());
 
             items.add(item);
         }

@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 /**
@@ -20,10 +20,12 @@ public class ListSyncController {
     private static final Logger logger = LoggerFactory.getLogger(ListSyncController.class);
 
     private final ListSyncRouterService listSyncRouterService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public ListSyncController(ListSyncRouterService listSyncRouterService) {
+    public ListSyncController(ListSyncRouterService listSyncRouterService, SimpMessagingTemplate messagingTemplate) {
         this.listSyncRouterService = listSyncRouterService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     /**
@@ -33,14 +35,25 @@ public class ListSyncController {
      * @return the exact payload to be broadcasted to all active subscribers of the room
      */
     @MessageMapping("/list/{listId}/update")
-    @SendTo("/topic/list/{listId}")
-    public ListUpdatePayload handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
+    public void handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
         if (payload == null) {
             logger.warn("Received null payload for list update on room");
-            throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
+            return;
         }
 
-        logger.debug("Routing action {} for room {}", payload.getAction(), listId);
-        return listSyncRouterService.route(listId, payload);
+        logger.info("Routing action {} for room {}", payload.getAction(), listId);
+        try {
+            logger.info("RECEIVED update for list: {} | Action: {} | Item: {}", listId, payload.getAction(), payload.getItemId());
+            ListUpdatePayload processedPayload = listSyncRouterService.route(listId, payload);
+            if (processedPayload != null) {
+                String destination = "/topic/list/" + listId;
+                logger.info("BROADCASTING update to destination: {} | Status: {}", destination, processedPayload.getStatus());
+                messagingTemplate.convertAndSend(destination, processedPayload);
+            } else {
+                logger.warn("Processed payload was null for list: {}, nothing to broadcast", listId);
+            }
+        } catch (Exception e) {
+            logger.error("CRITICAL: Error processing list update for list {}: {}", listId, e.getMessage(), e);
+        }
     }
 }

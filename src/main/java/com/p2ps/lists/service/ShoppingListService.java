@@ -322,6 +322,10 @@ public class ShoppingListService {
                 .map(Users::getId)
                 .toList());
 
+        dto.setCollaboratorEmails(list.getCollaborators().stream()
+                .map(Users::getEmail)
+                .toList());
+
         return dto;
     }
 }

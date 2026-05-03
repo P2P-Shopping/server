@@ -18,13 +18,9 @@ public class ListSyncRouterService {
 
     private final ListSyncStore listSyncStore;
 
-    ListSyncRouterService() {
-        this(new InMemoryListSyncStore());
-    }
-
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
-        this.listSyncStore = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
+        this.listSyncStore = Objects.requireNonNull(listSyncStore, "listSyncStore");
     }
 
     /**

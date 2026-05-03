@@ -45,6 +45,9 @@ public class Item {
     @Column(name = "last_updated_timestamp")
     private Long lastUpdatedTimestamp;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Long createdAt;
+
     @Version
     private Long version;
 
