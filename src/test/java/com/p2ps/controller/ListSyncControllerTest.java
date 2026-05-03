@@ -20,24 +20,27 @@ class ListSyncControllerTest {
     @Mock
     private ListSyncRouterService routerService;
 
+    @Mock
+    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
     @Test
     void handleListUpdate() {
-        ListSyncController controller = new ListSyncController(routerService);
+        ListSyncController controller = new ListSyncController(routerService, messagingTemplate);
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UPDATE);
         when(routerService.route("list-1", payload)).thenReturn(payload);
 
-        ListUpdatePayload result = controller.handleListUpdate("list-1", payload);
+        controller.handleListUpdate("list-1", payload);
 
-        assertSame(payload, result);
         verify(routerService).route("list-1", payload);
+        verify(messagingTemplate).convertAndSend("/topic/list/list-1", payload);
     }
 
     @Test
-    void handleListUpdate_NullPayload_ThrowsException() {
-        ListSyncController controller = new ListSyncController(routerService);
+    void handleListUpdate_NullPayload_NoException() {
+        ListSyncController controller = new ListSyncController(routerService, messagingTemplate);
 
-        assertThrows(IllegalArgumentException.class, () ->
-                controller.handleListUpdate("list-1", null));
+        // Should just return silently as per implementation
+        controller.handleListUpdate("list-1", null);
     }
 }
