@@ -20,7 +20,7 @@ public class ListSyncRouterService {
 
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
-        this.listSyncStore = Objects.requireNonNull(listSyncStore, "listSyncStore");
+        this.listSyncStore = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
     }
 
     /**

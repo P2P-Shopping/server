@@ -57,15 +57,14 @@ public class DatabaseListSyncStore implements ListSyncStore {
 
         // For CHECK_OFF and UPDATE, we perform a persistence check/update via ItemService.
         try {
-            boolean checked = payload.getChecked() != null ? payload.getChecked() : false;
-            ItemDTO updatedItem = itemService.updateItemStatus(uuid, checked, payload.getTimestamp());
+            ItemDTO updatedItem = itemService.updateItemFromSync(uuid, payload);
             payload.setChecked(updatedItem.isChecked());
             payload.setTimestamp(updatedItem.getLastUpdatedTimestamp());
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
         } catch (Exception ex) {
-            logger.warn("Sync update rejected for listId={}, itemId={}, action={}: {}", 
-                listId, itemId, action, ex.getMessage());
+            logger.error("Sync update failed for listId={}, itemId={}, action={}", 
+                listId, itemId, action, ex);
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
         }
