@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
+import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,11 +21,18 @@ public class AiOrchestrationService {
 
     private final AiService aiService;
     private final AiPersistenceService aiPersistenceService;
+    private final ProductResolutionService productResolutionService;
     private final ObjectMapper objectMapper;
 
-    public AiOrchestrationService(AiService aiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
+    public AiOrchestrationService(
+            AiService aiService,
+            AiPersistenceService aiPersistenceService,
+            ProductResolutionService productResolutionService,
+            java.util.Optional<ObjectMapper> objectMapper
+    ) {
         this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
+        this.productResolutionService = productResolutionService;
         this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
 
@@ -65,7 +74,13 @@ public class AiOrchestrationService {
     }
 
     // Multimodal and Gatekeeper Flow
-    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
+    public AiGenerationResponse generateShoppingItems(
+            MultipartFile image,
+            String text,
+            Double latitude,
+            Double longitude,
+            String userEmail
+    ) {
         int maxRetries = 2;
         Exception lastException = null;
         String lastRawResult = null;
@@ -82,6 +97,7 @@ public class AiOrchestrationService {
 
                 // Validation
                 if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
+                    normalizeDetectedProducts(response, userEmail);
                     return response;
                 }
             } catch (AiProcessingException e) {
@@ -129,5 +145,50 @@ public class AiOrchestrationService {
         String sanitized = raw.replaceAll("\\s+", " ").trim();
         if (sanitized.length() <= 240) return sanitized;
         return sanitized.substring(0, 240) + "...";
+    }
+
+    private void normalizeDetectedProducts(AiGenerationResponse response, String userEmail) {
+        for (ParsedItemResponse item : response.getItems()) {
+            if (item == null) {
+                continue;
+            }
+
+            String keyword = firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
+            if (keyword == null) {
+                continue;
+            }
+
+            productResolutionService.resolveForUser(keyword, userEmail)
+                    .ifPresent(match -> applyResolvedProduct(item, match));
+        }
+    }
+
+    private void applyResolvedProduct(ParsedItemResponse item, ProductResolutionService.ResolvedProduct match) {
+        ProductCatalog catalogProduct = match.catalogProduct();
+        item.setGenericName(firstNonBlank(
+                match.matchedName(),
+                catalogProduct != null ? catalogProduct.getGenericName() : null,
+                item.getGenericName()
+        ));
+
+        if (catalogProduct != null) {
+            item.setCatalogId(catalogProduct.getId() != null ? catalogProduct.getId().toString() : item.getCatalogId());
+            item.setSpecificName(firstNonBlank(catalogProduct.getSpecificName(), item.getSpecificName()));
+            item.setBrand(firstNonBlank(catalogProduct.getBrand(), item.getBrand(), match.brand()));
+            item.setCategory(firstNonBlank(item.getCategory(), catalogProduct.getCategory(), match.category()));
+            return;
+        }
+
+        item.setBrand(firstNonBlank(item.getBrand(), match.brand()));
+        item.setCategory(firstNonBlank(item.getCategory(), match.category()));
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

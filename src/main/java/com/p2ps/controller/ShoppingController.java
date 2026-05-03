@@ -67,7 +67,8 @@ public class ShoppingController {
                 receipt,
                 receiptPrompt,
                 null,
-                null
+                null,
+                userEmail
         );
 
         for (ParsedItemResponse item : aiResponse.getItems()) {

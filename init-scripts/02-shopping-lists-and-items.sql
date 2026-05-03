@@ -1,4 +1,7 @@
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
+
 CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     id UUID PRIMARY KEY,
     generic_name VARCHAR(255) NOT NULL,
@@ -64,4 +67,8 @@ CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_catalog ON items(catalog_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_purchase_count ON p2p_product_catalog(purchase_count DESC);
 CREATE INDEX IF NOT EXISTS idx_collaborators_user ON shopping_list_collaborators(user_id);
+CREATE INDEX IF NOT EXISTS idx_items_name_trgm ON items USING gin (LOWER(name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_catalog_generic_name_trgm ON p2p_product_catalog USING gin (LOWER(generic_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_catalog_specific_name_trgm ON p2p_product_catalog USING gin (LOWER(specific_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_catalog_brand_trgm ON p2p_product_catalog USING gin (LOWER(COALESCE(brand, '')) gin_trgm_ops);
 

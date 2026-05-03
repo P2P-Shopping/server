@@ -53,7 +53,7 @@ public class CatalogService {
         if (keyword == null || keyword.trim().isEmpty()) {
             return List.of(); // returnează listă goală dacă AI-ul trimite null
         }
-        return catalogRepository.searchByKeyword(keyword.trim()).stream()
+        return catalogRepository.searchByKeywordFuzzy(keyword.trim()).stream()
                 .limit(10)
                 .toList();
     }

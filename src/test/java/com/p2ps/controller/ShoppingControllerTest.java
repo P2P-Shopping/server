@@ -77,7 +77,7 @@ class ShoppingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(listId, response.getBody().getId());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService, org.mockito.Mockito.never()).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService, org.mockito.Mockito.never()).generateShoppingItems(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -119,7 +119,7 @@ class ShoppingControllerTest {
         item.setPrice(new BigDecimal("2.50"));
         aiResponse.setItems(java.util.List.of(item));
 
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any()))
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
 
         ProductCatalog catalogProduct = new ProductCatalog();
@@ -144,7 +144,7 @@ class ShoppingControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), eq(userEmail));
         verify(catalogService).recordPurchase(any(), any(), any(), any(), any());
         verify(shoppingListService).markReceiptItemPurchased(eq(listId), any(), eq(catalogProduct), eq(userEmail));
     }
@@ -160,7 +160,7 @@ class ShoppingControllerTest {
         item.setSpecificName(null);
         aiResponse.setItems(java.util.List.of(item));
 
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any()))
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
 
         MockMultipartFile receipt = new MockMultipartFile(
@@ -181,7 +181,7 @@ class ShoppingControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), eq(userEmail));
         verify(catalogService, org.mockito.Mockito.never()).recordPurchase(any(), any(), any(), any(), any());
     }
 
