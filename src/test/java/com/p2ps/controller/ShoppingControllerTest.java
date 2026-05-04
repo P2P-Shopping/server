@@ -7,6 +7,7 @@ import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.service.ShoppingListService;
+import com.p2ps.util.ProductStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -191,10 +192,8 @@ class ShoppingControllerTest {
         "'', fallback, fallback",
         "null, '', null"
     }, nullValues = {"null"})
-    void firstNonBlank_parameterized(String primary, String fallback, String expected) throws Exception {
-        java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, primary, fallback);
+    void firstNonBlank_parameterized(String primary, String fallback, String expected) {
+        String result = ProductStringUtils.firstNonBlank(primary, fallback);
         assertEquals(expected, result);
     }
 }
