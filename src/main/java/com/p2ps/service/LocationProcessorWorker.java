@@ -30,7 +30,7 @@ public class LocationProcessorWorker {
     private final DataSource dataSource;
 
     @org.springframework.beans.factory.annotation.Value("${app.scheduling.enabled:true}")
-    private boolean schedulingEnabled;
+    private boolean schedulingEnabled = true;
 
     private volatile Boolean postgresDetected = null;
 

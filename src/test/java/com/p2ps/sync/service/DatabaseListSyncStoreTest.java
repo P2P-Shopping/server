@@ -33,7 +33,7 @@ class DatabaseListSyncStoreTest {
         updated.setChecked(true);
         updated.setLastUpdatedTimestamp(123L);
 
-        when(itemService.updateItemStatus(any(UUID.class), any(boolean.class), any())).thenReturn(updated);
+        when(itemService.updateItemFromSync(any(UUID.class), any())).thenReturn(updated);
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -53,8 +53,8 @@ class DatabaseListSyncStoreTest {
         DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
         UUID itemId = UUID.randomUUID();
 
-        when(itemService.updateItemStatus(any(UUID.class), any(boolean.class), any()))
-                .thenThrow(new OptimisticLockingFailureException("conflict"));
+        when(itemService.updateItemFromSync(any(UUID.class), any()))
+                .thenThrow(new RuntimeException("conflict"));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -105,7 +105,7 @@ class DatabaseListSyncStoreTest {
         ListUpdatePayload result = store.apply("list-1", payload);
 
         assertSame(payload, result);
-        assertNull(result.getStatus());
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
     }
 
     @Test

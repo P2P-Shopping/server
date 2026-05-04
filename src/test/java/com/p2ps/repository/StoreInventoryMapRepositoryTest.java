@@ -92,15 +92,15 @@ class StoreInventoryMapRepositoryTest {
         jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id, category) VALUES (?, 'Lista mea', 999, 'NORMAL')", listId);
 
         // D. Inserăm produsul
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Lapte', false, ?)", itemId, listId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, created_at) VALUES (?, 'Lapte', false, ?, ?)", itemId, listId, System.currentTimeMillis());
 
         UUID lowConfidenceItemId = UUID.randomUUID();
         UUID exactCutoffItemId = UUID.randomUUID();
         UUID zeroConfidenceItemId = UUID.randomUUID();
 
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Iaurt', false, ?)", lowConfidenceItemId, listId);
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Branza', false, ?)", exactCutoffItemId, listId);
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id) VALUES (?, 'Apa', false, ?)", zeroConfidenceItemId, listId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, created_at) VALUES (?, 'Iaurt', false, ?, ?)", lowConfidenceItemId, listId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, created_at) VALUES (?, 'Branza', false, ?, ?)", exactCutoffItemId, listId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, created_at) VALUES (?, 'Apa', false, ?, ?)", zeroConfidenceItemId, listId, System.currentTimeMillis());
 
 
         // ---  (Pregătim locația produsului nostru) ---
