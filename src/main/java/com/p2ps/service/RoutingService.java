@@ -30,18 +30,14 @@ public class RoutingService {
     private final StringRedisTemplate redis;
 
     public RoutingService(JdbcTemplate jdbcTemplate,
-                          RouteOptimizer optimizer,
-                          RoutingAsyncService asyncService,
-                          StringRedisTemplate redis) {
+            RouteOptimizer optimizer,
+            RoutingAsyncService asyncService,
+            StringRedisTemplate redis) {
         this.jdbcTemplate = jdbcTemplate;
         this.optimizer = optimizer;
         this.asyncService = asyncService;
         this.redis = redis;
     }
-
-    // -------------------------------------------------------------------------
-    // BE 3.1 — Lazy Routing entry point
-    // -------------------------------------------------------------------------
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
@@ -62,7 +58,6 @@ public class RoutingService {
             return RoutingResponse.error("Niciunul din produsele cerute nu a fost gasit in magazin.");
         }
 
-        // Issue #154 — Closed-Loop TSP:
         // Fetch the store's exit point (checkout counters).
         // If the store doesn't have one yet (column is NULL) we fall back
         // gracefully to the old open-path behaviour.
@@ -108,8 +103,6 @@ public class RoutingService {
     }
 
     /**
-     * BE 3.1 — Lazy path.
-     *
      * Returns the first lazyN stops immediately (NN order, no 3-opt yet).
      * Schedules full 3-opt optimization in the background.
      * The checkout point is always part of the full (background) route but is
@@ -117,8 +110,8 @@ public class RoutingService {
      * end when the frontend polls GET /api/routing/full/{routeId}.
      */
     private RoutingResponse handleLazyRoute(List<RoutePoint> fullNnRoute,
-                                             int lazyN,
-                                             List<String> warnings) {
+            int lazyN,
+            List<String> warnings) {
         String routeId = UUID.randomUUID().toString();
 
         // Partial response: user point + first lazyN products
@@ -154,19 +147,18 @@ public class RoutingService {
     }
 
     /**
-     * Issue #154 — fetches the checkout / exit point for a store.
-     *
      * Returns {@code null} when:
      * <ul>
-     *   <li>the store's {@code exit_point} column is NULL (not yet configured), or</li>
-     *   <li>the store_id doesn't exist (shouldn't happen, but safe).</li>
+     * <li>the store's {@code exit_point} column is NULL (not yet configured),
+     * or</li>
+     * <li>the store_id doesn't exist (shouldn't happen, but safe).</li>
      * </ul>
      * In both cases the caller falls back to the open-path behaviour.
      */
     private RoutePoint fetchExitPoint(String storeId) {
         String sql = "SELECT ST_Y(exit_point) AS lat, ST_X(exit_point) AS lng " +
-                     "FROM store_geofences " +
-                     "WHERE store_id::text = ? AND exit_point IS NOT NULL";
+                "FROM store_geofences " +
+                "WHERE store_id::text = ? AND exit_point IS NOT NULL";
         try {
             return jdbcTemplate.queryForObject(sql,
                     (rs, rowNum) -> new RoutePoint(
@@ -176,7 +168,7 @@ public class RoutingService {
                             rs.getDouble("lng"),
                             "CHECKOUT"),
                     storeId);
-        } catch (EmptyResultDataAccessException e) {
+        } catch (EmptyResultDataAccessException _) {
             logger.info("Magazinul {} nu are un exit_point configurat — ruta ramane deschisa.", storeId);
             return null;
         } catch (Exception e) {
@@ -186,7 +178,8 @@ public class RoutingService {
     }
 
     private List<ProductLocation> getProductLocations(List<String> productIds, String storeId, List<String> warnings) {
-        if (productIds == null || productIds.isEmpty()) return List.of();
+        if (productIds == null || productIds.isEmpty())
+            return List.of();
 
         List<ProductLocation> locations = queryInventoryMap(productIds, storeId, warnings);
 
@@ -220,17 +213,14 @@ public class RoutingService {
                         rs.getString("name"),
                         rs.getDouble("lat"),
                         rs.getDouble("lng"),
-                        rs.getDouble("confidence_score")
-                ),
-                params.toArray(new Object[0])
-        );
+                        rs.getDouble("confidence_score")),
+                params.toArray(new Object[0]));
 
         for (ProductLocation loc : results) {
             if (loc.confidenceScore() < CONFIDENCE_THRESHOLD) {
                 warnings.add(String.format(
                         "Locatia produsului '%s' are un grad de incredere scazut (%.0f%%).",
-                        loc.name(), loc.confidenceScore() * 100
-                ));
+                        loc.name(), loc.confidenceScore() * 100));
             }
         }
 
@@ -270,10 +260,8 @@ public class RoutingService {
                         rs.getString("name"),
                         rs.getDouble("lat"),
                         rs.getDouble("lng"),
-                        rs.getDouble("confidence_score")
-                ),
-                params.toArray(new Object[0])
-        );
+                        rs.getDouble("confidence_score")),
+                params.toArray(new Object[0]));
         logger.info(">>> Query terminat, {} rezultate", result.size());
         return result;
     }
@@ -283,13 +271,15 @@ public class RoutingService {
     // -------------------------------------------------------------------------
 
     private void logImprovement(List<RoutePoint> before, List<RoutePoint> after) {
-        if (!logger.isInfoEnabled()) return;
+        if (!logger.isInfoEnabled())
+            return;
         double distBefore = optimizer.routeDistance(before);
-        double distAfter  = optimizer.routeDistance(after);
+        double distAfter = optimizer.routeDistance(after);
         logger.info("NN: {}m | 3-Opt: {}m | Imbunatatire: {}%",
                 (int) distBefore, (int) distAfter,
                 String.format("%.1f", distBefore > 0
-                        ? (distBefore - distAfter) / distBefore * 100 : 0));
+                        ? (distBefore - distAfter) / distBefore * 100
+                        : 0));
     }
 
     private List<RoutePoint> toRoutePoints(List<ProductLocation> locations) {
@@ -298,5 +288,6 @@ public class RoutingService {
                 .toList();
     }
 
-    public record ProductLocation(String itemId, String name, double lat, double lng, double confidenceScore) {}
+    public record ProductLocation(String itemId, String name, double lat, double lng, double confidenceScore) {
+    }
 }
