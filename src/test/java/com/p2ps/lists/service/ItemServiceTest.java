@@ -242,4 +242,110 @@ class ItemServiceTest {
 
         verify(itemRepository, never()).saveAll(anyList());
     }
+
+    @Test
+    void addItemToList_MergesHistoricalDuplicates_AndMaintainsPrecision() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Flour");
+        req.setQuantity("2.2 kg");
+
+        Item duplicate1 = new Item();
+        duplicate1.setId(UUID.randomUUID());
+        duplicate1.setName("Flour");
+        duplicate1.setQuantity("1.1 kg");
+
+        Item duplicate2 = new Item();
+        duplicate2.setId(UUID.randomUUID());
+        duplicate2.setName("Flour");
+        duplicate2.setQuantity("1 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
+                .thenReturn(List.of(duplicate1, duplicate2));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("4.3 kg");
+
+        verify(itemRepository, times(1)).delete(duplicate2);
+        verify(itemRepository).save(duplicate1);
+    }
+
+    @Test
+    void addItemsToList_MergesDuplicatesWithinSameBatch() {
+        ItemRequest req1 = new ItemRequest();
+        req1.setName("Eggs");
+        req1.setQuantity("2");
+
+        ItemRequest req2 = new ItemRequest();
+        req2.setName("Milk");
+        req2.setQuantity("1 liter");
+
+        ItemRequest req3 = new ItemRequest();
+        req3.setName("eggs"); // Different case
+        req3.setQuantity("4");
+
+        List<ItemRequest> requests = List.of(req1, req2, req3);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(any(UUID.class), anyString()))
+                .thenReturn(List.of());
+
+        when(itemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+
+        assertThat(result).hasSize(2);
+
+        Optional<ItemDTO> eggsItem = result.stream().filter(i -> i.getName().equalsIgnoreCase("Eggs")).findFirst();
+        assertThat(eggsItem).isPresent();
+        assertThat(eggsItem.get().getQuantity()).isEqualTo("6");
+    }
+
+    @Test
+    void sumStringQuantities_ParsesAndAccumulatesComplexStrings() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setQuantity("1 liter");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Milk");
+        existingItem.setQuantity("17 + 1 liter");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Milk"))
+                .thenReturn(List.of(existingItem));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("17 + 2 liter");
+    }
+
+    @Test
+    void sumStringQuantities_FallsBackToConcatenation_WhenUnitsDiffer() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Apples");
+        req.setQuantity("3 pieces");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Apples");
+        existingItem.setQuantity("2 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apples"))
+                .thenReturn(List.of(existingItem));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("2 kg + 3 pieces");
+    }
 }

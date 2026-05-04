@@ -12,14 +12,12 @@ import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.List;
-import java.util.ArrayList;
 
 @Service
 public class ItemService {
@@ -28,7 +26,7 @@ public class ItemService {
 
     private final ItemRepository itemRepository;
     private final ShoppingListRepository shoppingListRepository;
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.*)$");
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository) {
         this.itemRepository = itemRepository;
@@ -50,33 +48,34 @@ public class ItemService {
         }
 
         String normalizedItemName = request.getName().trim();
-        Optional<Item> existingItemOpt = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+        List<Item> existingItems = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
 
-        // If product exists, we update it
-        if (existingItemOpt.isPresent()) {
-            Item existingItem = existingItemOpt.get();
+        if (!existingItems.isEmpty()) {
+            Item primaryItem = existingItems.get(0);
 
-            String updatedQuantity = sumStringQuantities(existingItem.getQuantity(), request.getQuantity());
-            existingItem.setQuantity(updatedQuantity);
+            for (int i = 1; i < existingItems.size(); i++) {
+                Item duplicate = existingItems.get(i);
+                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                itemRepository.delete(duplicate);
+            }
 
-            if (request.getBrand() != null) existingItem.setBrand(request.getBrand());
-            if (request.getPrice() != null) existingItem.setPrice(request.getPrice());
+            primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
 
-            existingItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+            if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
+            if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
 
-            return mapToDTO(itemRepository.save(existingItem));
+            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+            return mapToDTO(itemRepository.save(primaryItem));
         }
 
-        // If it does not exists, we create it
         Item item = new Item();
         item.setName(normalizedItemName);
         item.setShoppingList(list);
-
         item.setBrand(request.getBrand());
         item.setQuantity(request.getQuantity());
         item.setPrice(request.getPrice());
         item.setCategory(request.getCategory());
-
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
@@ -96,7 +95,7 @@ public class ItemService {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 
-        List<Item> itemsToSave = new ArrayList<>();
+        Map<String, Item> batchMap = new LinkedHashMap<>();
 
         for (ItemRequest request : requests) {
             if (request.getName() == null || request.getName().trim().isEmpty()) {
@@ -105,32 +104,44 @@ public class ItemService {
             validatePrice(request.getPrice());
 
             String normalizedItemName = request.getName().trim();
-            Optional<Item> existingItemOpt = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+            String mapKey = normalizedItemName.toLowerCase();
 
-            if (existingItemOpt.isPresent()) {
-                // If exists, we update the quantity
-                Item existingItem = existingItemOpt.get();
-                String updatedQuantity = sumStringQuantities(existingItem.getQuantity(), request.getQuantity());
-                existingItem.setQuantity(updatedQuantity);
-                existingItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-                itemsToSave.add(existingItem);
+            if (batchMap.containsKey(mapKey)) {
+                Item existingInBatch = batchMap.get(mapKey);
+                existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
+                existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
             } else {
-                // If it does not exist, we create a new item
-                Item item = new Item();
-                item.setName(normalizedItemName);
-                item.setShoppingList(list);
-                item.setBrand(request.getBrand());
-                item.setQuantity(request.getQuantity());
-                item.setPrice(request.getPrice());
-                item.setCategory(request.getCategory());
-                item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-                item.setLastUpdatedTimestamp(System.currentTimeMillis());
+                List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
 
-                itemsToSave.add(item);
+                if (!existingInDb.isEmpty()) {
+                    Item primaryItem = existingInDb.get(0);
+
+                    for (int i = 1; i < existingInDb.size(); i++) {
+                        Item duplicate = existingInDb.get(i);
+                        primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                        itemRepository.delete(duplicate);
+                    }
+
+                    primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+                    primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+                    batchMap.put(mapKey, primaryItem);
+                } else {
+                    Item newItem = new Item();
+                    newItem.setName(normalizedItemName);
+                    newItem.setShoppingList(list);
+                    newItem.setBrand(request.getBrand());
+                    newItem.setQuantity(request.getQuantity());
+                    newItem.setPrice(request.getPrice());
+                    newItem.setCategory(request.getCategory());
+                    newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+                    newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+                    batchMap.put(mapKey, newItem);
+                }
             }
         }
 
-        List<Item> saved = itemRepository.saveAll(itemsToSave);
+        List<Item> saved = itemRepository.saveAll(batchMap.values());
         return saved.stream().map(this::mapToDTO).toList();
     }
 
@@ -217,38 +228,54 @@ public class ItemService {
         if (oldQ == null || oldQ.trim().isEmpty()) return newQ;
         if (newQ == null || newQ.trim().isEmpty()) return oldQ;
 
-        String cleanOld = oldQ.trim();
-        String cleanNew = newQ.trim();
+        Map<String, BigDecimal> unitSums = new LinkedHashMap<>();
 
-        Matcher matcherOld = QUANTITY_PATTERN.matcher(cleanOld);
-        Matcher matcherNew = QUANTITY_PATTERN.matcher(cleanNew);
+        List<String> unparseableParts = new ArrayList<>();
 
-        // If both quantities are of type 'Same Unit' + 'Optional Text'
-        if (matcherOld.matches() && matcherNew.matches()) {
-            try {
-                double valOld = Double.parseDouble(matcherOld.group(1).replace(",", "."));
-                double valNew = Double.parseDouble(matcherNew.group(1).replace(",", "."));
+        parseAndAccumulate(oldQ, unitSums, unparseableParts);
+        parseAndAccumulate(newQ, unitSums, unparseableParts);
 
-                String unitOld = matcherOld.group(2).trim();
-                String unitNew = matcherNew.group(2).trim();
+        List<String> finalParts = new ArrayList<>();
 
-                if (unitOld.equalsIgnoreCase(unitNew)) {
-                    double sum = valOld + valNew;
+        for (Map.Entry<String, BigDecimal> entry : unitSums.entrySet()) {
+            String valStr = entry.getValue().stripTrailingZeros().toPlainString();
+            String unit = entry.getKey();
 
-                    String sumStr = (sum == (long) sum) ? String.valueOf((long) sum) : String.valueOf(sum);
-
-                    if (!unitOld.isEmpty()) {
-                        return sumStr + " " + unitOld;
-                    }
-                    return sumStr;
-                }
-            } catch (NumberFormatException e) {
-                // fallback
+            if (unit.isEmpty()) {
+                finalParts.add(valStr);
+            } else {
+                finalParts.add(valStr + " " + unit);
             }
         }
 
-        // Concatenate if quantity is not well formated
-        return cleanOld + " + " + cleanNew;
+        finalParts.addAll(unparseableParts);
+
+        return String.join(" + ", finalParts);
+    }
+
+    private void parseAndAccumulate(String quantityStr, Map<String, BigDecimal> unitSums, List<String> unparseableParts) {
+        String[] parts = quantityStr.split("\\+");
+
+        for (String part : parts) {
+            String cleanPart = part.trim();
+            if (cleanPart.isEmpty()) continue;
+
+            Matcher matcher = QUANTITY_PATTERN.matcher(cleanPart);
+            if (matcher.matches()) {
+                try {
+                    BigDecimal val = new BigDecimal(matcher.group(1).replace(",", "."));
+
+                    String unit = matcher.group(2).trim().toLowerCase();
+
+                    BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
+                    unitSums.put(unit, currentSum.add(val));
+                } catch (NumberFormatException e) {
+                    unparseableParts.add(cleanPart);
+                }
+            } else {
+                unparseableParts.add(cleanPart);
+            }
+        }
     }
 
 }
