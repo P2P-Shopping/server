@@ -79,7 +79,14 @@ public class RoutingService {
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
-        return RoutingResponse.eager(optimizedRoute, warnings);
+
+        RoutingResponse response = RoutingResponse.eager(optimizedRoute, warnings);
+        response.setTotalDistanceMeters(optimizer.routeDistance(optimizedRoute));
+        response.setTotalStops(optimizedRoute.size() - 1);
+        // Assuming walking speed of ~1.4 m/s
+        response.setEstimatedTimeSeconds((int) (response.getTotalDistanceMeters() / 1.4));
+
+        return response;
     }
 
     /**
@@ -107,7 +114,12 @@ public class RoutingService {
         // Fire-and-forget: 3-opt on full route → Redis
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
-        return RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+        RoutingResponse response = RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+        response.setTotalDistanceMeters(optimizer.routeDistance(partial));
+        response.setTotalStops(partial.size() - 1);
+        response.setEstimatedTimeSeconds((int) (response.getTotalDistanceMeters() / 1.4));
+
+        return response;
     }
 
     // -------------------------------------------------------------------------

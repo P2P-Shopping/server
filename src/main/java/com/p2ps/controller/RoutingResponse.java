@@ -28,6 +28,13 @@ public class RoutingResponse implements Serializable {
     private String routeId;
     private boolean partial;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("total_distance_meters")
+    private double totalDistanceMeters;
+    @com.fasterxml.jackson.annotation.JsonProperty("estimated_time_seconds")
+    private int estimatedTimeSeconds;
+    @com.fasterxml.jackson.annotation.JsonProperty("total_stops")
+    private int totalStops;
+
     /**
      * 3-arg constructor kept for backward compatibility with existing tests
      * (RoutingResponseTest, RoutingControllerTest).
@@ -39,6 +46,9 @@ public class RoutingResponse implements Serializable {
         this.warnings = warnings;
         this.routeId = null;
         this.partial = false;
+        this.totalDistanceMeters = 0.0;
+        this.estimatedTimeSeconds = 0;
+        this.totalStops = 0;
     }
 
     // ------------------------------------------------------------------
@@ -47,21 +57,21 @@ public class RoutingResponse implements Serializable {
 
     /** Full eager response: 3-opt done, no routeId needed. */
     public static RoutingResponse eager(List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, null, false);
+        return new RoutingResponse("success", route, warnings, null, false, 0.0, 0, 0);
     }
 
     /** Partial lazy response: first N stops, full route computing in background. */
     public static RoutingResponse partial(String routeId, List<RoutePoint> partialRoute, List<String> warnings) {
-        return new RoutingResponse("partial", partialRoute, warnings, routeId, true);
+        return new RoutingResponse("partial", partialRoute, warnings, routeId, true, 0.0, 0, 0);
     }
 
     /** Full response retrieved from Redis after background optimization. */
     public static RoutingResponse full(String routeId, List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, routeId, false);
+        return new RoutingResponse("success", route, warnings, routeId, false, 0.0, 0, 0);
     }
 
     /** Error response. */
     public static RoutingResponse error(String message) {
-        return new RoutingResponse("error", List.of(), List.of(message), null, false);
+        return new RoutingResponse("error", List.of(), List.of(message), null, false, 0.0, 0, 0);
     }
 }
