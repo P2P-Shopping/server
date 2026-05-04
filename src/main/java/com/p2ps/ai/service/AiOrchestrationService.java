@@ -1,6 +1,5 @@
 package com.p2ps.ai.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
@@ -149,17 +148,13 @@ public class AiOrchestrationService {
 
     private void normalizeDetectedProducts(AiGenerationResponse response, String userEmail) {
         for (ParsedItemResponse item : response.getItems()) {
-            if (item == null) {
-                continue;
+            if (item != null) {
+                String keyword = firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
+                if (keyword != null) {
+                    productResolutionService.resolveForUser(keyword, userEmail)
+                            .ifPresent(match -> applyResolvedProduct(item, match));
+                }
             }
-
-            String keyword = firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
-            if (keyword == null) {
-                continue;
-            }
-
-            productResolutionService.resolveForUser(keyword, userEmail)
-                    .ifPresent(match -> applyResolvedProduct(item, match));
         }
     }
 

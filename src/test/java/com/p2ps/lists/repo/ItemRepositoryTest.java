@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "ai.api.url=https://api.test.com"
 })
 @Transactional
-public class ItemRepositoryTest {
+class ItemRepositoryTest {
 
     static DockerImageName postgisImage = DockerImageName.parse("postgis/postgis:16-3.4")
             .asCompatibleSubstituteFor("postgres");
