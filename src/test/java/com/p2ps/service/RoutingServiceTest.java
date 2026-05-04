@@ -77,8 +77,7 @@ class RoutingServiceTest {
         List<RoutePoint> points = List.of(
                 new RoutePoint(ITEM_1, "A", 47.157, 27.588),
                 new RoutePoint(ITEM_2, "B", 47.158, 27.589),
-                new RoutePoint(ITEM_3, "C", 47.159, 27.590)
-        );
+                new RoutePoint(ITEM_3, "C", 47.159, 27.590));
 
         List<RoutePoint> route = optimizer.nearestNeighborTSP(start, points);
 
@@ -116,8 +115,7 @@ class RoutingServiceTest {
                 new RoutePoint("u", "Tu", 47.156, 27.587),
                 new RoutePoint(ITEM_1, "A", 47.160, 27.595),
                 new RoutePoint(ITEM_2, "B", 47.158, 27.591),
-                new RoutePoint(ITEM_3, "C", 47.162, 27.600)
-        );
+                new RoutePoint(ITEM_3, "C", 47.162, 27.600));
 
         double before = optimizer.routeDistance(route);
         List<RoutePoint> improved = optimizer.threeOptImprove(route);
@@ -133,8 +131,7 @@ class RoutingServiceTest {
                 new RoutePoint("u", "Tu", 47.156, 27.587),
                 new RoutePoint(ITEM_1, "A", 47.160, 27.595),
                 new RoutePoint(ITEM_2, "B", 47.155, 27.580),
-                new RoutePoint(ITEM_3, "C", 47.162, 27.600)
-        );
+                new RoutePoint(ITEM_3, "C", 47.162, 27.600));
 
         List<RoutePoint> improved = optimizer.threeOptImprove(route);
 
@@ -167,8 +164,10 @@ class RoutingServiceTest {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
-        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "Produs 2", 47.1558, 27.5865, 0.8);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.9);
+        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "Produs 2", 47.1558, 27.5865,
+                0.8);
 
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1, p2));
@@ -196,11 +195,10 @@ class RoutingServiceTest {
                 new RoutingService.ProductLocation("item5", "P5", 47.1550, 27.5850, 0.8),
                 new RoutingService.ProductLocation("item6", "P6", 47.1548, 27.5845, 0.7),
                 new RoutingService.ProductLocation("item7", "P7", 47.1546, 27.5840, 0.9),
-                new RoutingService.ProductLocation("item8", "P8", 47.1544, 27.5835, 0.8)
-        );
+                new RoutingService.ProductLocation("item8", "P8", 47.1544, 27.5835, 0.8));
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(locations);
-        
+
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(valueOps);
 
@@ -228,8 +226,7 @@ class RoutingServiceTest {
     void routeDistance_shouldReturnPositiveForMultiplePoints() {
         List<RoutePoint> route = List.of(
                 new RoutePoint("u", "Tu", 47.156, 27.587),
-                new RoutePoint(ITEM_1, "A", 47.160, 27.595)
-        );
+                new RoutePoint(ITEM_1, "A", 47.160, 27.595));
         assertTrue(optimizer.routeDistance(route) > 0);
     }
 
@@ -239,7 +236,8 @@ class RoutingServiceTest {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.0);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.0);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1));
 
@@ -252,11 +250,89 @@ class RoutingServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldHandleEmptyResultExceptionFromExitPoint() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
+                .thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+        assertNotEquals("checkout", last.getItemId());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldEndAtCheckoutWhenExitPointExists() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "P2", 47.1558, 27.5865, 0.8);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1, p2));
+
+        RoutePoint checkout = new RoutePoint("checkout", "Casa de marcat", 47.1569, 27.5880, "CHECKOUT");
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
+                .thenReturn(checkout);
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_2), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        List<RoutePoint> route = response.getRoute();
+        assertFalse(route.isEmpty());
+
+        // First node must be the user position
+        assertEquals("user_loc", route.get(0).getItemId());
+        assertEquals("USER", route.get(0).getType());
+
+        // Last node must be the checkout counter -- closed loop
+        RoutePoint last = route.get(route.size() - 1);
+        assertEquals("checkout", last.getItemId());
+        assertEquals("CHECKOUT", last.getType());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldWorkWithoutExitPoint() {
+        // Backward-compatibility: stores without exit_point still work.
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1562, 27.5871, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+        // queryForObject not mocked -> returns null -> no checkout node appended
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertFalse(response.getRoute().isEmpty());
+
+        // Route must NOT end with a checkout node
+        RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+        assertNotEquals("checkout", last.getItemId());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void calculateOptimalRoute_shouldExposeRouteMetrics() {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.9);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1));
 
@@ -268,5 +344,99 @@ class RoutingServiceTest {
         assertTrue(response.getTotalDistanceMeters() > 0);
         assertTrue(response.getEstimatedTimeSeconds() > 0);
         assertTrue(response.getTotalStops() > 0);
+    }
+
+    @Test
+    void routePoint_shouldDefaultTypeToProduct() {
+        RoutePoint p = new RoutePoint("id123", "Lapte", 47.156, 27.587);
+        assertEquals("PRODUCT", p.getType());
+    }
+
+    @Test
+    void routePoint_shouldSupportExplicitType() {
+        RoutePoint checkout = new RoutePoint("checkout", "Casa de marcat", 47.156, 27.587, "CHECKOUT");
+        assertEquals("CHECKOUT", checkout.getType());
+
+        RoutePoint user = new RoutePoint("user_loc", "Tu", 47.156, 27.587, "USER");
+        assertEquals("USER", user.getType());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldFallbackToRawPingsWhenInventoryMapIsEmpty() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        // First query (inventory map) returns empty, second (raw pings) returns results
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of())
+                .thenReturn(List.of(new RoutingService.ProductLocation(ITEM_1, "Raw Product", 47.1, 27.1, 0.0)));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("estimate din date brute")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fetchExitPoint_shouldHandleGenericException() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(new RoutingService.ProductLocation(ITEM_1, "P1", 47.1, 27.1, 0.9)));
+
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), anyString()))
+                .thenThrow(new RuntimeException("DB error"));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertEquals(2, response.getRoute().size()); // User + Product, no checkout
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldHandleNullProductIds() {
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, null, 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Nu esti in niciun magazin cunoscut."));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldReturnErrorIfNoProductsFoundInBothSources() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldNotGoLazyIfRouteIsShort() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(new RoutingService.ProductLocation(ITEM_1, "P1", 47.1, 27.1, 0.9)));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 10);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertFalse(response.isPartial());
     }
 }
