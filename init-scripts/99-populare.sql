@@ -10,14 +10,28 @@ INSERT INTO users (first_name, last_name, email, password, token_version, create
 ON CONFLICT (email) DO NOTHING;
 
 
-INSERT INTO store_geofences (store_id, name, boundary_polygon, floor_level) VALUES
-('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas', ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 4326), 0),
- ('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall', ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156],[27.601,47.156],[27.601,47.158],[27.599,47.158],[27.599,47.156]]]}'), 4326), 0),
- ('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor', ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326), 0)
+INSERT INTO store_geofences (store_id, name, boundary_polygon, floor_level, entry_point, exit_point) VALUES
+('8f3e1a2b-c4d5-6e7f-8a9b-0c1d2e3f4a5b', 'Supermarket Palas',
+    ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.586,47.155],[27.588,47.155],[27.588,47.157],[27.586,47.157],[27.586,47.155]]]}'), 4326),
+    0,
+    ST_SetSRID(ST_MakePoint(27.5870, 47.1551), 4326),  -- intrare (sud)
+    ST_SetSRID(ST_MakePoint(27.5875, 47.1565), 4326)), -- case de marcat (nord)
+('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'Iulius Mall',
+    ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.599,47.156],[27.601,47.156],[27.601,47.158],[27.599,47.158],[27.599,47.156]]]}'), 4326),
+    0,
+    ST_SetSRID(ST_MakePoint(27.5991, 47.1561), 4326),  -- intrare
+    ST_SetSRID(ST_MakePoint(27.6008, 47.1575), 4326)), -- case de marcat
+('f1e2d3c4-b5a6-9f8e-7d6c-5b4a3f2e1d0c', 'Kaufland Tudor',
+    ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[27.604,47.149],[27.606,47.149],[27.606,47.151],[27.604,47.151],[27.604,47.149]]]}'), 4326),
+    0,
+    ST_SetSRID(ST_MakePoint(27.6041, 47.1491), 4326),  -- intrare
+    ST_SetSRID(ST_MakePoint(27.6053, 47.1498), 4326))  -- case de marcat
     ON CONFLICT (store_id) DO UPDATE SET
-    boundary_polygon = EXCLUDED.boundary_polygon,
-                                  name = EXCLUDED.name,
-                                  floor_level = EXCLUDED.floor_level;
+        boundary_polygon = EXCLUDED.boundary_polygon,
+        name             = EXCLUDED.name,
+        floor_level      = EXCLUDED.floor_level,
+        entry_point      = EXCLUDED.entry_point,
+        exit_point       = EXCLUDED.exit_point;
 
 
 -- 2. Seed shopping lists doar pentru userii existenti in aplicatie
