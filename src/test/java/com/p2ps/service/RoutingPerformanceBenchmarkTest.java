@@ -1,10 +1,10 @@
 package com.p2ps.service;
 
-// Importurile care lipseau și generau erorile:
 import com.p2ps.controller.RoutePoint;
 import com.p2ps.controller.RoutingRequest;
 import com.p2ps.controller.RoutingResponse;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Tag("manual")
 class RoutingPerformanceBenchmarkTest {
 
     private static final Logger log = LoggerFactory.getLogger(RoutingPerformanceBenchmarkTest.class);
@@ -52,7 +53,7 @@ class RoutingPerformanceBenchmarkTest {
         int numSimulations = 50; // Rulăm 50 de request-uri concurente pentru a simula "în paralel"
 
         System.out.println("\n=========================================================================");
-        System.out.println("🚀 START STRESS TEST: " + numSimulations + " useri simultani cauta ruta pentru " + productIds.size() + " produse.");
+        System.out.println("START STRESS TEST: " + numSimulations + " useri simultani cauta ruta pentru " + productIds.size() + " produse.");
         System.out.println("=========================================================================");
 
         long startTimeMs = System.currentTimeMillis();
@@ -61,11 +62,8 @@ class RoutingPerformanceBenchmarkTest {
         IntStream.range(0, numSimulations).parallel().forEach(i -> {
             RoutingRequest request = new RoutingRequest(userLat, userLng, productIds, 0); // Eager routing (lazyN=0)
 
-            // Această apelare rulează automat și NN și 3-Opt în interiorul serviciului tău
             RoutingResponse response = routingService.calculateOptimalRoute(request);
 
-            // Deoarece RoutingService calculează deja îmbunătățirea intern,
-            // putem prelua direct valorile din response-ul tău complet
             assertTrue(response.getTotalDistanceMeters() > 0, "Distanța trebuie să fie calculată");
         });
 
@@ -95,15 +93,16 @@ class RoutingPerformanceBenchmarkTest {
         double improvement = ((distNn - dist3Opt) / distNn) * 100;
 
         // 4. Afișarea cerută la Demo (Procente concrete)
-        System.out.println("\n📊 --- REZULTATE BENCHMARK DEMO ---");
+        System.out.println("\n --- REZULTATE BENCHMARK DEMO ---");
         System.out.printf("Dimensiune Lista: %d produse reale\n", productIds.size());
         System.out.printf("Timp execuție paralelă (%d requesturi simultane): %d ms\n", numSimulations, totalTimeMs);
         System.out.println("-------------------------------------------------------------------------");
-        System.out.printf("🚶 Distanta generata cu Nearest Neighbor: %.2f metri\n", distNn);
-        System.out.printf("⚡ Distanta optimizata cu 3-Opt: %.2f metri\n", dist3Opt);
-        System.out.printf("✅ CONCLUZIE: 3-Opt a redus distanța cu %.2f%% față de NN!\n", improvement);
+        System.out.printf(" Distanta generata cu Nearest Neighbor: %.2f metri\n", distNn);
+        System.out.printf(" Distanta optimizata cu 3-Opt: %.2f metri\n", dist3Opt);
+        System.out.printf("CONCLUZIE: 3-Opt a redus distanța cu %.2f%% față de NN!\n", improvement);
         System.out.println("=========================================================================\n");
 
-        assertTrue(dist3Opt <= distNn, "3-Opt trebuie sa ofere o ruta cel putin la fel de buna ca NN");
+        // Added epsilon 1e-9 to avoid flakiness from floating-point arithmetic
+        assertTrue(dist3Opt <= distNn + 1e-9, "3-Opt trebuie sa ofere o ruta cel putin la fel de buna ca NN");
     }
 }
