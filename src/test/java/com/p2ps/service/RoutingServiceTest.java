@@ -77,8 +77,7 @@ class RoutingServiceTest {
         List<RoutePoint> points = List.of(
                 new RoutePoint(ITEM_1, "A", 47.157, 27.588),
                 new RoutePoint(ITEM_2, "B", 47.158, 27.589),
-                new RoutePoint(ITEM_3, "C", 47.159, 27.590)
-        );
+                new RoutePoint(ITEM_3, "C", 47.159, 27.590));
 
         List<RoutePoint> route = optimizer.nearestNeighborTSP(start, points);
 
@@ -116,8 +115,7 @@ class RoutingServiceTest {
                 new RoutePoint("u", "Tu", 47.156, 27.587),
                 new RoutePoint(ITEM_1, "A", 47.160, 27.595),
                 new RoutePoint(ITEM_2, "B", 47.158, 27.591),
-                new RoutePoint(ITEM_3, "C", 47.162, 27.600)
-        );
+                new RoutePoint(ITEM_3, "C", 47.162, 27.600));
 
         double before = optimizer.routeDistance(route);
         List<RoutePoint> improved = optimizer.threeOptImprove(route);
@@ -126,7 +124,6 @@ class RoutingServiceTest {
         assertTrue(after <= before + 1e-9);
         assertEquals(route.size(), improved.size());
     }
-    
 
     @Test
     void threeOptImprove_shouldReturnAllSamePoints() {
@@ -134,8 +131,7 @@ class RoutingServiceTest {
                 new RoutePoint("u", "Tu", 47.156, 27.587),
                 new RoutePoint(ITEM_1, "A", 47.160, 27.595),
                 new RoutePoint(ITEM_2, "B", 47.155, 27.580),
-                new RoutePoint(ITEM_3, "C", 47.162, 27.600)
-        );
+                new RoutePoint(ITEM_3, "C", 47.162, 27.600));
 
         List<RoutePoint> improved = optimizer.threeOptImprove(route);
 
@@ -168,8 +164,10 @@ class RoutingServiceTest {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
-        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "Produs 2", 47.1558, 27.5865, 0.8);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.9);
+        RoutingService.ProductLocation p2 = new RoutingService.ProductLocation(ITEM_2, "Produs 2", 47.1558, 27.5865,
+                0.8);
 
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1, p2));
@@ -197,11 +195,10 @@ class RoutingServiceTest {
                 new RoutingService.ProductLocation("item5", "P5", 47.1550, 27.5850, 0.8),
                 new RoutingService.ProductLocation("item6", "P6", 47.1548, 27.5845, 0.7),
                 new RoutingService.ProductLocation("item7", "P7", 47.1546, 27.5840, 0.9),
-                new RoutingService.ProductLocation("item8", "P8", 47.1544, 27.5835, 0.8)
-        );
+                new RoutingService.ProductLocation("item8", "P8", 47.1544, 27.5835, 0.8));
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(locations);
-        
+
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(valueOps);
 
@@ -229,8 +226,7 @@ class RoutingServiceTest {
     void routeDistance_shouldReturnPositiveForMultiplePoints() {
         List<RoutePoint> route = List.of(
                 new RoutePoint("u", "Tu", 47.156, 27.587),
-                new RoutePoint(ITEM_1, "A", 47.160, 27.595)
-        );
+                new RoutePoint(ITEM_1, "A", 47.160, 27.595));
         assertTrue(optimizer.routeDistance(route) > 0);
     }
 
@@ -240,7 +236,8 @@ class RoutingServiceTest {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.0);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.0);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1));
 
@@ -252,9 +249,6 @@ class RoutingServiceTest {
         assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("incredere scazut")));
     }
 
-    // -------------------------------------------------------------------------
-    // Issue 154
-    // -------------------------------------------------------------------------
     @Test
     @SuppressWarnings("unchecked")
     void calculateOptimalRoute_shouldHandleEmptyResultExceptionFromExitPoint() {
@@ -332,11 +326,13 @@ class RoutingServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void calculateOptimalRoute_shouldExposeRouteMetrics() {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
                 .thenReturn(List.of(STORE_ID));
 
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
+                0.9);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1));
 
