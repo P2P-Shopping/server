@@ -1,6 +1,7 @@
 package com.p2ps.controller;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -8,6 +9,7 @@ import java.io.Serializable;
 import java.util.List;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class RoutingResponse implements Serializable {
@@ -18,50 +20,74 @@ public class RoutingResponse implements Serializable {
 
     /**
      * BE 3.1 — Lazy Routing fields.
-     *
+     * <p>
      * routeId: present only for lazy responses. The frontend uses this to poll
      *          GET /api/routing/full/{routeId} for the 3-opt-optimized full route.
-     *
-     * partial: true  → this response contains only the first N stops (NN order).
-     *          false → this response contains the full 3-opt-optimized route.
+     * <p>
+     * partial: true  -> this response contains only the first N stops (NN order).
+     *          false -> this response contains the full 3-opt-optimized route.
      */
     private String routeId;
     private boolean partial;
 
+    // --- Performance Metrics ---
+    private double totalDistanceMeters;
+    private int estimatedTimeSeconds;
+    private int totalStops;
+
     /**
      * 3-arg constructor kept for backward compatibility with existing tests
      * (RoutingResponseTest, RoutingControllerTest).
-     * Sets routeId=null and partial=false — equivalent to an eager response.
+     * Equivalent to an eager response.
      */
     public RoutingResponse(String status, List<RoutePoint> route, List<String> warnings) {
         this.status = status;
         this.route = route;
         this.warnings = warnings;
-        this.routeId = null;
-        this.partial = false;
+        // Primitive fields (totalDistanceMeters, estimatedTimeSeconds, totalStops)
+        // and boolean (partial) default to 0/false automatically in Java.
     }
 
     // ------------------------------------------------------------------
-    // Factory methods — use these instead of constructors in new code
+    // Factory methods
     // ------------------------------------------------------------------
 
     /** Full eager response: 3-opt done, no routeId needed. */
     public static RoutingResponse eager(List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, null, false);
+        return RoutingResponse.builder()
+                .status("success")
+                .route(route)
+                .warnings(warnings)
+                .build();
     }
 
     /** Partial lazy response: first N stops, full route computing in background. */
     public static RoutingResponse partial(String routeId, List<RoutePoint> partialRoute, List<String> warnings) {
-        return new RoutingResponse("partial", partialRoute, warnings, routeId, true);
+        return RoutingResponse.builder()
+                .status("partial")
+                .route(partialRoute)
+                .warnings(warnings)
+                .routeId(routeId)
+                .partial(true)
+                .build();
     }
 
     /** Full response retrieved from Redis after background optimization. */
     public static RoutingResponse full(String routeId, List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, routeId, false);
+        return RoutingResponse.builder()
+                .status("success")
+                .route(route)
+                .warnings(warnings)
+                .routeId(routeId)
+                .build();
     }
 
     /** Error response. */
     public static RoutingResponse error(String message) {
-        return new RoutingResponse("error", List.of(), List.of(message), null, false);
+        return RoutingResponse.builder()
+                .status("error")
+                .route(List.of())
+                .warnings(List.of(message))
+                .build();
     }
 }

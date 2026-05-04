@@ -79,7 +79,16 @@ public class RoutingService {
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
-        return RoutingResponse.eager(optimizedRoute, warnings);
+
+        RoutingResponse response = RoutingResponse.eager(optimizedRoute, warnings);
+
+        // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
+        double distEager = optimizer.routeDistance(optimizedRoute);
+        response.setTotalDistanceMeters(distEager);
+        response.setTotalStops(optimizedRoute.size());
+        response.setEstimatedTimeSeconds((int) (distEager / 1.4)); // viteză estimată 1.4 m/s
+
+        return response;
     }
 
     /**
@@ -90,8 +99,8 @@ public class RoutingService {
      * The frontend polls GET /api/routing/full/{routeId} when it needs the rest.
      */
     private RoutingResponse handleLazyRoute(List<RoutePoint> fullNnRoute,
-                                             int lazyN,
-                                             List<String> warnings) {
+                                            int lazyN,
+                                            List<String> warnings) {
         String routeId = UUID.randomUUID().toString();
 
         // Partial response: user point + first lazyN products
@@ -107,7 +116,15 @@ public class RoutingService {
         // Fire-and-forget: 3-opt on full route → Redis
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
-        return RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+        RoutingResponse partialResponse = RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+
+        // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
+        double distLazy = optimizer.routeDistance(partial);
+        partialResponse.setTotalDistanceMeters(distLazy);
+        partialResponse.setTotalStops(partial.size());
+        partialResponse.setEstimatedTimeSeconds((int) (distLazy / 1.4));
+
+        return partialResponse;
     }
 
     // -------------------------------------------------------------------------
