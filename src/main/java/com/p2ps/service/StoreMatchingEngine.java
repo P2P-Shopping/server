@@ -55,7 +55,7 @@ public class StoreMatchingEngine {
                 -- Pasul 2: Filtrare exactă pe geografie (metrică)
                 AND ST_DWithin(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
             GROUP BY sg.store_id, sg.name, sg.boundary_polygon
-            HAVING COUNT(sim.item_id) > 0
+            --HAVING COUNT(sim.item_id) > 0
             ORDER BY matched_items DESC, distance_m
             LIMIT 3
         """;
