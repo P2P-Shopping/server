@@ -294,7 +294,7 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(any(UUID.class), anyString()))
                 .thenReturn(List.of());
 
-        when(itemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
 

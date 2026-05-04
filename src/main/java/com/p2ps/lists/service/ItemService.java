@@ -141,7 +141,7 @@ public class ItemService {
             }
         }
 
-        List<Item> saved = itemRepository.saveAll(batchMap.values());
+        List<Item> saved = itemRepository.saveAll(new ArrayList<>(batchMap.values()));
         return saved.stream().map(this::mapToDTO).toList();
     }
 

@@ -37,7 +37,7 @@ public class ItemController {
     @PostMapping("/lists/{listId}/items/batch")
     public ResponseEntity<List<ItemDTO>> addMultipleItems(
             @PathVariable UUID listId,
-            @RequestBody List<ItemRequest> requests,
+            @RequestBody @Valid List<@Valid ItemRequest> requests,
             Authentication authentication) {
 
         List<ItemDTO> createdItems = itemService.addItemsToList(listId, requests, authentication.getName());
