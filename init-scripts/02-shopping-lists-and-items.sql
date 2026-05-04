@@ -12,6 +12,18 @@ CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     purchase_count INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS user_product_history (
+                                                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    catalog_id UUID REFERENCES p2p_product_catalog(id) ON DELETE SET NULL,
+    custom_name VARCHAR(255) NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_added_timestamp BIGINT
+    );
+
+CREATE INDEX idx_user_history_user_id ON user_product_history(user_id);
+-- Adaugam index de trigrame pe numele custom pentru a pastra cautarea rapida
+CREATE INDEX trgm_idx_user_history_custom_name ON user_product_history USING gin (lower(custom_name) gin_trgm_ops);
+
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10, 2);
 CREATE UNIQUE INDEX IF NOT EXISTS unq_product_catalog_name_brand

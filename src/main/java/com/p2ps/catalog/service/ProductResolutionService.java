@@ -3,7 +3,7 @@ package com.p2ps.catalog.service;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
-import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +21,16 @@ public class ProductResolutionService {
     ) {}
 
     private final UserRepository userRepository;
-    private final ItemRepository itemRepository;
+    private final UserProductHistoryRepository historyRepository;
     private final ProductCatalogRepository productCatalogRepository;
 
     public ProductResolutionService(
             UserRepository userRepository,
-            ItemRepository itemRepository,
+            UserProductHistoryRepository historyRepository,
             ProductCatalogRepository productCatalogRepository
     ) {
         this.userRepository = userRepository;
-        this.itemRepository = itemRepository;
+        this.historyRepository = historyRepository;
         this.productCatalogRepository = productCatalogRepository;
     }
 
@@ -63,7 +63,8 @@ public class ProductResolutionService {
         }
 
         return userRepository.findByEmail(userEmail)
-                .flatMap(user -> itemRepository.findUserProductHistoryMatches(user.getId(), keyword).stream()
+                // AICI ERA GRESEALA: am schimbat itemRepository cu historyRepository.findMatches
+                .flatMap(user -> historyRepository.findMatches(user.getId(), keyword).stream()
                         .findFirst()
                         .map(match -> {
                             ProductCatalog catalogProduct = null;
