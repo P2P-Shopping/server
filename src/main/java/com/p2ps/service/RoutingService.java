@@ -12,9 +12,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class RoutingService {
@@ -135,7 +135,7 @@ public class RoutingService {
         String sql = "SELECT store_id::text FROM store_geofences " +
                 "WHERE ST_Contains(boundary_polygon, ST_SetSRID(ST_MakePoint(?, ?), 4326)) LIMIT 1";
         List<String> results = jdbcTemplate.queryForList(sql, String.class, lng, lat);
-        return results.isEmpty() ? null : results.get(0);
+        return results.isEmpty() ? null : results.getFirst();
     }
 
     private List<ProductLocation> getProductLocations(List<String> productIds, String storeId, List<String> warnings) {
@@ -153,7 +153,7 @@ public class RoutingService {
     }
 
     private List<ProductLocation> queryInventoryMap(List<String> productIds, String storeId, List<String> warnings) {
-        String placeholders = productIds.stream().map(id -> "?").collect(Collectors.joining(", "));
+        String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
         String sql = "SELECT sim.item_id::text AS item_id, i.name AS name, " +
                 "ST_Y(sim.estimated_loc_point) AS lat, ST_X(sim.estimated_loc_point) AS lng, " +
@@ -168,7 +168,7 @@ public class RoutingService {
 
         List<ProductLocation> results = jdbcTemplate.query(
                 sql,
-                (rs, rowNum) -> new ProductLocation(
+                (rs, ignored) -> new ProductLocation(
                         rs.getString("item_id"),
                         rs.getString("name"),
                         rs.getDouble("lat"),
@@ -200,7 +200,7 @@ public class RoutingService {
     private List<ProductLocation> queryRawPingsCentroid(List<String> productIds, String storeId) {
         logger.info(">>> Incepe queryRawPingsCentroid pentru {} produse", productIds.size());
 
-        String placeholders = productIds.stream().map(id -> "?").collect(Collectors.joining(", "));
+        String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
         String sql = "SELECT rup.item_id::text AS item_id, i.name AS name, " +
                 "AVG(ST_Y(rup.location_point)) AS lat, AVG(ST_X(rup.location_point)) AS lng, " +
@@ -218,7 +218,7 @@ public class RoutingService {
         logger.info(">>> Execut query SQL");
         List<ProductLocation> result = jdbcTemplate.query(
                 sql,
-                (rs, rowNum) -> new ProductLocation(
+                (rs, ignored) -> new ProductLocation(
                         rs.getString("item_id"),
                         rs.getString("name"),
                         rs.getDouble("lat"),
