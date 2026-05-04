@@ -6,10 +6,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ListSyncRouterServiceTest {
 
@@ -151,11 +153,13 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
-    void routeHandlesInterruption() throws Exception {
+    void routeHandlesInterruption() {
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
             try {
-                Thread.sleep(1000);
-            } catch (InterruptedException _) {}
+                java.util.concurrent.TimeUnit.MILLISECONDS.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             return payload;
         });
 
@@ -163,17 +167,90 @@ class ListSyncRouterServiceTest {
         payload.setAction(ActionType.UPDATE);
         payload.setItemId("item-1");
 
+        java.util.concurrent.atomic.AtomicReference<Exception> caught = new java.util.concurrent.atomic.AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
                 service.route("list-1", payload);
             } catch (IllegalStateException e) {
-                if (e.getMessage().contains("Interrupted")) {
-                    // Success for this test logic
-                }
+                caught.set(e);
             }
         });
 
-        // This is hard to trigger deterministically without complex mocking of the LockState,
-        // but adding the test case increases branch coverage if it runs.
+        t.start();
+        // Give it a moment to enter the synchronized block in route
+        try { Thread.sleep(100); } catch (InterruptedException _) { Thread.currentThread().interrupt(); }
+        t.interrupt();
+        
+        org.awaitility.Awaitility.await().atMost(2, java.util.concurrent.TimeUnit.SECONDS)
+                .until(() -> caught.get() != null);
+        
+        assertThat(caught.get().getMessage()).contains("Interrupted");
+    }
+
+    @Test
+    void routeWaitOnLock() throws Exception {
+        java.util.concurrent.CountDownLatch firstEnter = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch secondWait = new java.util.concurrent.CountDownLatch(1);
+        
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            firstEnter.countDown();
+            try {
+                secondWait.await();
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+            return payload;
+        });
+
+        ListUpdatePayload p1 = new ListUpdatePayload();
+        p1.setAction(ActionType.UPDATE);
+        p1.setItemId("item-1");
+
+        ListUpdatePayload p2 = new ListUpdatePayload();
+        p2.setAction(ActionType.UPDATE);
+        p2.setItemId("item-1");
+
+        Thread t1 = new Thread(() -> service.route("list-1", p1));
+        t1.start();
+        
+        firstEnter.await();
+        
+        // Start second thread, it should wait for t1 to finish
+        Thread t2 = new Thread(() -> service.route("list-1", p2));
+        t2.start();
+        
+        // Let t1 finish
+        secondWait.countDown();
+        
+        t1.join();
+        t2.join();
+        
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, p1.getStatus());
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, p2.getStatus());
+    }
+
+    @Test
+    void routeSupportsTimeBasedEviction() throws Exception {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+            return payload;
+        });
+
+        ListUpdatePayload p1 = new ListUpdatePayload();
+        p1.setAction(ActionType.UPDATE);
+        p1.setItemId("item-1");
+
+        service.route("list-1", p1);
+        
+        // Wait for lock window to pass
+        Thread.sleep(100); 
+        
+        ListUpdatePayload p2 = new ListUpdatePayload();
+        p2.setAction(ActionType.UPDATE);
+        p2.setItemId("item-1");
+        
+        service.route("list-1", p2);
+        
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, p2.getStatus());
     }
 }

@@ -141,4 +141,18 @@ class DatabaseListSyncStoreTest {
         // Verify itemService was never called for these
         org.mockito.Mockito.verifyNoInteractions(itemService);
     }
+
+    @Test
+    void returnsEarlyForUnknownAction() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UNKNOWN);
+        payload.setItemId(UUID.randomUUID().toString());
+        
+        assertSame(payload, store.apply("list-1", payload));
+        assertNull(payload.getStatus());
+        
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
 }
