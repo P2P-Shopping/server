@@ -46,7 +46,7 @@ public class ProductResolutionService {
         if (userEmail != null && !userEmail.isBlank()) {
             Optional<Users> user = userRepository.findByEmail(userEmail);
             if (user.isPresent()) {
-                return resolveForUser(rawKeyword, user.get());
+                return resolveForUserInternal(keyword, user.get());
             }
         }
 
@@ -60,6 +60,10 @@ public class ProductResolutionService {
             return Optional.empty();
         }
 
+        return resolveForUserInternal(keyword, user);
+    }
+
+    private Optional<ResolvedProduct> resolveForUserInternal(String keyword, Users user) {
         if (user != null) {
             Optional<ResolvedProduct> historyMatch = resolveFromUserHistory(keyword, user);
             if (historyMatch.isPresent()) {

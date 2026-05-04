@@ -2,6 +2,10 @@ package com.p2ps.util;
 
 public class ProductStringUtils {
 
+    private ProductStringUtils() {
+        // Utility class
+    }
+
     /**
      * Returns the first non-null, non-blank string from the provided values.
      * The result is trimmed.
