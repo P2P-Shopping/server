@@ -28,4 +28,16 @@ class RoutingResponseTest {
         assertEquals("updated", response.getStatus());
         assertEquals(updatedRoute, response.getRoute());
     }
+
+    @Test
+    void shouldExposeNewMetricsFields() {
+        RoutingResponse response = new RoutingResponse();
+        response.setTotalDistanceMeters(140.5);
+        response.setEstimatedTimeSeconds(100);
+        response.setTotalStops(5);
+
+        assertEquals(140.5, response.getTotalDistanceMeters());
+        assertEquals(100, response.getEstimatedTimeSeconds());
+        assertEquals(5, response.getTotalStops());
+    }
 }
