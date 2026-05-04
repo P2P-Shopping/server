@@ -60,6 +60,10 @@ public class RoutingAsyncService {
             List<RoutePoint> optimized = optimizer.threeOptImprove(fullNnRoute);
 
             RoutingResponse fullResponse = RoutingResponse.full(routeId, optimized, warnings);
+            fullResponse.setTotalDistanceMeters(optimizer.routeDistance(optimized));
+            fullResponse.setTotalStops(optimized.size() - 1);
+            fullResponse.setEstimatedTimeSeconds((int) (fullResponse.getTotalDistanceMeters() / 1.4));
+
             String json = objectMapper.writeValueAsString(fullResponse);
 
             redis.opsForValue().set(ROUTE_KEY_PREFIX + routeId, json, ROUTE_TTL);
