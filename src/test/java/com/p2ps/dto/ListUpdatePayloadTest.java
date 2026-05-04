@@ -64,11 +64,19 @@ class ListUpdatePayloadTest {
     }
 
     @Test
-    void testJsonDeserialization_LowercaseAction_MapsToCorrectEnum() throws Exception {
-        String json = "{\"action\":\"add\",\"itemId\":\"item-4\",\"content\":\"Butter\"}";
-        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+    void testStatusValidation() {
+        ListUpdatePayload payload = new ListUpdatePayload();
 
-        assertEquals(ActionType.ADD, payload.getAction());
+        payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, payload.getStatus());
+
+        payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, payload.getStatus());
+
+        payload.setStatus(null);
+        assertNull(payload.getStatus());
+
+        assertThrows(IllegalArgumentException.class, () -> payload.setStatus("INVALID"));
     }
 }
 

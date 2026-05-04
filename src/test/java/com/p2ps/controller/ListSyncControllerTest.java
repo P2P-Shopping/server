@@ -44,4 +44,18 @@ class ListSyncControllerTest {
 
         verifyNoInteractions(routerService, messagingTemplate);
     }
+
+    @Test
+    void handleListUpdate_Exception_LogsError() {
+        ListSyncController controller = new ListSyncController(routerService, messagingTemplate);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UPDATE);
+        when(routerService.route("list-1", payload)).thenThrow(new RuntimeException("test error"));
+
+        // Should not throw exception out, just log it
+        controller.handleListUpdate("list-1", payload);
+
+        verify(routerService).route("list-1", payload);
+        verifyNoInteractions(messagingTemplate);
+    }
 }

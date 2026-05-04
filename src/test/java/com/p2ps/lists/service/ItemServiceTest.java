@@ -242,4 +242,37 @@ class ItemServiceTest {
 
         verify(itemRepository, never()).saveAll(anyList());
     }
+
+    @Test
+    void updateItemFromSync_Success_WithJsonContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setChecked(true);
+        payload.setContent("{\"name\":\"Synced Name\",\"brand\":\"Synced Brand\"}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.isChecked()).isTrue();
+        assertThat(result.getName()).isEqualTo("Synced Name");
+        assertThat(result.getBrand()).isEqualTo("Synced Brand");
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItemFromSync_Fallback_WithPlainContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("Simple Name Fallback");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Simple Name Fallback");
+        verify(itemRepository).save(mockItem);
+    }
 }

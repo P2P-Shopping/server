@@ -119,4 +119,26 @@ class DatabaseListSyncStoreTest {
         p2.setItemId("");
         assertSame(p2, store.apply("list-1", p2));
     }
+
+    @Test
+    void handlesAddAndDeleteActionsWithoutItemService() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload addPayload = new ListUpdatePayload();
+        addPayload.setAction(ActionType.ADD);
+        addPayload.setItemId(UUID.randomUUID().toString());
+        
+        ListUpdatePayload addResult = store.apply("list-1", addPayload);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, addResult.getStatus());
+        
+        ListUpdatePayload deletePayload = new ListUpdatePayload();
+        deletePayload.setAction(ActionType.DELETE);
+        deletePayload.setItemId(UUID.randomUUID().toString());
+        
+        ListUpdatePayload deleteResult = store.apply("list-1", deletePayload);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, deleteResult.getStatus());
+        
+        // Verify itemService was never called for these
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
 }
