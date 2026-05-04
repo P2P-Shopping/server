@@ -348,4 +348,88 @@ class ItemServiceTest {
 
         assertThat(result.getQuantity()).isEqualTo("2 kg + 3 pieces");
     }
+    @Test
+    void updateItem_UpdatesAllOptionalFields() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Updated Milk");
+        req.setBrand("Zuzu");
+        req.setQuantity("2 litri");
+        req.setPrice(new BigDecimal("15.5"));
+        req.setCategory("Dairy");
+        req.setIsRecurrent(true);
+        req.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getBrand()).isEqualTo("Zuzu");
+        assertThat(result.getQuantity()).isEqualTo("2 litri");
+        assertThat(result.getPrice()).isEqualTo(new BigDecimal("15.5"));
+        assertThat(result.getCategory()).isEqualTo("Dairy");
+        assertThat(result.isRecurrent()).isTrue();
+        assertThat(result.isChecked()).isTrue();
+    }
+
+    @Test
+    void deleteItem_ThrowsItemNotFoundException_WhenItemDoesNotExist() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.deleteItem(itemId, userEmail))
+                .isInstanceOf(ItemNotFoundException.class)
+                .hasMessageContaining("Item not found");
+    }
+
+    @Test
+    void addItemsToList_MergesWithExistingDbItems_AndCleansHistoricalDuplicates() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Zahar");
+        req.setQuantity("1 kg");
+
+        Item dbDuplicate1 = new Item();
+        dbDuplicate1.setId(UUID.randomUUID());
+        dbDuplicate1.setName("Zahar");
+        dbDuplicate1.setQuantity("2 kg");
+
+        Item dbDuplicate2 = new Item();
+        dbDuplicate2.setId(UUID.randomUUID());
+        dbDuplicate2.setName("Zahar");
+        dbDuplicate2.setQuantity("0.5 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Zahar"))
+                .thenReturn(List.of(dbDuplicate1, dbDuplicate2));
+
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getQuantity()).isEqualTo("3.5 kg"); // 1 + 2 + 0.5
+
+        verify(itemRepository).delete(dbDuplicate2);
+    }
+
+    @Test
+    void addItemToList_ReturnsNewQuantity_WhenOldQuantityIsBlank() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Apa");
+        req.setQuantity("2 sticle");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Apa");
+        existingItem.setQuantity("   ");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apa"))
+                .thenReturn(List.of(existingItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("2 sticle");
+    }
 }
