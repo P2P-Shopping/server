@@ -439,4 +439,73 @@ class RoutingServiceTest {
         assertEquals("success", response.getStatus());
         assertFalse(response.isPartial());
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldWarnWhenSomeProductsMissing() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        // Request ITEM_1 and ITEM_2, but only ITEM_1 is found in inventory map
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1, 27.1, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_2), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains(ITEM_2) && w.contains("nu a fost gasit")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldHandleZeroDistanceImprovement() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        // User and product at the same location -> distance is 0
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.156, 27.587, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        assertEquals(0.0, response.getTotalDistanceMeters(), 0.001);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calculateOptimalRoute_shouldHandleDuplicateProductIds() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "P1", 47.1, 27.1, 0.9);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(p1));
+
+        // Duplicate item IDs in request
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_1), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("success", response.getStatus());
+        // Depending on implementation, we might have 1 product in route (unique) or 2.
+        // Current logic in getProductLocations doesn't de-duplicate, it just returns what the DB returns.
+        // If DB returns one row (because item_id is unique per store), then we have 1 product.
+        assertTrue(response.getRoute().size() >= 2); // user + at least one product
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldReturnEmptyResponseWhenProductIdsIsEmpty() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
 }
