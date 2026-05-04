@@ -23,10 +23,10 @@ public class StoreMatchingEngine {
         this.namedJdbcTemplate = namedJdbcTemplate;
     }
 
-    public StoreMatchResult findOptimalStore(double userLat, double userLng, double radiusInMeters, List<UUID> itemIds) {
+    public List<StoreMatchResult> findOptimalStores(double userLat, double userLng, double radiusInMeters, List<UUID> itemIds) {
         if (itemIds == null || itemIds.isEmpty()) {
             logger.warn("Lista de produse este goala. Nu se poate calcula magazinul optim.");
-            return null;
+            return List.of();
         }
 
 
@@ -49,15 +49,15 @@ public class StoreMatchingEngine {
             FROM store_geofences sg
             LEFT JOIN store_inventory_map sim
                 ON sg.store_id = sim.store_id AND sim.item_id IN (:itemIds)
-            WHERE 
+            WHERE
                 -- Pasul 1: Pre-filtrare rapidă folosind indexul pe geometrie
                 ST_DWithin(sg.boundary_polygon, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :radiusDegrees)
                 -- Pasul 2: Filtrare exactă pe geografie (metrică)
                 AND ST_DWithin(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
             GROUP BY sg.store_id, sg.name, sg.boundary_polygon
             HAVING COUNT(sim.item_id) > 0
-            ORDER BY matched_items DESC, distance_m ASC
-            LIMIT 1
+            ORDER BY matched_items DESC, distance_m
+            LIMIT 3
         """;
 
         MapSqlParameterSource parameters = new MapSqlParameterSource()
@@ -83,14 +83,14 @@ public class StoreMatchingEngine {
 
         if (results.isEmpty()) {
             logger.info("Nu a fost gasit niciun magazin in raza specificata care sa contina produsele dorite.");
-            return null;
+            return List.of();
         }
 
         StoreMatchResult bestStore = results.getFirst();
-        logger.info("Gasit magazin optim: {} (ID: {}) - Produse gasite: {}/{}, Distanta: {}m",
-                bestStore.storeName(), bestStore.storeId(), bestStore.matchedItems(), itemIds.size(), Math.round(bestStore.distanceMeters()));
+        logger.info("Gasite {} magazine optime. Cel mai bun: {} (ID: {}) - Produse gasite: {}/{}, Distanta: {}m",
+                results.size(), bestStore.storeName(), bestStore.storeId(), bestStore.matchedItems(), itemIds.size(), Math.round(bestStore.distanceMeters()));
 
-        return bestStore;
+        return results;
     }
 
     public record StoreMatchResult(String storeId, String storeName, int matchedItems, double distanceMeters) {}
