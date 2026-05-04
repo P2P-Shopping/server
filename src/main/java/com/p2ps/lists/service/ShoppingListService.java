@@ -16,6 +16,7 @@ import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.util.ProductStringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -204,15 +205,15 @@ public class ShoppingListService {
     private boolean matchesReceiptItem(Item item, ParsedItemResponse receiptItem, ProductCatalog catalogProduct) {
         String itemName = normalize(item.getName());
         String itemBrand = normalize(item.getBrand());
-        String receiptSpecific = normalize(firstNonBlank(
+        String receiptSpecific = normalize(ProductStringUtils.firstNonBlank(
                 receiptItem.getSpecificName(),
                 catalogProduct != null ? catalogProduct.getSpecificName() : null
         ));
-        String receiptGeneric = normalize(firstNonBlank(
+        String receiptGeneric = normalize(ProductStringUtils.firstNonBlank(
                 receiptItem.getGenericName(),
                 catalogProduct != null ? catalogProduct.getGenericName() : null
         ));
-        String receiptBrand = normalize(firstNonBlank(
+        String receiptBrand = normalize(ProductStringUtils.firstNonBlank(
                 receiptItem.getBrand(),
                 catalogProduct != null ? catalogProduct.getBrand() : null
         ));
@@ -239,15 +240,6 @@ public class ShoppingListService {
         return value.trim().toLowerCase();
     }
 
-    private String firstNonBlank(String primary, String fallback) {
-        if (primary != null && !primary.isBlank()) {
-            return primary.trim();
-        }
-        if (fallback != null && !fallback.isBlank()) {
-            return fallback.trim();
-        }
-        return null;
-    }
 
     private ShoppingList getListEntityByIdAndUser(UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)

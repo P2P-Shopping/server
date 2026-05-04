@@ -101,7 +101,7 @@ class ProductResolutionServiceTest {
     void resolveForUser_noUser_onlyChecksGlobalCatalog() {
         when(productCatalogRepository.searchByKeywordFuzzy("ou")).thenReturn(Collections.emptyList());
 
-        Optional<ProductResolutionService.ResolvedProduct> result = productResolutionService.resolveForUser("ou", null);
+        Optional<ProductResolutionService.ResolvedProduct> result = productResolutionService.resolveForUser("ou", (String) null);
 
         assertThat(result).isNotPresent();
         verify(userRepository, never()).findByEmail(anyString());

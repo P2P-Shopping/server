@@ -4,6 +4,8 @@ import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.auth.model.Users;
+import com.p2ps.util.ProductStringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,15 +43,38 @@ public class ProductResolutionService {
             return Optional.empty();
         }
 
-        Optional<ResolvedProduct> historyMatch = resolveFromUserHistory(keyword, userEmail);
-        if (historyMatch.isPresent()) {
-            return historyMatch;
+        if (userEmail != null && !userEmail.isBlank()) {
+            Optional<Users> user = userRepository.findByEmail(userEmail);
+            if (user.isPresent()) {
+                return resolveForUser(rawKeyword, user.get());
+            }
         }
 
+        return resolveInCatalogOnly(keyword);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ResolvedProduct> resolveForUser(String rawKeyword, Users user) {
+        String keyword = normalize(rawKeyword);
+        if (keyword == null) {
+            return Optional.empty();
+        }
+
+        if (user != null) {
+            Optional<ResolvedProduct> historyMatch = resolveFromUserHistory(keyword, user);
+            if (historyMatch.isPresent()) {
+                return historyMatch;
+            }
+        }
+
+        return resolveInCatalogOnly(keyword);
+    }
+
+    private Optional<ResolvedProduct> resolveInCatalogOnly(String keyword) {
         return productCatalogRepository.searchByKeywordFuzzy(keyword).stream()
                 .findFirst()
                 .map(product -> new ResolvedProduct(
-                        firstNonBlank(product.getGenericName(), product.getSpecificName()),
+                        ProductStringUtils.firstNonBlank(product.getGenericName(), product.getSpecificName()),
                         product.getBrand(),
                         product.getCategory(),
                         product,
@@ -57,37 +82,36 @@ public class ProductResolutionService {
                 ));
     }
 
-    private Optional<ResolvedProduct> resolveFromUserHistory(String keyword, String userEmail) {
-        if (userEmail == null || userEmail.isBlank()) {
+    private Optional<ResolvedProduct> resolveFromUserHistory(String keyword, Users user) {
+        if (user == null) {
             return Optional.empty();
         }
 
-        return userRepository.findByEmail(userEmail)
-                .flatMap(user -> itemRepository.findUserProductHistoryMatches(user.getId(), keyword).stream()
-                        .findFirst()
-                        .map(match -> {
-                            ProductCatalog catalogProduct = null;
-                            if (match.getCatalogId() != null) {
-                                catalogProduct = new ProductCatalog();
-                                catalogProduct.setId(match.getCatalogId());
-                                catalogProduct.setGenericName(match.getCatalogGenericName());
-                                catalogProduct.setSpecificName(match.getCatalogSpecificName());
-                                catalogProduct.setBrand(match.getBrand());
-                                catalogProduct.setCategory(match.getCategory());
-                            }
+        return itemRepository.findUserProductHistoryMatches(user.getId(), keyword).stream()
+                .findFirst()
+                .map(match -> {
+                    ProductCatalog catalogProduct = null;
+                    if (match.getCatalogId() != null) {
+                        catalogProduct = new ProductCatalog();
+                        catalogProduct.setId(match.getCatalogId());
+                        catalogProduct.setGenericName(match.getCatalogGenericName());
+                        catalogProduct.setSpecificName(match.getCatalogSpecificName());
+                        catalogProduct.setBrand(match.getBrand());
+                        catalogProduct.setCategory(match.getCategory());
+                    }
 
-                            return new ResolvedProduct(
-                                    firstNonBlank(
-                                            match.getItemName(),
-                                            match.getCatalogGenericName(),
-                                            match.getCatalogSpecificName()
-                                    ),
-                                    match.getBrand(),
-                                    match.getCategory(),
-                                    catalogProduct,
-                                    "USER_HISTORY"
-                            );
-                        }));
+                    return new ResolvedProduct(
+                            ProductStringUtils.firstNonBlank(
+                                    match.getItemName(),
+                                    match.getCatalogGenericName(),
+                                    match.getCatalogSpecificName()
+                            ),
+                            match.getBrand(),
+                            match.getCategory(),
+                            catalogProduct,
+                            "USER_HISTORY"
+                    );
+                });
     }
 
     private String normalize(String value) {
@@ -97,12 +121,4 @@ public class ProductResolutionService {
         return value.trim();
     }
 
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
-    }
 }
