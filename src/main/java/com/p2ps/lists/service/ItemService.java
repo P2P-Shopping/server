@@ -127,7 +127,7 @@ public class ItemService {
                 if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
                 if (dto.getPrice() != null) item.setPrice(dto.getPrice());
                 if (dto.getCategory() != null) item.setCategory(dto.getCategory());
-            } catch (Exception e) {
+            } catch (Exception _) {
                 // Fallback: treat content as the item name
                 item.setName(payload.getContent());
             }

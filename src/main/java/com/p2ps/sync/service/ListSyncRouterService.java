@@ -62,14 +62,6 @@ public class ListSyncRouterService {
         };
     }
 
-    private static final class InMemoryListSyncStore implements ListSyncStore {
-        @Override
-        public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
-            return payload;
-        }
-
-    }
-
     private static final class LockingListSyncStore implements ListSyncStore {
 
         private static final long LOCK_WINDOW_MILLIS = 50L;

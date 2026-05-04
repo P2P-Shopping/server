@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.UUID;
 
@@ -54,7 +53,7 @@ class DatabaseListSyncStoreTest {
         UUID itemId = UUID.randomUUID();
 
         when(itemService.updateItemFromSync(any(UUID.class), any()))
-                .thenThrow(new RuntimeException("conflict"));
+                .thenThrow(new org.springframework.dao.OptimisticLockingFailureException("conflict"));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);

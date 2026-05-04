@@ -41,19 +41,14 @@ public class ListSyncController {
             return;
         }
 
-        logger.info("Routing action {} for room {}", payload.getAction(), listId);
         try {
-            logger.info("RECEIVED update for list: {} | Action: {} | Item: {}", listId, payload.getAction(), payload.getItemId());
             ListUpdatePayload processedPayload = listSyncRouterService.route(listId, payload);
             if (processedPayload != null) {
                 String destination = "/topic/list/" + listId;
-                logger.info("BROADCASTING update to destination: {} | Status: {}", destination, processedPayload.getStatus());
                 messagingTemplate.convertAndSend(destination, processedPayload);
-            } else {
-                logger.warn("Processed payload was null for list: {}, nothing to broadcast", listId);
             }
         } catch (Exception e) {
-            logger.error("CRITICAL: Error processing list update for list {}: {}", listId, e.getMessage(), e);
+            logger.error("CRITICAL: Error processing list update", e);
         }
     }
 }

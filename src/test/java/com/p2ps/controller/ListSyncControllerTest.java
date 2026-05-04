@@ -9,9 +9,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,5 +41,7 @@ class ListSyncControllerTest {
 
         // Should just return silently as per implementation
         controller.handleListUpdate("list-1", null);
+
+        verifyNoInteractions(routerService, messagingTemplate);
     }
 }
