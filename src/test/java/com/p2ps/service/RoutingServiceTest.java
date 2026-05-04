@@ -378,8 +378,7 @@ class RoutingServiceTest {
                 .thenReturn(List.of(STORE_ID));
 
         RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871, 0.9);
-        RoutingService.ProductLocation p1 = new RoutingService.ProductLocation(ITEM_1, "Produs 1", 47.1562, 27.5871,
-                0.9);
+
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of(p1));
 
