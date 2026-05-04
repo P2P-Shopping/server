@@ -1,7 +1,7 @@
 package com.p2ps.catalog.service;
 
-import com.p2ps.auth.model.User;
-import com.p2ps.auth.repo.UserRepository;
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.lists.repo.ItemRepository;
@@ -35,11 +35,11 @@ public class ProductResolutionServiceTest {
     @InjectMocks
     private ProductResolutionService productResolutionService;
 
-    private User user;
+    private Users user;
 
     @BeforeEach
     void setUp() {
-        user = new User("test@user.com", "pass");
+        user = new Users("test@user.com", "pass", "Test", "User");
         user.setId(1);
     }
 
@@ -60,10 +60,10 @@ public class ProductResolutionServiceTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().source()).isEqualTo("USER_HISTORY");
-        assertThat(result.get().genericName()).isEqualTo("oua");
-        assertThat(result.get().specificName()).isEqualTo("Oua de gaina M");
+        assertThat(result.get().matchedName()).isEqualTo("oua");
+        assertThat(result.get().catalogProduct().getSpecificName()).isEqualTo("Oua de gaina M");
 
-        verify(productCatalogRepository, never()).findTopByFuzzySearch(anyString());
+        verify(productCatalogRepository, never()).searchByKeywordFuzzy(anyString());
     }
 
     @Test
@@ -76,21 +76,21 @@ public class ProductResolutionServiceTest {
         catalogProduct.setSpecificName("Oua de gaina");
         catalogProduct.setBrand("BrandX");
 
-        when(productCatalogRepository.findTopByFuzzySearch("ou")).thenReturn(Optional.of(catalogProduct));
+        when(productCatalogRepository.searchByKeywordFuzzy("ou")).thenReturn(List.of(catalogProduct));
 
         Optional<ProductResolutionService.ResolvedProduct> result = productResolutionService.resolveForUser("ou", "test@user.com");
 
         assertThat(result).isPresent();
         assertThat(result.get().source()).isEqualTo("GLOBAL_CATALOG");
-        assertThat(result.get().genericName()).isEqualTo("oua");
-        assertThat(result.get().specificName()).isEqualTo("Oua de gaina");
+        assertThat(result.get().matchedName()).isEqualTo("oua");
+        assertThat(result.get().catalogProduct().getSpecificName()).isEqualTo("Oua de gaina");
     }
 
     @Test
     void resolveForUser_noMatch_returnsEmpty() {
         when(userRepository.findByEmail("test@user.com")).thenReturn(Optional.of(user));
         when(itemRepository.findUserProductHistoryMatches(user.getId(), "unknown")).thenReturn(Collections.emptyList());
-        when(productCatalogRepository.findTopByFuzzySearch("unknown")).thenReturn(Optional.empty());
+        when(productCatalogRepository.searchByKeywordFuzzy("unknown")).thenReturn(Collections.emptyList());
 
         Optional<ProductResolutionService.ResolvedProduct> result = productResolutionService.resolveForUser("unknown", "test@user.com");
 
@@ -99,7 +99,7 @@ public class ProductResolutionServiceTest {
 
     @Test
     void resolveForUser_noUser_onlyChecksGlobalCatalog() {
-        when(productCatalogRepository.findTopByFuzzySearch("ou")).thenReturn(Optional.empty());
+        when(productCatalogRepository.searchByKeywordFuzzy("ou")).thenReturn(Collections.emptyList());
 
         Optional<ProductResolutionService.ResolvedProduct> result = productResolutionService.resolveForUser("ou", null);
 
