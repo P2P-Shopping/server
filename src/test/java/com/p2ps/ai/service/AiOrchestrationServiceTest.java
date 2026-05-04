@@ -3,6 +3,8 @@ package com.p2ps.ai.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.RecipeRequest;
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
@@ -41,6 +43,9 @@ class AiOrchestrationServiceTest {
     @Mock
     private ProductResolutionService productResolutionService;
 
+    @Mock
+    private UserRepository userRepository;
+
     private AiOrchestrationService svc;
 
     @BeforeEach
@@ -49,6 +54,7 @@ class AiOrchestrationServiceTest {
                 aiService,
                 aiPersistenceService,
                 productResolutionService,
+                userRepository,
                 Optional.of(new ObjectMapper())
         );
     }
@@ -127,7 +133,7 @@ class AiOrchestrationServiceTest {
 
         when(aiService.extractFromMultimodal(mockImage, text, null, null)).thenReturn(validJson);
 
-        when(productResolutionService.resolveForUser("Lapte", null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Lapte", (Users) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null, null);
 
@@ -184,7 +190,7 @@ class AiOrchestrationServiceTest {
                 {"listType":"NORMAL","items":[{"genericName":"Milk"}]}
                 """;
         when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0))).thenReturn(validJson);
-        when(productResolutionService.resolveForUser("Milk", null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Milk", (Users) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0, null);
 
@@ -235,7 +241,7 @@ class AiOrchestrationServiceTest {
         when(aiService.extractFromMultimodal(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Fail"))
                 .thenReturn("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}");
-        when(productResolutionService.resolveForUser("Milk", null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Milk", (Users) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
 
@@ -262,8 +268,12 @@ class AiOrchestrationServiceTest {
         catalogProduct.setBrand("Ferma");
         catalogProduct.setCategory("Lactate");
 
+        Users user = new Users("user@test.com", "pass", "Test", "User");
+        user.setId(1);
+
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(validJson);
-        when(productResolutionService.resolveForUser("ou", "user@test.com"))
+        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(user));
+        when(productResolutionService.resolveForUser("ou", user))
                 .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
                         "oua",
                         "Ferma",
@@ -278,6 +288,7 @@ class AiOrchestrationServiceTest {
         assertThat(response.getItems().get(0).getGenericName()).isEqualTo("oua");
         assertThat(response.getItems().get(0).getSpecificName()).isEqualTo("Oua de gaina M");
         assertThat(response.getItems().get(0).getBrand()).isEqualTo("Ferma");
+        assertThat(response.getItems().get(0).getCategory()).isEqualTo("Lactate");
         assertThat(response.getItems().get(0).getCatalogId()).isEqualTo(catalogProduct.getId().toString());
     }
 }
