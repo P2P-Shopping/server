@@ -299,4 +299,32 @@ class ItemServiceTest {
         assertThat(result.getPrice()).isEqualByComparingTo(new BigDecimal("10.5"));
         assertThat(result.getCategory()).isEqualTo("Food");
     }
+
+    @Test
+    void addItemToList_WithNullRecurrent_DefaultsToFalse() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setIsRecurrent(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.isRecurrent()).isFalse();
+    }
+
+    @Test
+    void updateItem_WithNullFields_DoesNotChangeThem() {
+        ItemRequest req = new ItemRequest();
+        // All fields null
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getName()).isEqualTo("Old Item");
+        verify(itemRepository).save(mockItem);
+    }
 }

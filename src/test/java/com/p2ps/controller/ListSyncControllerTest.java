@@ -58,4 +58,16 @@ class ListSyncControllerTest {
         verify(routerService).route("list-1", payload);
         verifyNoInteractions(messagingTemplate);
     }
+
+    @Test
+    void handleListUpdate_NullResult_NoBroadcast() {
+        ListSyncController controller = new ListSyncController(routerService, messagingTemplate);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        when(routerService.route("list-1", payload)).thenReturn(null);
+
+        controller.handleListUpdate("list-1", payload);
+
+        verify(routerService).route("list-1", payload);
+        verifyNoInteractions(messagingTemplate);
+    }
 }

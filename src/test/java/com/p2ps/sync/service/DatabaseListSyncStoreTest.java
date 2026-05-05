@@ -155,4 +155,25 @@ class DatabaseListSyncStoreTest {
         
         org.mockito.Mockito.verifyNoInteractions(itemService);
     }
+
+    @Test
+    void returnsEarlyForNullAction() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(null);
+        payload.setItemId(UUID.randomUUID().toString());
+        
+        assertSame(payload, store.apply("list-1", payload));
+        
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
+
+    @Test
+    void returnsEarlyForBlankListId() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        
+        assertSame(payload, store.apply("   ", payload));
+    }
 }

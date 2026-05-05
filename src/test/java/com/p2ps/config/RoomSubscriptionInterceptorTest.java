@@ -13,7 +13,6 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
-import java.lang.reflect.Method;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -245,5 +244,31 @@ class RoomSubscriptionInterceptorTest {
         String result = (String) method.invoke(testInterceptor, "/topic/list/123");
 
         assertThat(result).isEqualTo("123");
+    }
+
+    @Test
+    void getAuthenticatedUser_withSessionAttributes_reauthenticates() {
+        String token = "valid-token";
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken("user@test.com", null);
+        
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
+        accessor.setSessionAttributes(new java.util.HashMap<>(java.util.Map.of(
+            JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE, token
+        )));
+        
+        UUID listId = UUID.randomUUID();
+        accessor.setDestination("/topic/list/" + listId);
+        
+        when(jwtAuthFilter.authenticateToken(token)).thenReturn(auth);
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, "user@test.com")).thenReturn(true);
+        
+        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+        MessageChannel channel = mock(MessageChannel.class);
+        
+        Message<?> result = interceptor.preSend(message, channel);
+        
+        assertThat(result).isNotNull();
+        verify(jwtAuthFilter).authenticateToken(token);
     }
 }
