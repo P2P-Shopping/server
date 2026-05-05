@@ -8,6 +8,7 @@ import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
+import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -266,9 +267,6 @@ class AiOrchestrationServiceTest {
         catalogProduct.setBrand("Ferma");
         catalogProduct.setCategory("Lactate");
 
-        Users user = new Users("user@test.com", "pass", "Test", "User");
-        user.setId(1);
-
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(validJson);
         when(productResolutionService.resolveForUser("ou", "user@test.com"))
                 .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
@@ -287,5 +285,59 @@ class AiOrchestrationServiceTest {
         assertThat(response.getItems().get(0).getBrand()).isEqualTo("Ferma");
         assertThat(response.getItems().get(0).getCategory()).isEqualTo("Lactate");
         assertThat(response.getItems().get(0).getCatalogId()).isEqualTo(catalogProduct.getId().toString());
+    }
+
+    @Test
+    void generateShoppingItems_whenNoCatalogProduct_stillAppliesBrandAndCategory() {
+        String validJson = "{\"items\":[{\"genericName\":\"milk\"}]}";
+        when(aiService.extractFromMultimodal(any(), any(), any(), any())).thenReturn(validJson);
+        
+        var resolved = new ProductResolutionService.ResolvedProduct(
+                "Fresh Milk", "Zuzu", "Dairy", null, "USER_HISTORY"
+        );
+        when(productResolutionService.resolveForUser("milk", null)).thenReturn(Optional.of(resolved));
+
+        AiGenerationResponse resp = svc.generateShoppingItems(null, "text", null, null, null);
+
+        assertThat(resp.getItems().get(0).getGenericName()).isEqualTo("Fresh Milk");
+        assertThat(resp.getItems().get(0).getBrand()).isEqualTo("Zuzu");
+        assertThat(resp.getItems().get(0).getCategory()).isEqualTo("Dairy");
+    }
+
+    @Test
+    void abbreviate_returnsSanitizedString() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("abbreviate", String.class);
+        method.setAccessible(true);
+
+        assertThat(method.invoke(svc, (String) null)).isEqualTo("<null>");
+        assertThat(method.invoke(svc, "Short string")).isEqualTo("Short string");
+        
+        String longString = "a".repeat(300);
+        String result = (String) method.invoke(svc, longString);
+        assertThat(result).hasSize(243);
+        assertThat(result).endsWith("...");
+    }
+
+    @Test
+    void generateShoppingItems_retriesOnUnprocessableContent() {
+        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+                .thenThrow(new AiProcessingException("Bad JSON", HttpStatus.UNPROCESSABLE_CONTENT))
+                .thenReturn("{\"items\":[{\"genericName\":\"Bread\"}]}");
+        
+        when(productResolutionService.resolveForUser(anyString(), any())).thenReturn(Optional.empty());
+
+        AiGenerationResponse resp = svc.generateShoppingItems(null, "text", null, null, null);
+        assertThat(resp.getItems()).hasSize(1);
+        verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any());
+    }
+
+    @Test
+    void generateShoppingItems_throwsException_whenRetriesExhausted() {
+        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Critical failure"));
+
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI returned an invalid structure after retries");
     }
 }
