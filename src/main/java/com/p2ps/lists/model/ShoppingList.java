@@ -57,6 +57,7 @@ public class ShoppingList {
     private List<Item> items = new ArrayList<>();
 
     public boolean canBeModifiedBy(String email) {
+        if (user == null) return false;
         return user.getEmail().equals(email) || collaborators.stream().anyMatch(c -> c.getEmail().equals(email));
     }
 }
