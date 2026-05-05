@@ -98,51 +98,55 @@ public class ItemService {
         Map<String, Item> batchMap = new LinkedHashMap<>();
 
         for (ItemRequest request : requests) {
-            if (request.getName() == null || request.getName().trim().isEmpty()) {
-                throw new ListValidationException("Item name cannot be empty");
-            }
-            validatePrice(request.getPrice());
-
-            String normalizedItemName = request.getName().trim();
-            String mapKey = normalizedItemName.toLowerCase();
-
-            if (batchMap.containsKey(mapKey)) {
-                Item existingInBatch = batchMap.get(mapKey);
-                existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
-                existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
-            } else {
-                List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
-
-                if (!existingInDb.isEmpty()) {
-                    Item primaryItem = existingInDb.get(0);
-
-                    for (int i = 1; i < existingInDb.size(); i++) {
-                        Item duplicate = existingInDb.get(i);
-                        primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
-                        itemRepository.delete(duplicate);
-                    }
-
-                    primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
-                    primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-                    batchMap.put(mapKey, primaryItem);
-                } else {
-                    Item newItem = new Item();
-                    newItem.setName(normalizedItemName);
-                    newItem.setShoppingList(list);
-                    newItem.setBrand(request.getBrand());
-                    newItem.setQuantity(request.getQuantity());
-                    newItem.setPrice(request.getPrice());
-                    newItem.setCategory(request.getCategory());
-                    newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-                    newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-
-                    batchMap.put(mapKey, newItem);
-                }
-            }
+            processItemRequest(listId, list, request, batchMap);
         }
 
         List<Item> saved = itemRepository.saveAll(new ArrayList<>(batchMap.values()));
         return saved.stream().map(this::mapToDTO).toList();
+    }
+
+    private void processItemRequest(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap) {
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new ListValidationException("Item name cannot be empty");
+        }
+        validatePrice(request.getPrice());
+
+        String normalizedItemName = request.getName().trim();
+        String mapKey = normalizedItemName.toLowerCase();
+
+        if (batchMap.containsKey(mapKey)) {
+            Item existingInBatch = batchMap.get(mapKey);
+            existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
+            existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
+        } else {
+            List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+
+            if (!existingInDb.isEmpty()) {
+                Item primaryItem = existingInDb.get(0);
+
+                for (int i = 1; i < existingInDb.size(); i++) {
+                    Item duplicate = existingInDb.get(i);
+                    primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                    itemRepository.delete(duplicate);
+                }
+
+                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+                primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+                batchMap.put(mapKey, primaryItem);
+            } else {
+                Item newItem = new Item();
+                newItem.setName(normalizedItemName);
+                newItem.setShoppingList(list);
+                newItem.setBrand(request.getBrand());
+                newItem.setQuantity(request.getQuantity());
+                newItem.setPrice(request.getPrice());
+                newItem.setCategory(request.getCategory());
+                newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+                newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+                batchMap.put(mapKey, newItem);
+            }
+        }
     }
 
     @Transactional
@@ -269,7 +273,7 @@ public class ItemService {
 
                     BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
                     unitSums.put(unit, currentSum.add(val));
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException _) {
                     unparseableParts.add(cleanPart);
                 }
             } else {
