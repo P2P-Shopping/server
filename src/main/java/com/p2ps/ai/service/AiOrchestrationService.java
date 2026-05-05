@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
-import com.p2ps.auth.model.Users;
-import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
@@ -24,20 +22,19 @@ public class AiOrchestrationService {
     private final AiService aiService;
     private final AiPersistenceService aiPersistenceService;
     private final ProductResolutionService productResolutionService;
-    private final UserRepository userRepository;
+
     private final ObjectMapper objectMapper;
 
     public AiOrchestrationService(
             AiService aiService,
             AiPersistenceService aiPersistenceService,
             ProductResolutionService productResolutionService,
-            UserRepository userRepository,
             java.util.Optional<ObjectMapper> objectMapper
     ) {
         this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
         this.productResolutionService = productResolutionService;
-        this.userRepository = userRepository;
+
         this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
 
@@ -116,11 +113,7 @@ public class AiOrchestrationService {
         }
 
         if (response != null) {
-            Users user = null;
-            if (userEmail != null && !userEmail.isBlank()) {
-                user = userRepository.findByEmail(userEmail).orElse(null);
-            }
-            normalizeDetectedProducts(response, user);
+            normalizeDetectedProducts(response, userEmail);
             return response;
         }
 
@@ -161,12 +154,12 @@ public class AiOrchestrationService {
         return sanitized.substring(0, 240) + "...";
     }
 
-    private void normalizeDetectedProducts(AiGenerationResponse response, Users user) {
+    private void normalizeDetectedProducts(AiGenerationResponse response, String userEmail) {
         for (ParsedItemResponse item : response.getItems()) {
             if (item != null) {
                 String keyword = ProductStringUtils.firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
                 if (keyword != null) {
-                    productResolutionService.resolveForUser(keyword, user)
+                    productResolutionService.resolveForUser(keyword, userEmail)
                             .ifPresent(match -> applyResolvedProduct(item, match));
                 }
             }

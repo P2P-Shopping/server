@@ -120,4 +120,28 @@ class AiControllerTest {
         assertThat(body).containsEntry("error", "You have to send a text or an image.");
         verifyNoInteractions(orchestration);
     }
+
+    @Test
+    void generateListMultimodal_withNullPrincipal_callsOrchestrationWithNullUser() {
+        AiGenerationResponse aiResp = new AiGenerationResponse();
+        when(orchestration.generateShoppingItems(null, "text", null, null, null)).thenReturn(aiResp);
+
+        ResponseEntity<?> resp = controller.generateListMultimodal(null, "text", null, null, null);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(orchestration).generateShoppingItems(null, "text", null, null, null);
+    }
+
+    @Test
+    void generateListMultimodal_withLocation_passesLocationToOrchestration() {
+        AiGenerationResponse aiResp = new AiGenerationResponse();
+        Double lat = 45.0;
+        Double lon = 25.0;
+        when(orchestration.generateShoppingItems(null, "text", lat, lon, "user@test.com")).thenReturn(aiResp);
+
+        ResponseEntity<?> resp = controller.generateListMultimodal(null, "text", lat, lon, principal);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(orchestration).generateShoppingItems(null, "text", lat, lon, "user@test.com");
+    }
 }
