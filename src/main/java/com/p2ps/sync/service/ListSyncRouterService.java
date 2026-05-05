@@ -18,10 +18,6 @@ public class ListSyncRouterService {
 
     private final ListSyncStore listSyncStore;
 
-    ListSyncRouterService() {
-        this(new InMemoryListSyncStore());
-    }
-
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
         this.listSyncStore = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
@@ -64,14 +60,6 @@ public class ListSyncRouterService {
             case ADD, UPDATE, DELETE, CHECK_OFF -> listSyncStore.apply(listId, payload);
             case TYPING, UNKNOWN -> payload;
         };
-    }
-
-    private static final class InMemoryListSyncStore implements ListSyncStore {
-        @Override
-        public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
-            return payload;
-        }
-
     }
 
     private static final class LockingListSyncStore implements ListSyncStore {
