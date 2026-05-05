@@ -29,6 +29,7 @@ public class Item {
         this.name = name;
         this.shoppingList = shoppingList;
     }
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
