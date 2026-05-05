@@ -1,3 +1,4 @@
+
 package com.p2ps.lists.model;
 
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,7 @@ class ItemTest {
     void testOnCreate() {
         Item item = new Item();
         item.onCreate();
-        
+
         assertThat(item.getCreatedAt()).isNotNull();
         assertThat(item.getLastUpdatedTimestamp()).isNotNull();
         assertThat(item.getCreatedAt()).isEqualTo(item.getLastUpdatedTimestamp());
@@ -27,7 +28,7 @@ class ItemTest {
         BigDecimal price = new BigDecimal("10.50");
         String category = "Produce";
         ShoppingList list = new ShoppingList();
-        
+
         item.setId(id);
         item.setName(name);
         item.setChecked(true);
@@ -50,5 +51,5 @@ class ItemTest {
         assertThat(item.getShoppingList()).isEqualTo(list);
         assertThat(item.getVersion()).isEqualTo(1L);
     }
-    
+
 }
