@@ -5,6 +5,7 @@ import com.p2ps.ai.core.AiMessage;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
+import com.p2ps.service.StoreMatchingEngine.StoreMatchResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -90,7 +91,8 @@ class AiServiceTest {
                 .thenReturn(toolCallResponse)
                 .thenReturn(locationResponse)
                 .thenReturn(finalizedResponse);
-        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId))).thenReturn("Mega");
+        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId)))
+                .thenReturn(new StoreMatchResult("store-1", "Mega", 1, 120.0));
 
         String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
@@ -137,7 +139,8 @@ class AiServiceTest {
                 .thenReturn(toolCallResponse)
                 .thenReturn(locationResponse)
                 .thenReturn(finalResponse);
-        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId))).thenReturn("Store A");
+        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId)))
+                .thenReturn(new StoreMatchResult("store-2", "Store A", 1, 240.0));
 
         String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 
