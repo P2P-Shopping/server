@@ -53,12 +53,18 @@ public class RoutingService {
         String storeId = findStoreForUser(request.getUserLat(), request.getUserLng());
         if (storeId == null) {
             logger.warn("Userul nu se afla in niciun magazin cunoscut.");
-            return RoutingResponse.error("Nu esti in niciun magazin cunoscut.");
+            RoutingResponse errorResponse = new RoutingResponse();
+            errorResponse.setStatus("error");
+            errorResponse.setWarnings(List.of("Nu esti in niciun magazin cunoscut."));
+            return errorResponse;
         }
 
         List<ProductLocation> locations = getProductLocations(request.getProductIds(), storeId, warnings);
         if (locations.isEmpty()) {
-            return RoutingResponse.error("Niciunul din produsele cerute nu a fost gasit in magazin.");
+            RoutingResponse errorResponse = new RoutingResponse();
+            errorResponse.setStatus("error");
+            errorResponse.setWarnings(List.of("Niciunul din produsele cerute nu a fost gasit in magazin."));
+            return errorResponse;
         }
 
         RoutePoint userPoint = new RoutePoint("user_loc", "Tu", request.getUserLat(), request.getUserLng());
@@ -80,7 +86,11 @@ public class RoutingService {
         logImprovement(nnRoute, optimizedRoute);
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
 
-        RoutingResponse response = RoutingResponse.eager(optimizedRoute, warnings);
+        RoutingResponse response = new RoutingResponse();
+        response.setStatus("success");
+        response.setRoute(optimizedRoute);
+        response.setWarnings(warnings);
+        response.setPartial(false);
 
         // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
         double distEager = optimizer.routeDistance(optimizedRoute);
@@ -116,7 +126,12 @@ public class RoutingService {
         // Fire-and-forget: 3-opt on full route → Redis
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
-        RoutingResponse partialResponse = RoutingResponse.partial(routeId, new ArrayList<>(partial), warnings);
+        RoutingResponse partialResponse = new RoutingResponse();
+        partialResponse.setStatus("success");
+        partialResponse.setRouteId(routeId);
+        partialResponse.setRoute(new ArrayList<>(partial));
+        partialResponse.setWarnings(warnings);
+        partialResponse.setPartial(true);
 
         // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
         double distLazy = optimizer.routeDistance(partial);
