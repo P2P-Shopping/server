@@ -74,8 +74,6 @@ public class ItemService {
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
-        // Apelam metoda actualizata
-        saveToHistory(item, list.getUser());
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -193,8 +191,6 @@ public class ItemService {
             item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
             item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
-            // Apelam metoda actualizata
-            saveToHistory(item, list.getUser());
             items.add(item);
         }
 
@@ -235,7 +231,7 @@ public class ItemService {
 
             // Atasam noul produs catalogat inapoi pe item
             item.setCatalogItem(catalogItem);
-            logger.info("Created new global catalog entry for: {} with brand: {}", itemName, item.getBrand());
+            logger.info("Created new global catalog entry for a purchased item.");
         }
 
         // 3. Salvam in history cu catalog_id-ul aferent
@@ -253,7 +249,7 @@ public class ItemService {
      */
     private ProductCatalog resolveCatalogByFuzzySearch(String itemName) {
         List<ProductCatalog> matches = catalogRepository.searchByKeywordFuzzy(itemName);
-        if (!matches.isEmpty()) {
+        if (matches != null && !matches.isEmpty()) {
             ProductCatalog bestMatch = matches.get(0);
             logger.debug("Fuzzy catalog match for '{}': {} (id={})",
                     itemName, bestMatch.getSpecificName(), bestMatch.getId());

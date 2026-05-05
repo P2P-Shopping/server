@@ -2,7 +2,6 @@ package com.p2ps.ai.service;
 
 import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
-import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.service.StoreMatchingEngine.StoreMatchResult;
@@ -32,10 +31,6 @@ class AiServiceTest {
     @Mock
     private AiClient aiClient;
 
-    // 1. Am inlocuit CatalogService cu ProductResolutionService
-    @Mock
-    private ProductResolutionService productResolutionService;
-
     @Mock
     private StoreMatchingEngine storeMatchingEngine;
 
@@ -57,8 +52,7 @@ class AiServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        // 2. Am updatat constructorul
-        aiService = new AiService(aiClient, productResolutionService, storeMatchingEngine);
+        aiService = new AiService(aiClient, storeMatchingEngine);
 
         Field toolRegistryField = AiService.class.getDeclaredField("toolRegistry");
         toolRegistryField.setAccessible(true);
@@ -96,8 +90,9 @@ class AiServiceTest {
 
         String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
-        assertThat(result).contains("\"genericName\":\"Milk\"");
-        assertThat(result).contains("\"suggestedStore\":\"Mega\"");
+        assertThat(result)
+                .contains("\"genericName\":\"Milk\"")
+                .contains("\"suggestedStore\":\"Mega\"");
         verify(storeMatchingEngine).findOptimalStore(45.0, 25.0, 5000, List.of(itemId));
     }
 
@@ -185,8 +180,7 @@ class AiServiceTest {
     void detectMimeTypeSecurely_jpeg_returnsImageJpeg() throws Exception {
         byte[] jpegHeader = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
 
-        // 4. Am updatat constructorul local si aici
-        AiService service = new AiService(aiClient, productResolutionService, storeMatchingEngine);
+        AiService service = new AiService(aiClient, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, jpegHeader);
@@ -198,8 +192,7 @@ class AiServiceTest {
     void detectMimeTypeSecurely_invalidBytes_returnsNull() throws Exception {
         byte[] invalid = "not-an-image".getBytes();
 
-        // 4. Am updatat constructorul local si aici
-        AiService service = new AiService(aiClient, productResolutionService, storeMatchingEngine);
+        AiService service = new AiService(aiClient, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, invalid);

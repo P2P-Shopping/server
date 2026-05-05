@@ -2,6 +2,16 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
+CREATE OR REPLACE FUNCTION public.f_unaccent(input_text TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+STRICT
+AS $$
+    SELECT public.unaccent('public.unaccent', input_text)
+$$;
+
 CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     id UUID PRIMARY KEY,
     generic_name VARCHAR(255) NOT NULL,
@@ -20,9 +30,12 @@ CREATE TABLE IF NOT EXISTS user_product_history (
     last_added_timestamp BIGINT
     );
 
-CREATE INDEX idx_user_history_user_id ON user_product_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_product_history(user_id);
 -- Adaugam index de trigrame pe numele custom pentru a pastra cautarea rapida
-CREATE INDEX trgm_idx_user_history_custom_name ON user_product_history USING gin (lower(custom_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_user_history_custom_name
+    ON user_product_history USING gin (lower(custom_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_user_history_custom_name_unaccent
+    ON user_product_history USING gin (f_unaccent(lower(custom_name)) gin_trgm_ops);
 
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10, 2);
@@ -83,5 +96,9 @@ CREATE INDEX IF NOT EXISTS idx_items_name_trgm ON items USING gin (LOWER(name) g
 CREATE INDEX IF NOT EXISTS idx_catalog_generic_name_trgm ON p2p_product_catalog USING gin (LOWER(generic_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_specific_name_trgm ON p2p_product_catalog USING gin (LOWER(specific_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_brand_trgm ON p2p_product_catalog USING gin (LOWER(COALESCE(brand, '')) gin_trgm_ops);
-CREATE INDEX trgm_idx_generic_name ON p2p_product_catalog USING GIN (unaccent(lower(generic_name)) gin_trgm_ops);
-CREATE INDEX trgm_idx_specific_name ON p2p_product_catalog USING GIN (unaccent(lower(specific_name)) gin_trgm_ops);q
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_generic_name_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(generic_name)) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_specific_name_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(specific_name)) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_brand_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(COALESCE(brand, ''))) gin_trgm_ops);

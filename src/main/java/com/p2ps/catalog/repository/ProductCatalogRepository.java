@@ -51,9 +51,9 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
     @Query(value = """
             SELECT p.*
             FROM p2p_product_catalog p
-            WHERE unaccent(LOWER(p.generic_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-               OR unaccent(LOWER(p.specific_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-               OR unaccent(LOWER(COALESCE(p.brand, ''))) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+            WHERE f_unaccent(LOWER(p.generic_name)) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR f_unaccent(LOWER(p.specific_name)) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR f_unaccent(LOWER(COALESCE(p.brand, ''))) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
             ORDER BY p.purchase_count DESC
             """, nativeQuery = true)
     List<ProductCatalog> searchByKeyword(@Param("keyword") String keyword);
@@ -62,16 +62,16 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
     @Query(value = """
             SELECT p.*
             FROM p2p_product_catalog p
-            WHERE unaccent(LOWER(p.generic_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-               OR unaccent(LOWER(p.specific_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-               OR unaccent(LOWER(COALESCE(p.brand, ''))) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-               OR similarity(unaccent(LOWER(p.generic_name)), unaccent(LOWER(:keyword))) > 0.4
-               OR similarity(unaccent(LOWER(p.specific_name)), unaccent(LOWER(:keyword))) > 0.4
-               OR similarity(unaccent(LOWER(COALESCE(p.brand, ''))), unaccent(LOWER(:keyword))) > 0.4
+            WHERE f_unaccent(LOWER(p.generic_name)) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR f_unaccent(LOWER(p.specific_name)) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR f_unaccent(LOWER(COALESCE(p.brand, ''))) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR similarity(f_unaccent(LOWER(p.generic_name)), f_unaccent(LOWER(:keyword))) > 0.4
+               OR similarity(f_unaccent(LOWER(p.specific_name)), f_unaccent(LOWER(:keyword))) > 0.4
+               OR similarity(f_unaccent(LOWER(COALESCE(p.brand, ''))), f_unaccent(LOWER(:keyword))) > 0.4
             ORDER BY GREATEST(
-                    similarity(unaccent(LOWER(p.generic_name)), unaccent(LOWER(:keyword))),
-                    similarity(unaccent(LOWER(p.specific_name)), unaccent(LOWER(:keyword))),
-                    similarity(unaccent(LOWER(COALESCE(p.brand, ''))), unaccent(LOWER(:keyword)))
+                    similarity(f_unaccent(LOWER(p.generic_name)), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(p.specific_name)), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(COALESCE(p.brand, ''))), f_unaccent(LOWER(:keyword)))
                 ) DESC,
                 p.purchase_count DESC
             LIMIT 10

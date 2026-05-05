@@ -31,15 +31,15 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
             LEFT JOIN p2p_product_catalog c ON c.id = h.catalog_id
             WHERE h.user_id = :userId
               AND (
-                    unaccent(LOWER(h.custom_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
-                 OR similarity(unaccent(LOWER(h.custom_name)), unaccent(LOWER(:keyword))) > 0.4
-                 OR similarity(unaccent(LOWER(COALESCE(c.generic_name, ''))), unaccent(LOWER(:keyword))) > 0.4
-                 OR similarity(unaccent(LOWER(COALESCE(c.specific_name, ''))), unaccent(LOWER(:keyword))) > 0.4
+                    f_unaccent(LOWER(h.custom_name)) LIKE f_unaccent(LOWER(CONCAT('%', :keyword, '%')))
+                 OR similarity(f_unaccent(LOWER(h.custom_name)), f_unaccent(LOWER(:keyword))) > 0.4
+                 OR similarity(f_unaccent(LOWER(COALESCE(c.generic_name, ''))), f_unaccent(LOWER(:keyword))) > 0.4
+                 OR similarity(f_unaccent(LOWER(COALESCE(c.specific_name, ''))), f_unaccent(LOWER(:keyword))) > 0.4
               )
             ORDER BY GREATEST(
-                    similarity(unaccent(LOWER(h.custom_name)), unaccent(LOWER(:keyword))),
-                    similarity(unaccent(LOWER(COALESCE(c.generic_name, ''))), unaccent(LOWER(:keyword))),
-                    similarity(unaccent(LOWER(COALESCE(c.specific_name, ''))), unaccent(LOWER(:keyword)))
+                    similarity(f_unaccent(LOWER(h.custom_name)), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(COALESCE(c.generic_name, ''))), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(COALESCE(c.specific_name, ''))), f_unaccent(LOWER(:keyword)))
                 ) DESC,
                 h.last_added_timestamp DESC NULLS LAST
             LIMIT 10

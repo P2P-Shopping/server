@@ -4,9 +4,8 @@ import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
 import com.p2ps.ai.core.AiTool;
 import com.p2ps.ai.core.ToolRegistry;
-import com.p2ps.catalog.service.ProductResolutionService;
-import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.exception.AiProcessingException;
+import com.p2ps.service.StoreMatchingEngine;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,7 +24,6 @@ public class AiService {
 
     private final AiClient aiClient;
     private final ToolRegistry toolRegistry;
-    private final ProductResolutionService productResolutionService;
     private final StoreMatchingEngine storeMatchingEngine;
 
     private static final String SYSTEM_PROMPT =
@@ -49,14 +47,16 @@ public class AiService {
                     "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. If the user described a dish or recipe, listType must be RECIPE. Do not add markdown, explanations, or prose.";
 
     private static final String DESCRIPTION = "description";
-    private static final String KEYWORD = "keyword";
+
     private static final String RADIUS_METERS = "radius_meters";
     private static final String ITEM_IDS = "item_ids";
 
-    public AiService(AiClient aiClient, ProductResolutionService productResolutionService, StoreMatchingEngine storeMatchingEngine) {
+    public AiService(
+            AiClient aiClient,
+            StoreMatchingEngine storeMatchingEngine
+    ) {
         this.aiClient = aiClient;
         this.toolRegistry = new ToolRegistry();
-        this.productResolutionService = productResolutionService;
         this.storeMatchingEngine = storeMatchingEngine;
     }
 
@@ -181,6 +181,7 @@ public class AiService {
                 reader.dispose();
             }
         } catch (IOException _) {
+            // Treat unreadable bytes as an unsupported image format.
         }
         return null;
     }
