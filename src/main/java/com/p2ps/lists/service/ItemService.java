@@ -106,8 +106,6 @@ public class ItemService {
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
-        // Daca vrei sa salvezi si la update / checkoff în istoric, o poți face aici.
-        // saveToHistory(item, item.getShoppingList().getUser());
 
         return mapToDTO(itemRepository.save(item));
     }

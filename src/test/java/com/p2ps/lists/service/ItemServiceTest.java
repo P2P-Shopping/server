@@ -254,10 +254,11 @@ class ItemServiceTest {
     void addItemsToList_ThrowsAccessDenied_WhenWrongUser() {
         ItemRequest req = new ItemRequest();
         req.setName("Milk");
+        List<ItemRequest> requests = List.of(req);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
 
-        assertThatThrownBy(() -> itemService.addItemsToList(listId, List.of(req), "hacker@user.com"))
+        assertThatThrownBy(() -> itemService.addItemsToList(listId, requests, "hacker@user.com"))
                 .isInstanceOf(ListAccessDeniedException.class)
                 .hasMessageContaining("You do not have permission to add items to this list");
 
