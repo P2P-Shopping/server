@@ -1,6 +1,5 @@
 package com.p2ps.sync.concurrency;
 
-import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

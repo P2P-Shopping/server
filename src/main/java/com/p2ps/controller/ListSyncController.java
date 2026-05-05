@@ -62,11 +62,11 @@ public class ListSyncController {
         }
 
         if (payloads == null || payloads.isEmpty()) {
-            logger.warn("Received null or empty payload list for batch update on room {}", listId);
+            logger.warn("Received null or empty payload list for batch update");
             return;
         }
 
-        logger.info("Received batch update of size {} for room {}", payloads.size(), listId);
+        logger.info("Received batch update of size {}", payloads.size());
         List<ListUpdatePayload> results = listSyncRouterService.routeBatch(listId, payloads);
         
         for (ListUpdatePayload result : results) {

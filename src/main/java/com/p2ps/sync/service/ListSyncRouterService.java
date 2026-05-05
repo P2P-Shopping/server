@@ -82,7 +82,7 @@ public class ListSyncRouterService {
             return Collections.emptyList();
         }
 
-        logger.info("Processing batch of {} updates for room {}", payloads.size(), listId);
+        logger.info("Processing batch of {} updates", payloads.size());
 
         // Sort by client-side timestamp to ensure chronological processing
         List<ListUpdatePayload> sortedPayloads = payloads.stream()
