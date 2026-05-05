@@ -56,4 +56,23 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             ORDER BY p.purchaseCount DESC
             """)
     List<ProductCatalog> searchByKeyword(@Param("keyword") String keyword);
+
+    @Query(value = """
+            SELECT p.*
+            FROM p2p_product_catalog p
+            WHERE LOWER(p.generic_name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(p.specific_name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(COALESCE(p.brand, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(p.generic_name) % LOWER(:keyword)
+               OR LOWER(p.specific_name) % LOWER(:keyword)
+               OR LOWER(COALESCE(p.brand, '')) % LOWER(:keyword)
+            ORDER BY GREATEST(
+                    similarity(LOWER(p.generic_name), LOWER(:keyword)),
+                    similarity(LOWER(p.specific_name), LOWER(:keyword)),
+                    similarity(LOWER(COALESCE(p.brand, '')), LOWER(:keyword))
+                ) DESC,
+                p.purchase_count DESC
+            LIMIT 10
+            """, nativeQuery = true)
+    List<ProductCatalog> searchByKeywordFuzzy(@Param("keyword") String keyword);
 }

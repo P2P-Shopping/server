@@ -7,6 +7,7 @@ import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.service.ShoppingListService;
+import com.p2ps.util.ProductStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,7 +78,7 @@ class ShoppingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(listId, response.getBody().getId());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService, org.mockito.Mockito.never()).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService, org.mockito.Mockito.never()).generateShoppingItems(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -119,7 +120,7 @@ class ShoppingControllerTest {
         item.setPrice(new BigDecimal("2.50"));
         aiResponse.setItems(java.util.List.of(item));
 
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any()))
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
 
         ProductCatalog catalogProduct = new ProductCatalog();
@@ -144,7 +145,7 @@ class ShoppingControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), eq(userEmail));
         verify(catalogService).recordPurchase(any(), any(), any(), any(), any());
         verify(shoppingListService).markReceiptItemPurchased(eq(listId), any(), eq(catalogProduct), eq(userEmail));
     }
@@ -160,7 +161,7 @@ class ShoppingControllerTest {
         item.setSpecificName(null);
         aiResponse.setItems(java.util.List.of(item));
 
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any()))
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
 
         MockMultipartFile receipt = new MockMultipartFile(
@@ -181,7 +182,7 @@ class ShoppingControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any());
+        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), eq(userEmail));
         verify(catalogService, org.mockito.Mockito.never()).recordPurchase(any(), any(), any(), any(), any());
     }
 
@@ -191,10 +192,8 @@ class ShoppingControllerTest {
         "'', fallback, fallback",
         "null, '', null"
     }, nullValues = {"null"})
-    void firstNonBlank_parameterized(String primary, String fallback, String expected) throws Exception {
-        java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, primary, fallback);
+    void firstNonBlank_parameterized(String primary, String fallback, String expected) {
+        String result = ProductStringUtils.firstNonBlank(primary, fallback);
         assertEquals(expected, result);
     }
 }

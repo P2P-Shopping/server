@@ -3,7 +3,10 @@ package com.p2ps.ai.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.RecipeRequest;
+import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
+import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,11 +39,21 @@ class AiOrchestrationServiceTest {
     @Mock
     private AiPersistenceService aiPersistenceService;
 
+    @Mock
+    private ProductResolutionService productResolutionService;
+
+
+
     private AiOrchestrationService svc;
 
     @BeforeEach
     void setUp() {
-        svc = new AiOrchestrationService(aiService, aiPersistenceService, Optional.of(new ObjectMapper()));
+        svc = new AiOrchestrationService(
+                aiService,
+                aiPersistenceService,
+                productResolutionService,
+                Optional.of(new ObjectMapper())
+        );
     }
 
     @ParameterizedTest
@@ -117,7 +130,9 @@ class AiOrchestrationServiceTest {
 
         when(aiService.extractFromMultimodal(mockImage, text, null, null)).thenReturn(validJson);
 
-        AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null);
+        when(productResolutionService.resolveForUser("Lapte", (String) null)).thenReturn(Optional.empty());
+
+        AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null, null);
 
         assertThat(response).isNotNull();
         assertThat(response.getListType()).isEqualTo("RECIPE");
@@ -131,7 +146,7 @@ class AiOrchestrationServiceTest {
     void generateShoppingItems_invalidJson_throwsAiProcessingException() {
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn("I am an AI, I cannot give you JSON.");
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure")
                 .hasMessageContaining("Raw AI snippet");
@@ -147,7 +162,7 @@ class AiOrchestrationServiceTest {
                 """;
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(jsonWithEmptyItems);
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure");
     }
@@ -161,7 +176,7 @@ class AiOrchestrationServiceTest {
                 """;
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(jsonWithNullItems);
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure");
     }
@@ -172,8 +187,9 @@ class AiOrchestrationServiceTest {
                 {"listType":"NORMAL","items":[{"genericName":"Milk"}]}
                 """;
         when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0))).thenReturn(validJson);
+        when(productResolutionService.resolveForUser("Milk", (String) null)).thenReturn(Optional.empty());
 
-        AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0);
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0, null);
 
         assertThat(response.getItems()).hasSize(1);
         verify(aiService).extractFromMultimodal(null, "text", 45.0, 25.0);
@@ -222,10 +238,103 @@ class AiOrchestrationServiceTest {
         when(aiService.extractFromMultimodal(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Fail"))
                 .thenReturn("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}");
+        when(productResolutionService.resolveForUser("Milk", (String) null)).thenReturn(Optional.empty());
 
-        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null);
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
 
         assertThat(response.getItems()).hasSize(1);
         verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any());
+    }
+
+    @Test
+    void generateShoppingItems_appliesUserHistoryOrCatalogNormalization() {
+        String validJson = """
+                {
+                  "listType": "NORMAL",
+                  "items": [
+                    {
+                      "genericName": "ou"
+                    }
+                  ]
+                }
+                """;
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("oua");
+        catalogProduct.setSpecificName("Oua de gaina M");
+        catalogProduct.setBrand("Ferma");
+        catalogProduct.setCategory("Lactate");
+
+        when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(validJson);
+        when(productResolutionService.resolveForUser("ou", "user@test.com"))
+                .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
+                        "oua",
+                        "Ferma",
+                        "Lactate",
+                        catalogProduct,
+                        "USER_HISTORY"
+                )));
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, "user@test.com");
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getGenericName()).isEqualTo("oua");
+        assertThat(response.getItems().get(0).getSpecificName()).isEqualTo("Oua de gaina M");
+        assertThat(response.getItems().get(0).getBrand()).isEqualTo("Ferma");
+        assertThat(response.getItems().get(0).getCategory()).isEqualTo("Lactate");
+        assertThat(response.getItems().get(0).getCatalogId()).isEqualTo(catalogProduct.getId().toString());
+    }
+
+    @Test
+    void generateShoppingItems_whenNoCatalogProduct_stillAppliesBrandAndCategory() {
+        String validJson = "{\"items\":[{\"genericName\":\"milk\"}]}";
+        when(aiService.extractFromMultimodal(any(), any(), any(), any())).thenReturn(validJson);
+        
+        var resolved = new ProductResolutionService.ResolvedProduct(
+                "Fresh Milk", "Zuzu", "Dairy", null, "USER_HISTORY"
+        );
+        when(productResolutionService.resolveForUser("milk", null)).thenReturn(Optional.of(resolved));
+
+        AiGenerationResponse resp = svc.generateShoppingItems(null, "text", null, null, null);
+
+        assertThat(resp.getItems().get(0).getGenericName()).isEqualTo("Fresh Milk");
+        assertThat(resp.getItems().get(0).getBrand()).isEqualTo("Zuzu");
+        assertThat(resp.getItems().get(0).getCategory()).isEqualTo("Dairy");
+    }
+
+    @Test
+    void abbreviate_returnsSanitizedString() throws Exception {
+        java.lang.reflect.Method method = AiOrchestrationService.class.getDeclaredMethod("abbreviate", String.class);
+        method.setAccessible(true);
+
+        assertThat(method.invoke(svc, (String) null)).isEqualTo("<null>");
+        assertThat(method.invoke(svc, "Short string")).isEqualTo("Short string");
+        
+        String longString = "a".repeat(300);
+        String result = (String) method.invoke(svc, longString);
+        assertThat(result).hasSize(243).endsWith("...");
+    }
+
+    @Test
+    void generateShoppingItems_retriesOnUnprocessableContent() {
+        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+                .thenThrow(new AiProcessingException("Bad JSON", HttpStatus.UNPROCESSABLE_CONTENT))
+                .thenReturn("{\"items\":[{\"genericName\":\"Bread\"}]}");
+        
+        when(productResolutionService.resolveForUser(anyString(), any())).thenReturn(Optional.empty());
+
+        AiGenerationResponse resp = svc.generateShoppingItems(null, "text", null, null, null);
+        assertThat(resp.getItems()).hasSize(1);
+        verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any());
+    }
+
+    @Test
+    void generateShoppingItems_throwsException_whenRetriesExhausted() {
+        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Critical failure"));
+
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("AI returned an invalid structure after retries");
     }
 }
