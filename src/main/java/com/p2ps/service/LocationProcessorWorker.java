@@ -28,6 +28,10 @@ public class LocationProcessorWorker {
 
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
+
+    @org.springframework.beans.factory.annotation.Value("${app.scheduling.enabled:true}")
+    private boolean schedulingEnabled = true;
+
     private volatile Boolean postgresDetected = null;
 
     private static final int MAX_STARTUP_FAILURES = 3;
@@ -136,6 +140,10 @@ public class LocationProcessorWorker {
     @Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
+        if (!schedulingEnabled) {
+            logger.debug("Location centroid recalculation skipped (scheduling disabled).");
+            return;
+        }
         if (!isPostgreSQL()) {
             return;
         }

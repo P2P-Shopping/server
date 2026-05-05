@@ -26,4 +26,5 @@ public class ItemDTO {
     private String category;
     private boolean isRecurrent;
     private Long lastUpdatedTimestamp;
+    private Long createdAt;
 }

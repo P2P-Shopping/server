@@ -203,8 +203,8 @@ class ProductCatalogRepositoryTest {
         UUID item2Id = UUID.randomUUID();
 
         // Cast la ::uuid pentru id, list_id și catalog_id
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid)", item1Id, listId, catalogId);
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid)", item2Id, listId, catalogId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid, ?)", item1Id, listId, catalogId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid, ?)", item2Id, listId, catalogId, System.currentTimeMillis());
 
         // Inventory mapping cu cast la ::uuid
         jdbcTemplate.update("INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?::uuid, ?::uuid, ?::uuid, ST_GeomFromText('POINT(0 0)', 4326), 0.9, 1, NOW())", UUID.randomUUID(), store1Id, item1Id);

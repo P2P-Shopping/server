@@ -15,11 +15,14 @@ import java.util.UUID;
 @Setter
 public class Item {
 
-    public Item() {}
-
-    public Item(String name, ShoppingList shoppingList) {
-        this.name = name;
-        this.shoppingList = shoppingList;
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = System.currentTimeMillis();
+        }
+        if (lastUpdatedTimestamp == null) {
+            lastUpdatedTimestamp = System.currentTimeMillis();
+        }
     }
 
     @Id
@@ -51,6 +54,9 @@ public class Item {
 
     @Column(name = "last_updated_timestamp")
     private Long lastUpdatedTimestamp;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Long createdAt;
 
     @Version
     private Long version;
