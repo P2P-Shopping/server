@@ -1,6 +1,7 @@
 package com.p2ps.catalog.repository;
 
 import com.p2ps.catalog.model.ProductCatalog;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,6 +56,23 @@ class ProductCatalogRepositoryTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void ensureSearchFunctionsExist() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE FUNCTION public.f_unaccent(input_text TEXT)
+            RETURNS TEXT
+            LANGUAGE sql
+            IMMUTABLE
+            PARALLEL SAFE
+            STRICT
+            AS $$
+                SELECT public.unaccent('public.unaccent', input_text)
+            $$
+        """);
+    }
 
     @Test
     void shouldFindBySpecificNameAndBrand() {
@@ -203,8 +221,6 @@ class ProductCatalogRepositoryTest {
 
     @Test
     void shouldFindProductsUsingFuzzyKeywordSearch() {
-        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
-        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
         ProductCatalog product = new ProductCatalog();
         product.setGenericName("Oua");
         product.setSpecificName("Oua de gaina M");
@@ -220,9 +236,6 @@ class ProductCatalogRepositoryTest {
 
     @Test
     void shouldFindProductsUsingFuzzyKeywordSearchWithoutDiacritics() {
-        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
-        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
-
         ProductCatalog product = new ProductCatalog();
         product.setGenericName("Lamai");
         product.setSpecificName("Lamai verzi");
