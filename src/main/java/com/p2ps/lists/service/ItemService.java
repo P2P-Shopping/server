@@ -8,8 +8,10 @@ import com.p2ps.lists.exception.ListValidationException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
+import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +27,12 @@ public class ItemService {
 
     private final ItemRepository itemRepository;
     private final ShoppingListRepository shoppingListRepository;
+    private final UserProductHistoryRepository historyRepository;
 
-    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository) {
+    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository, UserProductHistoryRepository historyRepository) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
+        this.historyRepository = historyRepository;
     }
 
     @Transactional
@@ -58,6 +62,7 @@ public class ItemService {
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
+        saveToHistory(item.getName(), list.getUser());
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -157,6 +162,7 @@ public class ItemService {
         for (ItemRequest request : requests) {
             if (request.getName() == null || request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
+
             }
             validatePrice(request.getPrice());
 
@@ -170,11 +176,22 @@ public class ItemService {
             item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
             item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
+            saveToHistory(item.getName(), list.getUser());
             items.add(item);
         }
 
         List<Item> saved = itemRepository.saveAll(items);
 
         return saved.stream().map(this::mapToDTO).toList();
+    }
+    private void saveToHistory(String itemName, com.p2ps.auth.model.Users user) {
+        UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
+        if (history == null) {
+            history = new UserProductHistory();
+            history.setUser(user);
+            history.setCustomName(itemName);
+        }
+        history.setLastAddedTimestamp(System.currentTimeMillis());
+        historyRepository.save(history);
     }
 }
