@@ -43,8 +43,7 @@ class AiOrchestrationServiceTest {
     @Mock
     private ProductResolutionService productResolutionService;
 
-    @Mock
-    private UserRepository userRepository;
+
 
     private AiOrchestrationService svc;
 
@@ -54,7 +53,6 @@ class AiOrchestrationServiceTest {
                 aiService,
                 aiPersistenceService,
                 productResolutionService,
-                userRepository,
                 Optional.of(new ObjectMapper())
         );
     }
@@ -133,7 +131,7 @@ class AiOrchestrationServiceTest {
 
         when(aiService.extractFromMultimodal(mockImage, text, null, null)).thenReturn(validJson);
 
-        when(productResolutionService.resolveForUser("Lapte", (Users) null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Lapte", (String) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null, null);
 
@@ -190,7 +188,7 @@ class AiOrchestrationServiceTest {
                 {"listType":"NORMAL","items":[{"genericName":"Milk"}]}
                 """;
         when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0))).thenReturn(validJson);
-        when(productResolutionService.resolveForUser("Milk", (Users) null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Milk", (String) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0, null);
 
@@ -241,7 +239,7 @@ class AiOrchestrationServiceTest {
         when(aiService.extractFromMultimodal(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Fail"))
                 .thenReturn("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}");
-        when(productResolutionService.resolveForUser("Milk", (Users) null)).thenReturn(Optional.empty());
+        when(productResolutionService.resolveForUser("Milk", (String) null)).thenReturn(Optional.empty());
 
         AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
 
@@ -272,8 +270,7 @@ class AiOrchestrationServiceTest {
         user.setId(1);
 
         when(aiService.extractFromMultimodal(null, "text", null, null)).thenReturn(validJson);
-        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(user));
-        when(productResolutionService.resolveForUser("ou", user))
+        when(productResolutionService.resolveForUser("ou", "user@test.com"))
                 .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
                         "oua",
                         "Ferma",
