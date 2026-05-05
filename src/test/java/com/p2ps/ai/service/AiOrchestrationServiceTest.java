@@ -3,8 +3,6 @@ package com.p2ps.ai.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.RecipeRequest;
-import com.p2ps.auth.model.Users;
-import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
@@ -314,8 +312,7 @@ class AiOrchestrationServiceTest {
         
         String longString = "a".repeat(300);
         String result = (String) method.invoke(svc, longString);
-        assertThat(result).hasSize(243);
-        assertThat(result).endsWith("...");
+        assertThat(result).hasSize(243).endsWith("...");
     }
 
     @Test

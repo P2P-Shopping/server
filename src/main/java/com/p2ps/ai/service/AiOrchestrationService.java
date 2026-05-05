@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
-import com.p2ps.auth.model.Users;
-import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;

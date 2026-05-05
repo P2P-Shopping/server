@@ -122,13 +122,6 @@ class AiControllerTest {
     }
 
     @Test
-    void parseRecipe_returnsGone() {
-        ResponseEntity<Map<String, String>> resp = controller.parseRecipe();
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.GONE);
-        assertThat(resp.getBody()).containsEntry("error", "This endpoint is permanently removed due to the new Gatekeeper architecture.");
-    }
-
-    @Test
     void generateListMultimodal_withNullPrincipal_callsOrchestrationWithNullUser() {
         AiGenerationResponse aiResp = new AiGenerationResponse();
         when(orchestration.generateShoppingItems(null, "text", null, null, null)).thenReturn(aiResp);

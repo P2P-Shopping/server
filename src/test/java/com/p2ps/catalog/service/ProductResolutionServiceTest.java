@@ -4,7 +4,6 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
-import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +17,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
