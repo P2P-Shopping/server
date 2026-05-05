@@ -24,18 +24,13 @@ public class RoomManager {
         }
 
         ItemLockManager lock = itemLocks.computeIfAbsent(itemId, id -> new ItemLockManager());
-        ListUpdatePayload result = lock.process(payload);
-
-        // Immediate cleanup for deleted items
-        if (payload.getAction() == ActionType.DELETE && ListUpdatePayload.STATUS_SUCCESS.equals(result.getStatus())) {
-            itemLocks.remove(itemId);
-        }
-
-        return result;
+        return lock.process(payload);
     }
 
     /**
      * Evicts item locks that haven't been accessed recently to prevent memory leaks.
+     * Note: itemLocks.entrySet().removeIf(...) invokes ItemLockManager.isIdle(...),
+     * which is synchronized on the per-item monitor, ensuring safe removal.
      */
     public void cleanupIdleLocks() {
         long now = System.currentTimeMillis();

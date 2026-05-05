@@ -1,44 +1,33 @@
 package com.p2ps.sync.concurrency;
 
+import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 
 /**
  * Manages concurrency and state for a single item within a shopping list.
- * Implements optimistic concurrency control using timestamps.
+ * Uses pessimistic/monitor-based locking with a synchronized process(...) method.
+ * Implements staleness gating using timestamps to ensure chronological consistency.
  */
 public class ItemLockManager {
-    private static final long LOCK_WINDOW_MILLIS = 50L;
     
-    private long lockedUntilMillis;
-    private long lastTimestamp;
+    private long lastTimestamp = Long.MIN_VALUE;
     private long lastAccessedMillis;
     private Boolean lastChecked;
     private Long lastConfirmedTimestamp;
+    private boolean deleted = false;
 
     /**
-     * Attempts to acquire a lock and process the payload.
-     * If the payload is stale (older timestamp), it marks it as REJECTION and returns current state.
+     * Attempts to process the payload under the item's monitor.
+     * If the payload is stale or the item is deleted, it marks it as REJECTION.
      */
     public synchronized ListUpdatePayload process(ListUpdatePayload payload) {
-        long currentTime = System.currentTimeMillis();
-        
-        // Wait if currently locked (primitive spin-wait/blocking)
-        long waitMillis = lockedUntilMillis - currentTime;
-        while (waitMillis > 0) {
-            try {
-                this.wait(waitMillis);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for item lock", e);
-            }
-            currentTime = System.currentTimeMillis();
-            waitMillis = lockedUntilMillis - currentTime;
-        }
-
-        // Lock for processing window
-        lockedUntilMillis = currentTime + LOCK_WINDOW_MILLIS;
-        
         try {
+            // Reject updates for items marked as deleted (tombstone)
+            if (deleted && payload.getAction() != ActionType.ADD) {
+                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+                return payload;
+            }
+
             Long incomingTimestamp = payload.getTimestamp();
             
             // Check for stale updates
@@ -47,6 +36,13 @@ public class ItemLockManager {
                 payload.setTimestamp(this.lastConfirmedTimestamp);
                 payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
                 return payload;
+            }
+
+            // Handle deletion
+            if (payload.getAction() == ActionType.DELETE) {
+                this.deleted = true;
+            } else if (payload.getAction() == ActionType.ADD) {
+                this.deleted = false;
             }
 
             // Update internal state for successful application
@@ -62,11 +58,12 @@ public class ItemLockManager {
             return payload;
         } finally {
             this.lastAccessedMillis = System.currentTimeMillis();
-            this.notifyAll();
         }
     }
 
     public synchronized boolean isIdle(long currentTime, long idleThresholdMillis) {
-        return lockedUntilMillis <= currentTime && (currentTime - lastAccessedMillis > idleThresholdMillis);
+        // We don't remove tombstones immediately if they were recently accessed
+        return currentTime - lastAccessedMillis > idleThresholdMillis;
     }
 }
+

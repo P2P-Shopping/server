@@ -9,7 +9,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -80,12 +85,20 @@ public class ListSyncRouterService {
         logger.info("Processing batch of {} updates for room {}", payloads.size(), listId);
 
         // Sort by client-side timestamp to ensure chronological processing
-        List<ListUpdatePayload> sortedPayloads = new ArrayList<>(payloads);
-        sortedPayloads.sort(Comparator.comparing(p -> p.getTimestamp() != null ? p.getTimestamp() : 0L));
-
-        return sortedPayloads.stream()
-                .map(p -> route(listId, p))
+        List<ListUpdatePayload> sortedPayloads = payloads.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingLong(p -> p.getTimestamp() != null ? p.getTimestamp() : 0L))
                 .toList();
+
+        List<ListUpdatePayload> results = new ArrayList<>();
+        for (ListUpdatePayload p : sortedPayloads) {
+            try {
+                results.add(route(listId, p));
+            } catch (Exception e) {
+                logger.error("Failed to route payload {} for list {}: {}", p.getItemId(), listId, e.getMessage());
+            }
+        }
+        return results;
     }
 
     /**
@@ -128,8 +141,11 @@ public class ListSyncRouterService {
 
         public void cleanup() {
             logger.debug("Starting concurrency lock cleanup for {} rooms", rooms.size());
-            rooms.values().forEach(RoomManager::cleanupIdleLocks);
-            rooms.entrySet().removeIf(entry -> entry.getValue().getActiveLockCount() == 0);
+            rooms.keySet().forEach(listId -> rooms.compute(listId, (id, rm) -> {
+                if (rm == null) return null;
+                rm.cleanupIdleLocks();
+                return rm.getActiveLockCount() == 0 ? null : rm;
+            }));
         }
     }
 }

@@ -56,7 +56,13 @@ public class ListSyncController {
      */
     @MessageMapping("/list/{listId}/batch-update")
     public void handleBatchUpdate(@DestinationVariable String listId, List<ListUpdatePayload> payloads) {
+        if (listId == null || listId.isBlank()) {
+            logger.error("Received batch update with blank listId");
+            throw new IllegalArgumentException("listId must not be blank");
+        }
+
         if (payloads == null || payloads.isEmpty()) {
+            logger.warn("Received null or empty payload list for batch update on room {}", listId);
             return;
         }
 
@@ -64,7 +70,11 @@ public class ListSyncController {
         List<ListUpdatePayload> results = listSyncRouterService.routeBatch(listId, payloads);
         
         for (ListUpdatePayload result : results) {
-            messagingTemplate.convertAndSend("/topic/list/" + listId, result);
+            try {
+                messagingTemplate.convertAndSend("/topic/list/" + listId, result);
+            } catch (Exception e) {
+                logger.error("Failed to broadcast update for list {}: {}", listId, e.getMessage());
+            }
         }
     }
 }
