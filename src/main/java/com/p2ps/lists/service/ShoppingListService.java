@@ -311,6 +311,7 @@ public class ShoppingListService {
                         itemDto.setCategory(item.getCategory());
                         itemDto.setRecurrent(item.isRecurrent());
                         itemDto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
+                        itemDto.setCreatedAt(item.getCreatedAt());
                         return itemDto;
                     })
                     .toList());
@@ -320,6 +321,14 @@ public class ShoppingListService {
 
         dto.setCollaboratorIds(list.getCollaborators().stream()
                 .map(Users::getId)
+                .toList());
+
+        dto.setCollaboratorEmails(list.getCollaborators().stream()
+                .map(u -> {
+                    String email = u.getEmail();
+                    if (email == null) return null;
+                    return email.replaceAll("(^.)[^@]*(@.*$)", "$1***$2");
+                })
                 .toList());
 
         return dto;

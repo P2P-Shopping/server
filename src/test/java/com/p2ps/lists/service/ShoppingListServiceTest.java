@@ -671,6 +671,62 @@ class ShoppingListServiceTest {
     }
 
     @Test
+    void markReceiptItemPurchased_shouldDoNothingWhenNoMatchFound() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Zahar");
+        item.setChecked(false);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte"); // No match
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertFalse(item.isChecked());
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldDoNothingWhenBrandMismatches() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setBrand("Zuzu");
+        item.setChecked(false);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+        receiptItem.setBrand("Napolact"); // Mismatch
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertFalse(item.isChecked());
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
     void markReceiptItemPurchased_shouldUpdateCategoryFromReceipt() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS items (
     category VARCHAR(50),
     is_recurrent BOOLEAN DEFAULT FALSE,
     last_updated_timestamp BIGINT,
+    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
     version BIGINT DEFAULT 0,
     list_id UUID NOT NULL,
     catalog_id UUID,

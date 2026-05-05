@@ -15,6 +15,16 @@ import java.util.UUID;
 @Setter
 public class Item {
 
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = System.currentTimeMillis();
+        }
+        if (lastUpdatedTimestamp == null) {
+            lastUpdatedTimestamp = System.currentTimeMillis();
+        }
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -44,6 +54,9 @@ public class Item {
 
     @Column(name = "last_updated_timestamp")
     private Long lastUpdatedTimestamp;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Long createdAt;
 
     @Version
     private Long version;
