@@ -14,6 +14,7 @@ import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.util.ProductStringUtils;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.catalog.model.ProductCatalog;
 import org.junit.jupiter.api.Test;
@@ -716,26 +717,20 @@ class ShoppingListServiceTest {
     }
 
     @Test
-    void firstNonBlank_shouldReturnPrimary() throws Exception {
-        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingListService, "primary", "fallback");
+    void firstNonBlank_shouldReturnPrimary() {
+        String result = ProductStringUtils.firstNonBlank("primary", "fallback");
         assertEquals("primary", result);
     }
 
     @Test
-    void firstNonBlank_shouldReturnFallbackWhenPrimaryBlank() throws Exception {
-        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingListService, "", "fallback");
+    void firstNonBlank_shouldReturnFallbackWhenPrimaryBlank() {
+        String result = ProductStringUtils.firstNonBlank("", "fallback");
         assertEquals("fallback", result);
     }
 
     @Test
-    void firstNonBlank_shouldReturnNullWhenBothBlank() throws Exception {
-        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingListService, null, "");
+    void firstNonBlank_shouldReturnNullWhenBothBlank() {
+        String result = ProductStringUtils.firstNonBlank(null, "");
         assertNull(result);
     }
 
