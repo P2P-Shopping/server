@@ -275,4 +275,28 @@ class ItemServiceTest {
         assertThat(result.getName()).isEqualTo("Simple Name Fallback");
         verify(itemRepository).save(mockItem);
     }
+
+    @Test
+    void updateItemFromSync_Success_WithAllFields() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{" +
+                "\"name\":\"Full Update\"," +
+                "\"brand\":\"Brand X\"," +
+                "\"quantity\":\"5\"," +
+                "\"price\":10.5," +
+                "\"category\":\"Food\"" +
+                "}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Full Update");
+        assertThat(result.getBrand()).isEqualTo("Brand X");
+        assertThat(result.getQuantity()).isEqualTo("5");
+        assertThat(result.getPrice()).isEqualByComparingTo(new BigDecimal("10.5"));
+        assertThat(result.getCategory()).isEqualTo("Food");
+    }
 }

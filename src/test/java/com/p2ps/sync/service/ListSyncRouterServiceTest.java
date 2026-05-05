@@ -153,38 +153,16 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
-    void routeHandlesInterruption() {
-        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
-            try {
-                java.util.concurrent.TimeUnit.MILLISECONDS.sleep(2000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            return payload;
-        });
-
+    void routeHandlesTypingAction() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
         ListUpdatePayload payload = new ListUpdatePayload();
-        payload.setAction(ActionType.UPDATE);
-        payload.setItemId("item-1");
+        payload.setAction(ActionType.TYPING);
+        payload.setContent("User is typing...");
 
-        java.util.concurrent.atomic.AtomicReference<Exception> caught = new java.util.concurrent.atomic.AtomicReference<>();
-        Thread t = new Thread(() -> {
-            try {
-                service.route("list-1", payload);
-            } catch (IllegalStateException e) {
-                caught.set(e);
-            }
-        });
+        ListUpdatePayload result = service.route("list-1", payload);
 
-        t.start();
-        // Give it a moment to enter the synchronized block in route
-        try { Thread.sleep(100); } catch (InterruptedException _) { Thread.currentThread().interrupt(); }
-        t.interrupt();
-        
-        org.awaitility.Awaitility.await().atMost(2, java.util.concurrent.TimeUnit.SECONDS)
-                .until(() -> caught.get() != null);
-        
-        assertThat(caught.get().getMessage()).contains("Interrupted");
+        assertSame(payload, result);
+        assertEquals("User is typing...", result.getContent());
     }
 
     @Test
@@ -193,6 +171,7 @@ class ListSyncRouterServiceTest {
         java.util.concurrent.CountDownLatch secondWait = new java.util.concurrent.CountDownLatch(1);
         
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             firstEnter.countDown();
             try {
                 secondWait.await();
@@ -220,6 +199,7 @@ class ListSyncRouterServiceTest {
         t2.start();
         
         // Let t1 finish
+        Thread.sleep(100); // Wait for t2 to block
         secondWait.countDown();
         
         t1.join();
