@@ -8,7 +8,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+
+import java.util.List;
 
 /**
  * WebSocket controller responsible for routing list-specific synchronization messages.
@@ -20,10 +23,12 @@ public class ListSyncController {
     private static final Logger logger = LoggerFactory.getLogger(ListSyncController.class);
 
     private final ListSyncRouterService listSyncRouterService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public ListSyncController(ListSyncRouterService listSyncRouterService) {
+    public ListSyncController(ListSyncRouterService listSyncRouterService, SimpMessagingTemplate messagingTemplate) {
         this.listSyncRouterService = listSyncRouterService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     /**
@@ -43,4 +48,24 @@ public class ListSyncController {
         logger.debug("Routing action {} for room {}", payload.getAction(), listId);
         return listSyncRouterService.route(listId, payload);
     }
+
+    /**
+     * Processes a flood of updates (e.g. from a user coming back online) and broadcasts results individually.
+     * @param listId   the unique identifier of the shopping list
+     * @param payloads the batch of modifications
+     */
+    @MessageMapping("/list/{listId}/batch-update")
+    public void handleBatchUpdate(@DestinationVariable String listId, List<ListUpdatePayload> payloads) {
+        if (payloads == null || payloads.isEmpty()) {
+            return;
+        }
+
+        logger.info("Received batch update of size {} for room {}", payloads.size(), listId);
+        List<ListUpdatePayload> results = listSyncRouterService.routeBatch(listId, payloads);
+        
+        for (ListUpdatePayload result : results) {
+            messagingTemplate.convertAndSend("/topic/list/" + listId, result);
+        }
+    }
 }
+
