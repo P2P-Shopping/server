@@ -5,13 +5,13 @@ import com.p2ps.dto.ListUpdatePayload;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.time.Duration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ListSyncRouterServiceTest {
 
@@ -199,7 +199,9 @@ class ListSyncRouterServiceTest {
         t2.start();
         
         // Let t1 finish
-        Thread.sleep(100); // Wait for t2 to block
+        await().atMost(Duration.ofMillis(500)).until(() -> 
+            t2.getState() == Thread.State.BLOCKED || t2.getState() == Thread.State.WAITING);
+            
         secondWait.countDown();
         
         t1.join();
@@ -222,8 +224,8 @@ class ListSyncRouterServiceTest {
 
         service.route("list-1", p1);
         
-        // Wait for lock window to pass
-        Thread.sleep(100); 
+        // Wait for lock window to pass (50ms)
+        await().pollDelay(Duration.ofMillis(100)).until(() -> true);
         
         ListUpdatePayload p2 = new ListUpdatePayload();
         p2.setAction(ActionType.UPDATE);
