@@ -4,46 +4,100 @@ import com.p2ps.controller.RoutePoint;
 import com.p2ps.controller.RoutingRequest;
 import com.p2ps.controller.RoutingResponse;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.lenient;
 
-@SpringBootTest
-@ActiveProfiles("test")
+// Testul va rula instant, fără să încerce să pornească MongoDB!
+@ExtendWith(MockitoExtension.class)
 @Tag("manual")
 class RoutingPerformanceBenchmarkTest {
 
-    private static final Logger log = LoggerFactory.getLogger(RoutingPerformanceBenchmarkTest.class);
-
-    @Autowired
     private RoutingService routingService;
 
-    @Autowired
+    @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private RoutingAsyncService routingAsyncService;
+
+    @Mock
+    private StringRedisTemplate redis;
 
     // UUID-ul listei masive inserate prin scriptul SQL
     private static final String DEMO_LIST_ID = "99999999-0000-0000-0000-000000000001";
+    private static final String STORE_ID = "11111111-2222-3333-4444-555555555555";
+
+    @BeforeEach
+    void setUp() {
+        // Instanțiem serviciul manual exact cum trebuie, fără Spring Boot
+        RouteOptimizer optimizer = new RouteOptimizer();
+        routingService = new RoutingService(jdbcTemplate, optimizer, routingAsyncService, redis);
+    }
 
     @Test
+    @SuppressWarnings("unchecked")
     void benchmark_ParallelExecution_NearestNeighbor_vs_3Opt() {
-        // 1. Extragem itemele reale din baza de date pentru lista de Demo
-        List<String> productIds = jdbcTemplate.queryForList(
-                "SELECT id::text FROM items WHERE list_id = ?",
-                String.class,
-                DEMO_LIST_ID
-        );
 
-        // Verificăm că scriptul SQL a rulat cu succes și avem datele masive (> 20 iteme)
+        // --- 1. MOCKING DATABASE CALLS ---
+
+        // Generăm 25 de produse mockate
+        List<RoutingService.ProductLocation> mockLocations = IntStream.range(0, 25)
+                .mapToObj(i -> new RoutingService.ProductLocation(
+                        "item_" + i,
+                        "Produs " + i,
+                        47.150 + (i * 0.0001),
+                        27.580 + (i * 0.0001),
+                        1.0))
+                .collect(Collectors.toList());
+
+        List<String> productIds = mockLocations.stream().map(RoutingService.ProductLocation::itemId).toList();
+
+        // Folosim lenient() pentru a nu crăpa testul dacă metoda nu apelează absolut toate query-urile mockate
+        lenient().when(jdbcTemplate.queryForList(
+                eq("SELECT id::text FROM items WHERE list_id = ?"),
+                eq(String.class),
+                eq(DEMO_LIST_ID)
+        )).thenReturn(productIds);
+
+        // Mock pentru găsirea magazinului în RoutingService (findStoreForUser)
+        lenient().when(jdbcTemplate.queryForList(
+                contains("SELECT store_id::text FROM store_geofences"),
+                eq(String.class),
+                anyDouble(), anyDouble()
+        )).thenReturn(List.of(STORE_ID));
+
+        // Mock pentru queryInventoryMap din RoutingService și query-ul manual din test
+        lenient().when(jdbcTemplate.query(
+                anyString(),
+                any(RowMapper.class),
+                any(Object[].class)
+        )).thenReturn(mockLocations);
+
+        lenient().when(jdbcTemplate.query(
+                contains("SELECT i.id::text AS id"),
+                any(RowMapper.class),
+                eq(DEMO_LIST_ID)
+        )).thenReturn(mockLocations);
+
+
+        // --- 2. EXECUȚIA TESTULUI ---
+
+        // Verificăm că avem datele masive (> 20 iteme)
         assertTrue(productIds.size() >= 20, "Scriptul SQL de seeding trebuie rulat. Nu sunt destule iteme!");
 
         // Setăm coordonatele de test (ex. Intrarea în magazin)
@@ -71,15 +125,10 @@ class RoutingPerformanceBenchmarkTest {
 
         // 3. Facem o rulare dedicată doar pentru a extrage metricile matematice exacte pentru afișare
         RoutePoint startPoint = new RoutePoint("start", "User", userLat, userLng);
-        List<RoutingService.ProductLocation> locations = jdbcTemplate.query(
-                "SELECT i.id::text AS id, i.name, ST_Y(sim.estimated_loc_point) AS lat, ST_X(sim.estimated_loc_point) AS lng, 1.0 AS confidence_score " +
-                        "FROM items i JOIN store_inventory_map sim ON i.id = sim.item_id WHERE i.list_id = ?",
-                (rs, rowNum) -> new RoutingService.ProductLocation(rs.getString("id"), rs.getString("name"), rs.getDouble("lat"), rs.getDouble("lng"), 1.0),
-                DEMO_LIST_ID
-        );
 
+        // În loc de apelul de DB, folosim direct obiectele mockate pentru extragerea metricilor
         RouteOptimizer optimizer = new RouteOptimizer();
-        List<RoutePoint> points = locations.stream().map(l -> new RoutePoint(l.itemId(), l.name(), l.lat(), l.lng())).toList();
+        List<RoutePoint> points = mockLocations.stream().map(l -> new RoutePoint(l.itemId(), l.name(), l.lat(), l.lng())).toList();
 
         // NN Pur
         List<RoutePoint> nnRoute = optimizer.nearestNeighborTSP(startPoint, points);
