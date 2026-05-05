@@ -23,12 +23,6 @@ public class Item {
         if (lastUpdatedTimestamp == null) {
             lastUpdatedTimestamp = System.currentTimeMillis();
         }
-    public Item() {}
-
-    public Item(String name, ShoppingList shoppingList) {
-        this.name = name;
-        this.shoppingList = shoppingList;
-    }
     }
 
     @Id
