@@ -199,4 +199,20 @@ class ProductCatalogRepositoryTest {
         assertEquals(store2Id, bestStores.get(0));
         assertEquals(store1Id, bestStores.get(1));
     }
+
+    @Test
+    void shouldFindProductsUsingFuzzyKeywordSearch() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Oua");
+        product.setSpecificName("Oua de gaina M");
+        product.setBrand("Ferma");
+        product.setPurchaseCount(25);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeywordFuzzy("ou");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Oua", results.get(0).getGenericName());
+    }
 }
