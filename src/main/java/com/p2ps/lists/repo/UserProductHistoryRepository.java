@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +18,7 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
         String getCatalogSpecificName();
         String getBrand();
         String getCategory();
+        BigDecimal getPrice();
     }
 
     @Query(value = """
@@ -26,7 +28,8 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
                 c.generic_name AS catalogGenericName,
                 c.specific_name AS catalogSpecificName,
                 c.brand AS brand,
-                c.category AS category
+                c.category AS category,
+                c.estimated_price AS price
             FROM user_product_history h
             LEFT JOIN p2p_product_catalog c ON c.id = h.catalog_id
             WHERE h.user_id = :userId

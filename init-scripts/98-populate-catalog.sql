@@ -16,3 +16,6 @@ INSERT INTO p2p_product_catalog (id, generic_name, specific_name, brand, categor
     (gen_random_uuid(), 'Hartie igienica', 'Hartie igienica 3 straturi 10 role', 'Zewa', 'Ingrijire personala', 20.00, 130),
     (gen_random_uuid(), 'Rosii', 'Rosii calitatea I', 'Fara brand', 'Legume', 8.00, 210),
     (gen_random_uuid(), 'Mere', 'Mere romanesti', 'Fara brand', 'Fructe', 4.50, 190);
+    (gen_random_uuid(), 'Lapte', 'Lapte de migdale Alpro 1L', 'Alpro', 'Lactate vegetale', 12.50, 80),
+    (gen_random_uuid(), 'Lapte', 'Lapte Napolact 3.5% 1L', 'Napolact', 'Lactate', 8.50, 190),
+    (gen_random_uuid(), 'Lapte', 'Lapte fara lactoza LaDorna', 'LaDorna', 'Lactate', 9.00, 110),
