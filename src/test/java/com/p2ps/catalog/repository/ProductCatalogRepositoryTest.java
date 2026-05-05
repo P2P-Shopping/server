@@ -235,6 +235,36 @@ class ProductCatalogRepositoryTest {
     }
 
     @Test
+    void shouldFindProductsUsingKeywordSearchWithoutDiacritics() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Lamai");
+        product.setSpecificName("Lamai verzi");
+        product.setBrand("Fresh");
+        product.setPurchaseCount(12);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeyword("lămâi");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Lamai", results.get(0).getGenericName());
+    }
+
+    @Test
+    void shouldFindProductsUsingKeywordSearchByBrandWithoutDiacritics() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Iaurt");
+        product.setSpecificName("Iaurt grecesc");
+        product.setBrand("Frăguța");
+        product.setPurchaseCount(8);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeyword("fraguta");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Frăguța", results.get(0).getBrand());
+    }
+
+    @Test
     void shouldFindProductsUsingFuzzyKeywordSearchWithoutDiacritics() {
         ProductCatalog product = new ProductCatalog();
         product.setGenericName("Lamai");
