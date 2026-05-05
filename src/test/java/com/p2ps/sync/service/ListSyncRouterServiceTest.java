@@ -212,7 +212,7 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
-    void routeSupportsTimeBasedEviction() throws Exception {
+    void routeSupportsTimeBasedEviction() {
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
