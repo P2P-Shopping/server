@@ -1,0 +1,89 @@
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileTestJava
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/ai/controller/AiControllerTest.java:126: warning: [removal] parseRecipe() in AiController has been deprecated and marked for removal
+        ResponseEntity<Map<String, String>> resp = controller.parseRecipe();
+                                                             ^
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:66: error: cannot find symbol
+        when(history.getItemName()).thenReturn("Lapte");
+                    ^
+  symbol:   method getItemName()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:67: error: cannot find symbol
+        when(history.getBrand()).thenReturn("Zuzu");
+                    ^
+  symbol:   method getBrand()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:68: error: cannot find symbol
+        when(history.getCategory()).thenReturn("Lactate");
+                    ^
+  symbol:   method getCategory()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:70: error: no suitable method found for thenReturn(List<UserProductHistory>)
+        when(historyRepository.findMatches(1, "lapte")).thenReturn(List.of(history));
+                                                       ^
+    method OngoingStubbing.thenReturn(List<HistoryMatch>) is not applicable
+      (argument mismatch; inference variable E has incompatible bounds
+          equality constraints: HistoryMatch
+          lower bounds: UserProductHistory)
+    method OngoingStubbing.thenReturn(List<HistoryMatch>,List<HistoryMatch>...) is not applicable
+      (argument mismatch; inference variable E has incompatible bounds
+          equality constraints: HistoryMatch
+          lower bounds: UserProductHistory)
+  where E is a type-variable:
+    E extends Object declared in method <E>of(E)
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:86: error: cannot find symbol
+        when(history.getCatalogId()).thenReturn(catalogId);
+                    ^
+  symbol:   method getCatalogId()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:87: error: cannot find symbol
+        when(history.getCatalogGenericName()).thenReturn("Lapte");
+                    ^
+  symbol:   method getCatalogGenericName()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:88: error: cannot find symbol
+        when(history.getBrand()).thenReturn("Zuzu");
+                    ^
+  symbol:   method getBrand()
+  location: variable history of type UserProductHistory
+/home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/catalog/service/ProductResolutionServiceTest.java:90: error: no suitable method found for thenReturn(List<UserProductHistory>)
+        when(historyRepository.findMatches(1, "lapte")).thenReturn(List.of(history));
+                                                       ^
+    method OngoingStubbing.thenReturn(List<HistoryMatch>) is not applicable
+      (argument mismatch; inference variable E has incompatible bounds
+          equality constraints: HistoryMatch
+          lower bounds: UserProductHistory)
+    method OngoingStubbing.thenReturn(List<HistoryMatch>,List<HistoryMatch>...) is not applicable
+      (argument mismatch; inference variable E has incompatible bounds
+          equality constraints: HistoryMatch
+          lower bounds: UserProductHistory)
+  where E is a type-variable:
+    E extends Object declared in method <E>of(E)
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+8 errors
+1 warning
+
+> Task :compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /home/syu/.gemini/antigravity/worktrees/P2P-Shopping/fix-ai-search-compilation-20260505/src/test/java/com/p2ps/ai/controller/AiControllerTest.java:126: warning: [removal] parseRecipe() in AiController has been deprecated and marked for removal
+          ResponseEntity<Map<String, String>> resp = controller.parseRecipe();
+                                                               ^
+  8 errors
+  1 warning
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 26s
+3 actionable tasks: 1 executed, 2 up-to-date
