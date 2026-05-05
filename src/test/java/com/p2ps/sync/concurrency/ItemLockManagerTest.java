@@ -70,7 +70,7 @@ class ItemLockManagerTest {
     }
 
     @Test
-    void isIdle_ReturnsTrueAfterThreshold() throws InterruptedException {
+    void isIdle_ReturnsTrueAfterThreshold() {
         ItemLockManager lock = new ItemLockManager();
         lock.process(new ListUpdatePayload()); // Updates lastAccessedMillis
         

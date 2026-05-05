@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -179,7 +180,7 @@ class ListSyncRouterServiceTest {
     void performCleanupCallsUnderlyingCleanup() {
         // We can't easily mock the internal LockingListSyncStore but we can verify it doesn't crash
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
-        service.performCleanup();
+        assertDoesNotThrow(service::performCleanup);
     }
 
     @Test

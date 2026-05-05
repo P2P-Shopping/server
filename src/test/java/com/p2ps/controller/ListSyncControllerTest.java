@@ -11,7 +11,6 @@ import com.p2ps.dto.ListUpdatePayload;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
@@ -84,8 +83,9 @@ class ListSyncControllerTest {
     @Test
     void handleBatchUpdate_BlankListId_ThrowsException() {
         ListSyncController controller = new ListSyncController(routerService, messagingTemplate);
+        List<ListUpdatePayload> payloads = Arrays.asList(new ListUpdatePayload());
         assertThrows(IllegalArgumentException.class, () ->
-                controller.handleBatchUpdate(" ", Arrays.asList(new ListUpdatePayload())));
+                controller.handleBatchUpdate(" ", payloads));
     }
 
     @Test
