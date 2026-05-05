@@ -93,7 +93,7 @@ public class AiOrchestrationService {
         for (int i = 0; i <= maxRetries; i++) {
             try {
                 // Receive the generated JSON from AI Service
-                String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude);
+                String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude, userEmail);
                 lastRawResult = rawResult;
                 String jsonResult = extractJson(rawResult);
 
@@ -162,17 +162,20 @@ public class AiOrchestrationService {
     }
 
     private void normalizeDetectedProducts(AiGenerationResponse response, Users user) {
+        // Extragem email-ul în siguranță pentru a preveni NullPointerException
+        String email = (user != null) ? user.getEmail() : null;
+
         for (ParsedItemResponse item : response.getItems()) {
             if (item != null) {
                 String keyword = ProductStringUtils.firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
                 if (keyword != null) {
-                    productResolutionService.resolveForUser(keyword, user)
+                    // Java face căutarea INSTANT, direct pe backend!
+                    productResolutionService.resolveForUser(keyword, email)
                             .ifPresent(match -> applyResolvedProduct(item, match));
                 }
             }
         }
     }
-
     private void applyResolvedProduct(ParsedItemResponse item, ProductResolutionService.ResolvedProduct match) {
         ProductCatalog catalogProduct = match.catalogProduct();
         item.setGenericName(ProductStringUtils.firstNonBlank(

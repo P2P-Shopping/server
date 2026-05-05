@@ -19,7 +19,7 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
     Optional<ProductCatalog> findBySpecificNameAndBrand(@Param("specificName") String specificName, @Param("brand") String brand);
 
     List<ProductCatalog> findTop50ByOrderByPurchaseCountDesc();
-    
+
     @Query(value = """
             SELECT sim.store_id 
             FROM store_inventory_map sim 
@@ -30,7 +30,7 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             LIMIT 10
             """, nativeQuery = true)
     List<UUID> findBestStoresForCatalogProduct(@Param("catalogId") UUID catalogId);
-    
+
     @Modifying
     @Query(value = """
         INSERT INTO p2p_product_catalog (id, generic_name, specific_name, brand, category, estimated_price, purchase_count)
@@ -41,35 +41,37 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             estimated_price = COALESCE(:price, p2p_product_catalog.estimated_price),
             category = COALESCE(:category, p2p_product_catalog.category)
         """, nativeQuery = true)
-    void upsertProduct(@Param("genericName") String genericName, 
-                       @Param("specificName") String specificName, 
-                       @Param("brand") String brand, 
-                       @Param("category") String category, 
+    void upsertProduct(@Param("genericName") String genericName,
+                       @Param("specificName") String specificName,
+                       @Param("brand") String brand,
+                       @Param("category") String category,
                        @Param("price") BigDecimal price);
 
-    @Query("""
-            SELECT p
-            FROM ProductCatalog p
-            WHERE LOWER(p.genericName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(p.specificName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(COALESCE(p.brand, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            ORDER BY p.purchaseCount DESC
-            """)
-    List<ProductCatalog> searchByKeyword(@Param("keyword") String keyword);
-
+    // Transformata in Native Query pentru a suporta unaccent()
     @Query(value = """
             SELECT p.*
             FROM p2p_product_catalog p
-            WHERE LOWER(p.generic_name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(p.specific_name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(COALESCE(p.brand, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(p.generic_name) % LOWER(:keyword)
-               OR LOWER(p.specific_name) % LOWER(:keyword)
-               OR LOWER(COALESCE(p.brand, '')) % LOWER(:keyword)
+            WHERE unaccent(LOWER(p.generic_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR unaccent(LOWER(p.specific_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR unaccent(LOWER(COALESCE(p.brand, ''))) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+            ORDER BY p.purchase_count DESC
+            """, nativeQuery = true)
+    List<ProductCatalog> searchByKeyword(@Param("keyword") String keyword);
+
+    // Adaugat unaccent() peste tot pentru fuzzy search
+    @Query(value = """
+            SELECT p.*
+            FROM p2p_product_catalog p
+            WHERE unaccent(LOWER(p.generic_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR unaccent(LOWER(p.specific_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR unaccent(LOWER(COALESCE(p.brand, ''))) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+               OR similarity(unaccent(LOWER(p.generic_name)), unaccent(LOWER(:keyword))) > 0.4
+               OR similarity(unaccent(LOWER(p.specific_name)), unaccent(LOWER(:keyword))) > 0.4
+               OR similarity(unaccent(LOWER(COALESCE(p.brand, ''))), unaccent(LOWER(:keyword))) > 0.4
             ORDER BY GREATEST(
-                    similarity(LOWER(p.generic_name), LOWER(:keyword)),
-                    similarity(LOWER(p.specific_name), LOWER(:keyword)),
-                    similarity(LOWER(COALESCE(p.brand, '')), LOWER(:keyword))
+                    similarity(unaccent(LOWER(p.generic_name)), unaccent(LOWER(:keyword))),
+                    similarity(unaccent(LOWER(p.specific_name)), unaccent(LOWER(:keyword))),
+                    similarity(unaccent(LOWER(COALESCE(p.brand, ''))), unaccent(LOWER(:keyword)))
                 ) DESC,
                 p.purchase_count DESC
             LIMIT 10

@@ -2,7 +2,7 @@ package com.p2ps.ai.service;
 
 import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
-import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,8 +28,9 @@ class AiServiceTest {
     @Mock
     private AiClient aiClient;
 
+    // 1. Am inlocuit CatalogService cu ProductResolutionService
     @Mock
-    private CatalogService catalogService;
+    private ProductResolutionService productResolutionService;
 
     @Mock
     private StoreMatchingEngine storeMatchingEngine;
@@ -48,9 +49,12 @@ class AiServiceTest {
             (byte) 0xAE, 0x42, 0x60, (byte) 0x82
     };
 
+    private static final String TEST_USER_EMAIL = "test@example.com";
+
     @BeforeEach
     void setUp() throws Exception {
-        aiService = new AiService(aiClient, catalogService, storeMatchingEngine);
+        // 2. Am updatat constructorul
+        aiService = new AiService(aiClient, productResolutionService, storeMatchingEngine);
 
         Field toolRegistryField = AiService.class.getDeclaredField("toolRegistry");
         toolRegistryField.setAccessible(true);
@@ -88,7 +92,8 @@ class AiServiceTest {
     void extractFromMultimodal_withInvalidImage_throwsException() {
         MultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
 
-        assertThatThrownBy(() -> aiService.extractFromMultimodal(fakeImage, "text", null, null))
+        // 3. Am adaugat paramatrul userEmail la final
+        assertThatThrownBy(() -> aiService.extractFromMultimodal(fakeImage, "text", null, null, TEST_USER_EMAIL))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("Unsupported or corrupted image format");
     }
@@ -98,7 +103,8 @@ class AiServiceTest {
         MultipartFile image = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
         when(aiClient.generateResponse(any(), any())).thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("{\"listType\":\"NORMAL\",\"items\":[]}"))));
 
-        String result = aiService.extractFromMultimodal(image, "Ce am in frigider?", null, null);
+        // 3. Am adaugat paramatrul userEmail la final
+        String result = aiService.extractFromMultimodal(image, "Ce am in frigider?", null, null, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
     }
@@ -116,7 +122,8 @@ class AiServiceTest {
                 .thenReturn(toolCallResponse)
                 .thenReturn(finalResponse);
 
-        String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0);
+        // 3. Am adaugat paramatrul userEmail la final
+        String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
     }
@@ -125,7 +132,8 @@ class AiServiceTest {
     void extractFromMultimodal_noImageTextOnly_usesFallbackText() {
         when(aiClient.generateResponse(any(), any())).thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("result"))));
 
-        String result = aiService.extractFromMultimodal(null, null, null, null);
+        // 3. Am adaugat paramatrul userEmail la final (null e perfect valid aici)
+        String result = aiService.extractFromMultimodal(null, null, null, null, null);
 
         assertThat(result).isEqualTo("result");
     }
@@ -133,7 +141,9 @@ class AiServiceTest {
     @Test
     void detectMimeTypeSecurely_jpeg_returnsImageJpeg() throws Exception {
         byte[] jpegHeader = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
-        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+
+        // 4. Am updatat constructorul local si aici
+        AiService service = new AiService(aiClient, productResolutionService, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, jpegHeader);
@@ -144,7 +154,9 @@ class AiServiceTest {
     @Test
     void detectMimeTypeSecurely_invalidBytes_returnsNull() throws Exception {
         byte[] invalid = "not-an-image".getBytes();
-        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+
+        // 4. Am updatat constructorul local si aici
+        AiService service = new AiService(aiClient, productResolutionService, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, invalid);

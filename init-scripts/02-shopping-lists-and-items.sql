@@ -1,5 +1,6 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
 CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     id UUID PRIMARY KEY,
@@ -82,4 +83,5 @@ CREATE INDEX IF NOT EXISTS idx_items_name_trgm ON items USING gin (LOWER(name) g
 CREATE INDEX IF NOT EXISTS idx_catalog_generic_name_trgm ON p2p_product_catalog USING gin (LOWER(generic_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_specific_name_trgm ON p2p_product_catalog USING gin (LOWER(specific_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_brand_trgm ON p2p_product_catalog USING gin (LOWER(COALESCE(brand, '')) gin_trgm_ops);
-
+CREATE INDEX trgm_idx_generic_name ON p2p_product_catalog USING GIN (unaccent(lower(generic_name)) gin_trgm_ops);
+CREATE INDEX trgm_idx_specific_name ON p2p_product_catalog USING GIN (unaccent(lower(specific_name)) gin_trgm_ops);q

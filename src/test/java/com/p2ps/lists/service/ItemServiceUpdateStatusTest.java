@@ -1,5 +1,6 @@
 package com.p2ps.lists.service;
 
+import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.auth.model.Users;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -7,6 +8,7 @@ import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +32,12 @@ class ItemServiceUpdateStatusTest {
 
     @Mock
     private ShoppingListRepository shoppingListRepository;
+
+    @Mock
+    private UserProductHistoryRepository historyRepository;
+
+    @Mock
+    private ProductCatalogRepository catalogRepository;
 
     @InjectMocks
     private ItemService itemService;

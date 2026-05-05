@@ -31,15 +31,15 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
             LEFT JOIN p2p_product_catalog c ON c.id = h.catalog_id
             WHERE h.user_id = :userId
               AND (
-                    LOWER(h.custom_name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(h.custom_name) % LOWER(:keyword)
-                 OR LOWER(COALESCE(c.generic_name, '')) % LOWER(:keyword)
-                 OR LOWER(COALESCE(c.specific_name, '')) % LOWER(:keyword)
+                    unaccent(LOWER(h.custom_name)) LIKE unaccent(LOWER(CONCAT('%', :keyword, '%')))
+                 OR similarity(unaccent(LOWER(h.custom_name)), unaccent(LOWER(:keyword))) > 0.4
+                 OR similarity(unaccent(LOWER(COALESCE(c.generic_name, ''))), unaccent(LOWER(:keyword))) > 0.4
+                 OR similarity(unaccent(LOWER(COALESCE(c.specific_name, ''))), unaccent(LOWER(:keyword))) > 0.4
               )
             ORDER BY GREATEST(
-                    similarity(LOWER(h.custom_name), LOWER(:keyword)),
-                    similarity(LOWER(COALESCE(c.generic_name, '')), LOWER(:keyword)),
-                    similarity(LOWER(COALESCE(c.specific_name, '')), LOWER(:keyword))
+                    similarity(unaccent(LOWER(h.custom_name)), unaccent(LOWER(:keyword))),
+                    similarity(unaccent(LOWER(COALESCE(c.generic_name, ''))), unaccent(LOWER(:keyword))),
+                    similarity(unaccent(LOWER(COALESCE(c.specific_name, ''))), unaccent(LOWER(:keyword)))
                 ) DESC,
                 h.last_added_timestamp DESC NULLS LAST
             LIMIT 10
