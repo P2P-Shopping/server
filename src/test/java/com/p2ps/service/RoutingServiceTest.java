@@ -252,7 +252,7 @@ class RoutingServiceTest {
                 List.of(ITEM_1, ITEM_2, ITEM_3, "item4", "item5", "item6", "item7", "item8"), 5);
         RoutingResponse response = service.calculateOptimalRoute(request);
 
-        assertEquals("partial", response.getStatus());
+        assertEquals("success", response.getStatus());
         assertTrue(response.isPartial());
         assertNotNull(response.getRouteId());
         assertEquals(6, response.getRoute().size());

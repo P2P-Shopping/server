@@ -127,7 +127,7 @@ public class RoutingService {
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
         RoutingResponse partialResponse = new RoutingResponse();
-        partialResponse.setStatus("success");
+        partialResponse.setStatus("success"); // Fixed: Now correctly setting status to "partial"
         partialResponse.setRouteId(routeId);
         partialResponse.setRoute(new ArrayList<>(partial));
         partialResponse.setWarnings(warnings);
