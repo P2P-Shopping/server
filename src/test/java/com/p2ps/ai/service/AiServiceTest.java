@@ -16,10 +16,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,19 +76,27 @@ class AiServiceTest {
 
     @Test
     void extractIngredientsAsJson_withToolCall_loopExecutesTool() {
+        UUID itemId = UUID.randomUUID();
         AiMessage toolCallResponse = new AiMessage("model", List.of(
-                new AiMessage.ToolCallPart("search_catalog", Map.of("keyword", "milk"))
+                new AiMessage.ToolCallPart("find_optimal_store", Map.of("item_ids", List.of(itemId.toString())))
         ));
-        AiMessage finalResponse = new AiMessage("model", List.of(
-                new AiMessage.TextPart("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}")
+        AiMessage locationResponse = new AiMessage("model", List.of(
+                new AiMessage.TextPart("Suggested store: Mega")
+        ));
+        AiMessage finalizedResponse = new AiMessage("model", List.of(
+                new AiMessage.TextPart("{\"listType\":\"RECIPE\",\"suggestedStore\":\"Mega\",\"items\":[{\"genericName\":\"Milk\"}]}")
         ));
         when(aiClient.generateResponse(any(), any()))
                 .thenReturn(toolCallResponse)
-                .thenReturn(finalResponse);
+                .thenReturn(locationResponse)
+                .thenReturn(finalizedResponse);
+        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId))).thenReturn("Mega");
 
-        String result = aiService.extractIngredientsAsJson("milk recipe");
+        String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"genericName\":\"Milk\"");
+        assertThat(result).contains("\"suggestedStore\":\"Mega\"");
+        verify(storeMatchingEngine).findOptimalStore(45.0, 25.0, 5000, List.of(itemId));
     }
 
     @Test
@@ -112,30 +123,59 @@ class AiServiceTest {
     @Test
     void extractFromMultimodal_withLocation_passesContextToTools() {
         MultipartFile image = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
+        UUID itemId = UUID.randomUUID();
         AiMessage toolCallResponse = new AiMessage("model", List.of(
-                new AiMessage.ToolCallPart("find_optimal_store", Map.of("item_ids", List.of("id1")))
+                new AiMessage.ToolCallPart("find_optimal_store", Map.of("item_ids", List.of(itemId.toString())))
+        ));
+        AiMessage locationResponse = new AiMessage("model", List.of(
+                new AiMessage.TextPart("Nearest store suggestion")
         ));
         AiMessage finalResponse = new AiMessage("model", List.of(
                 new AiMessage.TextPart("{\"listType\":\"NORMAL\",\"items\":[]}")
         ));
         when(aiClient.generateResponse(any(), any()))
                 .thenReturn(toolCallResponse)
+                .thenReturn(locationResponse)
                 .thenReturn(finalResponse);
+        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId))).thenReturn("Store A");
 
-        // 3. Am adaugat paramatrul userEmail la final
         String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
+        verify(storeMatchingEngine).findOptimalStore(45.0, 25.0, 5000, List.of(itemId));
     }
 
     @Test
     void extractFromMultimodal_noImageTextOnly_usesFallbackText() {
         when(aiClient.generateResponse(any(), any())).thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("result"))));
 
-        // 3. Am adaugat paramatrul userEmail la final (null e perfect valid aici)
         String result = aiService.extractFromMultimodal(null, null, null, null, null);
 
         assertThat(result).isEqualTo("result");
+    }
+
+    @Test
+    void extractFromMultimodal_whenFinalizerReturnsBlank_fallsBackToRawResponse() {
+        AiMessage draftResponse = new AiMessage("model", List.of(new AiMessage.TextPart("raw-json")));
+        AiMessage blankFinalizedResponse = new AiMessage("model", List.of(new AiMessage.TextPart("   ")));
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(draftResponse)
+                .thenReturn(blankFinalizedResponse);
+
+        String result = aiService.extractFromMultimodal(null, "text", null, null, TEST_USER_EMAIL);
+
+        assertThat(result).isEqualTo("raw-json");
+    }
+
+    @Test
+    void extractFromMultimodal_whenImageReadFails_throwsAiProcessingException() throws Exception {
+        MultipartFile image = mock(MultipartFile.class);
+        when(image.isEmpty()).thenReturn(false);
+        when(image.getBytes()).thenThrow(new java.io.IOException("disk failure"));
+
+        assertThatThrownBy(() -> aiService.extractFromMultimodal(image, "text", null, null, TEST_USER_EMAIL))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("Error reading image: disk failure");
     }
 
     @Test

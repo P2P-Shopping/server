@@ -45,6 +45,7 @@ class ProductCatalogRepositoryTest {
         registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
         registry.add("spring.datasource.username", postgresContainer::getUsername);
         registry.add("spring.datasource.password", postgresContainer::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
@@ -202,6 +203,7 @@ class ProductCatalogRepositoryTest {
 
     @Test
     void shouldFindProductsUsingFuzzyKeywordSearch() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
         ProductCatalog product = new ProductCatalog();
         product.setGenericName("Oua");
@@ -214,5 +216,23 @@ class ProductCatalogRepositoryTest {
 
         assertFalse(results.isEmpty());
         assertEquals("Oua", results.get(0).getGenericName());
+    }
+
+    @Test
+    void shouldFindProductsUsingFuzzyKeywordSearchWithoutDiacritics() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Lamai");
+        product.setSpecificName("Lamai verzi");
+        product.setBrand("Fresh");
+        product.setPurchaseCount(12);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeywordFuzzy("lămâi");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Lamai", results.get(0).getGenericName());
     }
 }

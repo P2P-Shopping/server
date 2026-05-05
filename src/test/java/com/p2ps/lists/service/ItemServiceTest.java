@@ -1,6 +1,7 @@
 package com.p2ps.lists.service;
 
 import com.p2ps.catalog.repository.ProductCatalogRepository;
+import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -44,6 +45,9 @@ class ItemServiceTest {
 
     @Mock
     private ProductCatalogRepository catalogRepository;
+
+    @Mock
+    private CatalogService catalogService;
 
     @InjectMocks
     private ItemService itemService;
