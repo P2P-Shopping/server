@@ -78,6 +78,7 @@ class ItemServiceTest {
         req.setIsRecurrent(true);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -224,6 +225,7 @@ class ItemServiceTest {
         List<ItemRequest> requests = List.of(req1, req2);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
@@ -310,7 +312,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void sumStringQuantities_ParsesAndAccumulatesComplexStrings() {
+    void addItemToList_AccumulatesComplexSegmentedQuantity() {
         ItemRequest req = new ItemRequest();
         req.setName("Milk");
         req.setQuantity("1 liter");
@@ -332,7 +334,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void sumStringQuantities_FallsBackToConcatenation_WhenUnitsDiffer() {
+    void addItemToList_FallsBackToConcatenation_WhenUnitsDiffer() {
         ItemRequest req = new ItemRequest();
         req.setName("Apples");
         req.setQuantity("3 pieces");
@@ -406,6 +408,7 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Zahar"))
                 .thenReturn(List.of(dbDuplicate1, dbDuplicate2));
 
+        lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
