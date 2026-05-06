@@ -276,9 +276,32 @@ class ItemServiceTest {
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
         assertThat(result.getQuantity()).isEqualTo("4.3 kg");
+        assertThat(result.isRecurrent()).isFalse();
 
         verify(itemRepository, times(1)).delete(duplicate2);
         verify(itemRepository).save(duplicate1);
+    }
+
+    @Test
+    void addItemToList_PreservesMetadataInMerge() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Flour");
+        req.setCategory("Baking");
+        req.setIsRecurrent(true);
+
+        Item existing = new Item();
+        existing.setId(UUID.randomUUID());
+        existing.setName("Flour");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
+                .thenReturn(List.of(existing));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getCategory()).isEqualTo("Baking");
+        assertThat(result.isRecurrent()).isTrue();
     }
 
     @Test
@@ -435,6 +458,32 @@ class ItemServiceTest {
         assertThat(result.getQuantity()).isEqualTo("5");
         assertThat(result.getPrice()).isEqualByComparingTo(new BigDecimal("10.5"));
         assertThat(result.getCategory()).isEqualTo("Food");
+    }
+
+    @Test
+    void updateItemFromSync_ThrowsValidationException_WhenNameIsBlank() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{\"name\":\"  \"}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.updateItemFromSync(itemId, payload))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Item name cannot be empty");
+    }
+
+    @Test
+    void updateItemFromSync_ThrowsValidationException_WhenPriceIsNegative() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{\"price\":-10}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.updateItemFromSync(itemId, payload))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Price must be zero or positive");
     }
 
     @Test

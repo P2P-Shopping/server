@@ -63,13 +63,19 @@ public class ItemService {
             }
 
             primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
 
             if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
             if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
+            if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
+            if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
 
-            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-
-            return mapToDTO(itemRepository.save(primaryItem));
+            try {
+                return mapToDTO(itemRepository.save(primaryItem));
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // In case of a race condition where another thread merged or added it, retry the merge
+                return addItemToList(listId, request, userEmail);
+            }
         }
 
         Item item = new Item();
@@ -84,7 +90,12 @@ public class ItemService {
         item.setCreatedAt(System.currentTimeMillis());
 
         saveToHistory(item.getName(), list.getUser());
-        return mapToDTO(itemRepository.save(item));
+        try {
+            return mapToDTO(itemRepository.save(item));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Concurrent add: item was likely created between find and save. Retry as merge.
+            return addItemToList(listId, request, userEmail);
+        }
     }
 
     @Transactional
@@ -137,6 +148,12 @@ public class ItemService {
 
                 primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
                 primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+                
+                if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
+                if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
+                if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
+                if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
+                
                 batchMap.put(mapKey, primaryItem);
             } else {
                 Item newItem = new Item();
@@ -153,6 +170,17 @@ public class ItemService {
                 saveToHistory(newItem.getName(), list.getUser());
                 batchMap.put(mapKey, newItem);
             }
+        }
+    }
+
+    @Transactional
+    public List<ItemDTO> addItemsToListWithRetry(UUID listId, List<ItemRequest> requests, String userEmail) {
+        try {
+            return addItemsToList(listId, requests, userEmail);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // If any item in the batch fails due to a concurrent addition, retry the whole batch
+            // The batch logic naturally handles existing DB items by merging.
+            return addItemsToList(listId, requests, userEmail);
         }
     }
 
@@ -213,12 +241,21 @@ public class ItemService {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 ItemDTO dto = mapper.readValue(payload.getContent(), ItemDTO.class);
-                if (dto.getName() != null) item.setName(dto.getName());
+                if (dto.getName() != null) {
+                    if (dto.getName().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
+                    item.setName(dto.getName());
+                }
                 if (dto.getBrand() != null) item.setBrand(dto.getBrand());
                 if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
-                if (dto.getPrice() != null) item.setPrice(dto.getPrice());
+                if (dto.getPrice() != null) {
+                    validatePrice(dto.getPrice());
+                    item.setPrice(dto.getPrice());
+                }
                 if (dto.getCategory() != null) item.setCategory(dto.getCategory());
+            } catch (ListValidationException e) {
+                throw e;
             } catch (Exception _) {
+                if (payload.getContent().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
                 item.setName(payload.getContent());
             }
         }
