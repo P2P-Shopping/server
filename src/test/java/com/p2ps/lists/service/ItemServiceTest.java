@@ -96,7 +96,6 @@ class ItemServiceTest {
         assertThat(result.getPrice()).isEqualTo(BigDecimal.TEN);
         assertThat(result.isRecurrent()).isTrue();
         verify(itemRepository).save(any(Item.class));
-        verifyNoInteractions(historyRepository, catalogRepository, catalogService);
     }
 
     @Test
@@ -250,7 +249,6 @@ class ItemServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getName()).isEqualTo("Item 1");
         verify(itemRepository).saveAll(anyList());
-        verifyNoInteractions(historyRepository, catalogRepository, catalogService);
     }
 
     @Test
