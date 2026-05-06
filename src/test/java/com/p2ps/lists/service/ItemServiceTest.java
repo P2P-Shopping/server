@@ -282,7 +282,6 @@ class ItemServiceTest {
 
         verify(itemRepository, never()).saveAll(anyList());
     }
-}
 
     @Test
     void addItemToList_MergesHistoricalDuplicates_AndMaintainsPrecision() {

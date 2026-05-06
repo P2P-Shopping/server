@@ -58,7 +58,6 @@ class AiOrchestrationServiceTest {
                 userRepository,
                 Optional.of(new ObjectMapper())
         );
-        svc = new AiOrchestrationService(aiService, aiPersistenceService, Optional.of(new ObjectMapper()));
     }
 
     @ParameterizedTest
@@ -135,7 +134,7 @@ class AiOrchestrationServiceTest {
 
         when(aiService.extractFromMultimodal(mockImage, text, null, null, null)).thenReturn(validJson);
 
-        AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null);
+        AiGenerationResponse response = svc.generateShoppingItems(mockImage, text, null, null, null);
 
         assertThat(response).isNotNull();
         assertThat(response.getListType()).isEqualTo("RECIPE");
@@ -149,7 +148,7 @@ class AiOrchestrationServiceTest {
     void generateShoppingItems_invalidJson_throwsAiProcessingException() {
         when(aiService.extractFromMultimodal(null, "text", null, null, null)).thenReturn("I am an AI, I cannot give you JSON.");
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure")
                 .hasMessageContaining("Raw AI snippet");
@@ -165,7 +164,7 @@ class AiOrchestrationServiceTest {
                 """;
         when(aiService.extractFromMultimodal(null, "text", null, null, null)).thenReturn(jsonWithEmptyItems);
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure");
     }
@@ -179,7 +178,7 @@ class AiOrchestrationServiceTest {
                 """;
         when(aiService.extractFromMultimodal(null, "text", null, null, null)).thenReturn(jsonWithNullItems);
 
-        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null))
+        assertThatThrownBy(() -> svc.generateShoppingItems(null, "text", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("AI returned an invalid structure");
     }
@@ -191,9 +190,8 @@ class AiOrchestrationServiceTest {
                 """;
         when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0), isNull())).thenReturn(validJson);
         when(productResolutionService.resolveForUser("Milk", (String) null)).thenReturn(Optional.empty());
-        when(aiService.extractFromMultimodal(any(), any(), eq(45.0), eq(25.0))).thenReturn(validJson);
 
-        AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0);
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", 45.0, 25.0, null);
 
         assertThat(response.getItems()).hasSize(1);
         verify(aiService).extractFromMultimodal(null, "text", 45.0, 25.0, null);
@@ -239,14 +237,14 @@ class AiOrchestrationServiceTest {
 
     @Test
     void generateShoppingItems_retriesOnFailure() {
-        when(aiService.extractFromMultimodal(any(), any(), any(), any()))
+        when(aiService.extractFromMultimodal(any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Fail"))
                 .thenReturn("{\"listType\":\"RECIPE\",\"items\":[{\"genericName\":\"Milk\"}]}");
 
-        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null);
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
 
         assertThat(response.getItems()).hasSize(1);
-        verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any());
+        verify(aiService, times(2)).extractFromMultimodal(any(), any(), any(), any(), any());
     }
 
     @Test

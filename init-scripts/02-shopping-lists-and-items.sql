@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     category VARCHAR(50),
     estimated_price DECIMAL(10, 2),
     purchase_count INTEGER NOT NULL DEFAULT 0
-);
+    );
 
 CREATE TABLE IF NOT EXISTS user_product_history (
                                                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

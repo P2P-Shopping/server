@@ -80,7 +80,7 @@ class AiControllerTest {
     void generateListMultimodal_whenValidTextOnly_returnsOk() {
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("RECIPE");
-        when(orchestration.generateShoppingItems(null, "Valid recipe text", null, null)).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(null, "Valid recipe text", null, null, "user@test.com")).thenReturn(aiResp);
 
         ResponseEntity<?> resp = controller.generateListMultimodal(null, "Valid recipe text", null, null, principal);
 
@@ -97,14 +97,14 @@ class AiControllerTest {
 
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("FREQUENT");
-        when(orchestration.generateShoppingItems(image, "What is this?", null, null)).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(image, "What is this?", null, null, "user@test.com")).thenReturn(aiResp);
 
         ResponseEntity<?> resp = controller.generateListMultimodal(image, "What is this?", null, null, principal);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(aiResp);
         verify(imageValidator, times(1)).detectImageFormat(image);
-        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?", null, null);
+        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?", null, null, "user@test.com");
     }
 
     @Test

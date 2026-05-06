@@ -1,6 +1,5 @@
 package com.p2ps.ai.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
@@ -18,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class AiOrchestrationService {
@@ -33,9 +33,8 @@ public class AiOrchestrationService {
             AiPersistenceService aiPersistenceService,
             ProductResolutionService productResolutionService,
             UserRepository userRepository,
-            java.util.Optional<ObjectMapper> objectMapper
+            Optional<ObjectMapper> objectMapper
     ) {
-    public AiOrchestrationService(AiService aiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
         this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
         this.productResolutionService = productResolutionService;
@@ -81,7 +80,7 @@ public class AiOrchestrationService {
     }
 
     // Multimodal and Gatekeeper Flow
-    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
+    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude, String userEmail) {
         int maxRetries = 2;
         Exception lastException = null;
         String lastRawResult = null;
@@ -94,11 +93,11 @@ public class AiOrchestrationService {
                 String jsonResult = extractJson(rawResult);
 
                 // Map the JSON to the response object
-                AiGenerationResponse response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
+                response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
 
                 // Validation
                 if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
-                    return response;
+                    break; // Success
                 }
             } catch (AiProcessingException e) {
                 if (e.getStatus() != HttpStatus.UNPROCESSABLE_CONTENT) {

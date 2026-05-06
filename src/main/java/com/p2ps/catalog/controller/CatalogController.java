@@ -2,9 +2,11 @@ package com.p2ps.catalog.controller;
 
 import com.p2ps.catalog.dto.RecordPurchaseRequest;
 import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.dto.ProductSuggestionDTO;
 import com.p2ps.catalog.service.CatalogService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,5 +47,12 @@ public class CatalogController {
     @GetMapping("/{catalogId}/best-stores")
     public ResponseEntity<List<UUID>> getBestStores(@PathVariable UUID catalogId) {
         return ResponseEntity.ok(catalogService.getBestStoresForCatalogProduct(catalogId));
+    }
+    // 4. Endpoint pentru Autocomplete (Task 4)
+    @GetMapping("/suggest")
+    public ResponseEntity<List<ProductSuggestionDTO>> suggestProducts(
+            @RequestParam("q") String query,
+            Authentication authentication) {
+        return ResponseEntity.ok(catalogService.suggestProducts(query, authentication.getName()));
     }
 }

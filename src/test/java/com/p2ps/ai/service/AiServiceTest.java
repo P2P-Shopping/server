@@ -2,6 +2,7 @@ package com.p2ps.ai.service;
 
 import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
+import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.service.StoreMatchingEngine.StoreMatchResult;
@@ -32,6 +33,9 @@ class AiServiceTest {
     private AiClient aiClient;
 
     @Mock
+    private CatalogService catalogService; // Added mock for CatalogService
+
+    @Mock
     private StoreMatchingEngine storeMatchingEngine;
 
     private AiService aiService;
@@ -52,7 +56,8 @@ class AiServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        aiService = new AiService(aiClient, storeMatchingEngine);
+        // Updated constructor to include catalogService
+        aiService = new AiService(aiClient, catalogService, storeMatchingEngine);
 
         Field toolRegistryField = AiService.class.getDeclaredField("toolRegistry");
         toolRegistryField.setAccessible(true);
@@ -85,22 +90,22 @@ class AiServiceTest {
                 .thenReturn(toolCallResponse)
                 .thenReturn(locationResponse)
                 .thenReturn(finalizedResponse);
-        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(new StoreMatchResult("store-1", "Mega", 1, 120.0));
+        // Updated mock to findOptimalStores which returns a List
+        when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
+                .thenReturn(List.of(new StoreMatchResult("store-1", "Mega", 1, 120.0)));
 
         String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
         assertThat(result)
                 .contains("\"genericName\":\"Milk\"")
                 .contains("\"suggestedStore\":\"Mega\"");
-        verify(storeMatchingEngine).findOptimalStore(45.0, 25.0, 5000, List.of(itemId));
+        verify(storeMatchingEngine).findOptimalStores(45.0, 25.0, 5000, List.of(itemId));
     }
 
     @Test
     void extractFromMultimodal_withInvalidImage_throwsException() {
         MultipartFile fakeImage = new MockMultipartFile("image", "virus.png", "image/png", "fake-pixel-data".getBytes());
 
-        // 3. Am adaugat paramatrul userEmail la final
         assertThatThrownBy(() -> aiService.extractFromMultimodal(fakeImage, "text", null, null, TEST_USER_EMAIL))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("Unsupported or corrupted image format");
@@ -111,7 +116,6 @@ class AiServiceTest {
         MultipartFile image = new MockMultipartFile("image", "fridge.png", "image/png", VALID_PNG);
         when(aiClient.generateResponse(any(), any())).thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("{\"listType\":\"NORMAL\",\"items\":[]}"))));
 
-        // 3. Am adaugat paramatrul userEmail la final
         String result = aiService.extractFromMultimodal(image, "Ce am in frigider?", null, null, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
@@ -134,13 +138,14 @@ class AiServiceTest {
                 .thenReturn(toolCallResponse)
                 .thenReturn(locationResponse)
                 .thenReturn(finalResponse);
-        when(storeMatchingEngine.findOptimalStore(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(new StoreMatchResult("store-2", "Store A", 1, 240.0));
+        // Updated mock to findOptimalStores which returns a List
+        when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
+                .thenReturn(List.of(new StoreMatchResult("store-2", "Store A", 1, 240.0)));
 
         String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 
         assertThat(result).contains("\"listType\":\"NORMAL\"");
-        verify(storeMatchingEngine).findOptimalStore(45.0, 25.0, 5000, List.of(itemId));
+        verify(storeMatchingEngine).findOptimalStores(45.0, 25.0, 5000, List.of(itemId));
     }
 
     @Test
@@ -180,7 +185,8 @@ class AiServiceTest {
     void detectMimeTypeSecurely_jpeg_returnsImageJpeg() throws Exception {
         byte[] jpegHeader = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
 
-        AiService service = new AiService(aiClient, storeMatchingEngine);
+        // Updated constructor to include catalogService
+        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, jpegHeader);
@@ -192,7 +198,8 @@ class AiServiceTest {
     void detectMimeTypeSecurely_invalidBytes_returnsNull() throws Exception {
         byte[] invalid = "not-an-image".getBytes();
 
-        AiService service = new AiService(aiClient, storeMatchingEngine);
+        // Updated constructor to include catalogService
+        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, invalid);

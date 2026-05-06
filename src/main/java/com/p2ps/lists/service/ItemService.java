@@ -102,8 +102,6 @@ public class ItemService {
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
 
-        return mapToDTO(itemRepository.save(item));
-        saveToHistory(item.getName(), list.getUser());
         try {
             return mapToDTO(itemRepository.save(item));
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
@@ -181,7 +179,6 @@ public class ItemService {
                 newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
                 newItem.setCreatedAt(System.currentTimeMillis());
 
-                saveToHistory(newItem.getName(), list.getUser());
                 batchMap.put(mapKey, newItem);
             }
         }
@@ -336,10 +333,6 @@ public class ItemService {
                 finalParts.add(valStr);
             } else {
                 finalParts.add(valStr + " " + unit);
-        List<Item> items = new ArrayList<>();
-        for (ItemRequest request : requests) {
-            if (request.getName() == null || request.getName().trim().isEmpty()) {
-                throw new ListValidationException("Item name cannot be empty");
             }
         }
 
@@ -347,8 +340,6 @@ public class ItemService {
 
         return String.join(" + ", finalParts);
     }
-            items.add(item);
-        }
 
     private void parseAndAccumulate(String quantityStr, Map<String, BigDecimal> unitSums, List<String> unparseableParts) {
         String[] parts = quantityStr.split("\\+");
@@ -373,11 +364,8 @@ public class ItemService {
         }
     }
 
-    // Metoda actualizata primeste tot Item-ul!
     private void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
         String itemName = item.getName();
-
-    private void saveToHistory(String itemName, com.p2ps.auth.model.Users user) {
         UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
         if (history == null) {
             history = new UserProductHistory();
