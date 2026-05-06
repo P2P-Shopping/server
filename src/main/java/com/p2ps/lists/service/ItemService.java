@@ -40,18 +40,20 @@ public class ItemService {
     private final CatalogService catalogService;
     private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
-    @Autowired
-    @Lazy
-    private ItemService self;
+    private final ItemService self;
 
-    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository,
-                       UserProductHistoryRepository historyRepository, ProductCatalogRepository catalogRepository,
-                       CatalogService catalogService) {
+    public ItemService(ItemRepository itemRepository, 
+                       ShoppingListRepository shoppingListRepository, 
+                       UserProductHistoryRepository historyRepository,
+                       ProductCatalogRepository catalogRepository,
+                       CatalogService catalogService,
+                       @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.historyRepository = historyRepository;
         this.catalogRepository = catalogRepository;
         this.catalogService = catalogService;
+        this.self = self;
     }
 
     @Transactional

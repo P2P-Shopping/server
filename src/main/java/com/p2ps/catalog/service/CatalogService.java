@@ -1,6 +1,5 @@
 package com.p2ps.catalog.service;
 
-import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.dto.ProductSuggestionDTO;
 import com.p2ps.catalog.model.ProductCatalog;
@@ -12,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class CatalogService {
@@ -96,9 +94,9 @@ public class CatalogService {
                 String bestName = ProductStringUtils.firstNonBlank(
                         match.getItemName(), match.getCatalogSpecificName(), match.getCatalogGenericName()
                 );
-                if (bestName != null && !suggestionsMap.containsKey(bestName)) {
-                    suggestionsMap.put(bestName, new ProductSuggestionDTO(
-                            bestName,
+                if (bestName != null) {
+                    suggestionsMap.computeIfAbsent(bestName, k -> new ProductSuggestionDTO(
+                            k,
                             match.getBrand(),
                             match.getCategory(),
                             match.getPrice(),
@@ -118,9 +116,9 @@ public class CatalogService {
             String bestName = ProductStringUtils.firstNonBlank(
                     catalogMatch.getSpecificName(), catalogMatch.getGenericName()
             );
-            if (bestName != null && !suggestionsMap.containsKey(bestName)) {
-                suggestionsMap.put(bestName, new ProductSuggestionDTO(
-                        bestName,
+            if (bestName != null) {
+                suggestionsMap.computeIfAbsent(bestName, k -> new ProductSuggestionDTO(
+                        k,
                         catalogMatch.getBrand(),
                         catalogMatch.getCategory(),
                         catalogMatch.getEstimatedPrice(),

@@ -20,8 +20,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +79,8 @@ class ItemServiceTest {
         mockItem.setShoppingList(mockList);
         mockItem.setName("Old Item");
         mockItem.setChecked(false);
+
+        ReflectionTestUtils.setField(itemService, "self", itemService);
     }
 
     @Test
@@ -597,5 +601,77 @@ class ItemServiceTest {
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
         assertThat(result.getQuantity()).isEqualTo("2 sticle");
+    }
+
+    @Test
+    void addItemsToListWithRetry_SuccessOnFirstTry() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Item");
+        List<ItemRequest> requests = List.of(req);
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.saveAll(anyList())).thenReturn(List.of(new Item()));
+
+        List<ItemDTO> results = itemService.addItemsToListWithRetry(listId, requests, userEmail);
+        assertThat(results).hasSize(1);
+    }
+
+    @Test
+    void sumStringQuantities_HandlesUnparseableParts() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Mystery");
+        req.setQuantity("mystery-bag");
+
+        Item existing = new Item();
+        existing.setName("Mystery");
+        existing.setQuantity("weird-box");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Mystery"))
+                .thenReturn(List.of(existing));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        
+        assertThat(result.getQuantity()).contains("weird-box");
+        assertThat(result.getQuantity()).contains("mystery-bag");
+    }
+
+    @Test
+    void addItemToList_HandlesUnparseableQuantities() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Mystery");
+        req.setQuantity("2 box");
+
+        Item existing = new Item();
+        existing.setName("Mystery");
+        existing.setQuantity("1 box + some stuff");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Mystery"))
+                .thenReturn(List.of(existing));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        assertThat(result.getQuantity()).isEqualTo("3 box + some stuff");
+    }
+
+    @Test
+    void addItemToList_RetriesOnDataIntegrityViolation() {
+        ItemRequest req = new ItemRequest();
+        req.setName("RaceConditionItem");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RaceConditionItem"))
+                .thenReturn(List.of()); // First call: not found
+        
+        // Mock save to throw exception on first call, then succeed on second call (after retry)
+        when(itemRepository.save(any(Item.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        assertThat(result.getName()).isEqualTo("RaceConditionItem");
+        verify(itemRepository, times(2)).save(any(Item.class));
     }
 }
