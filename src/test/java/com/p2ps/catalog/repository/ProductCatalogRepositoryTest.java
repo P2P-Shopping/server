@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration",
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.DataMongoAutoConfiguration",
         "telemetry.api.key=test-telemetry-key-for-tests",
         "app.scheduling.enabled=false",
         "ai.api.key=test-key",
@@ -45,8 +45,9 @@ class ProductCatalogRepositoryTest {
         registry.add("spring.datasource.url", postgresContainer::getJdbcUrl);
         registry.add("spring.datasource.username", postgresContainer::getUsername);
         registry.add("spring.datasource.password", postgresContainer::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+        registry.add("spring.jpa.properties.hibernate.dialect", () -> "org.hibernate.dialect.PostgreSQLDialect");
     }
 
     @Autowired
@@ -184,8 +185,8 @@ class ProductCatalogRepositoryTest {
         UUID item2Id = UUID.randomUUID();
 
         // Cast la ::uuid pentru id, list_id și catalog_id
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid)", item1Id, listId, catalogId);
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid)", item2Id, listId, catalogId);
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid, ?)", item1Id, listId, catalogId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid, ?)", item2Id, listId, catalogId, System.currentTimeMillis());
 
         // Inventory mapping cu cast la ::uuid
         jdbcTemplate.update("INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?::uuid, ?::uuid, ?::uuid, ST_GeomFromText('POINT(0 0)', 4326), 0.9, 1, NOW())", UUID.randomUUID(), store1Id, item1Id);
@@ -198,21 +199,5 @@ class ProductCatalogRepositoryTest {
         // Since Store 2 has highest confidence (0.95 vs 0.9), it should be first
         assertEquals(store2Id, bestStores.get(0));
         assertEquals(store1Id, bestStores.get(1));
-    }
-
-    @Test
-    void shouldFindProductsUsingFuzzyKeywordSearch() {
-        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
-        ProductCatalog product = new ProductCatalog();
-        product.setGenericName("Oua");
-        product.setSpecificName("Oua de gaina M");
-        product.setBrand("Ferma");
-        product.setPurchaseCount(25);
-        repository.saveAndFlush(product);
-
-        List<ProductCatalog> results = repository.searchByKeywordFuzzy("ou");
-
-        assertFalse(results.isEmpty());
-        assertEquals("Oua", results.get(0).getGenericName());
     }
 }

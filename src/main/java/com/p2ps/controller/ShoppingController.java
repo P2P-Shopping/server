@@ -4,7 +4,6 @@ import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.service.AiOrchestrationService;
 import com.p2ps.catalog.service.CatalogService;
-import com.p2ps.util.ProductStringUtils;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.service.ShoppingListService;
 import org.springframework.http.MediaType;
@@ -68,12 +67,11 @@ public class ShoppingController {
                 receipt,
                 receiptPrompt,
                 null,
-                null,
-                userEmail
+                null
         );
 
         for (ParsedItemResponse item : aiResponse.getItems()) {
-            String specificName = ProductStringUtils.firstNonBlank(item.getSpecificName(), item.getGenericName());
+            String specificName = firstNonBlank(item.getSpecificName(), item.getGenericName());
             if (specificName == null) {
                 continue;
             }
@@ -89,4 +87,13 @@ public class ShoppingController {
         }
     }
 
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback.trim();
+        }
+        return null;
+    }
 }

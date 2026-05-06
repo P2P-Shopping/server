@@ -1,77 +1,97 @@
 package com.p2ps.controller;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.io.Serializable;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.ArrayList;
 import java.util.List;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class RoutingResponse implements Serializable {
+public class RoutingResponse {
 
     private String status;
     private List<RoutePoint> route;
-    private List<String> warnings;
-
-    /**
-     * BE 3.1 — Lazy Routing fields.
-     *
-     * routeId: present only for lazy responses. The frontend uses this to poll
-     *          GET /api/routing/full/{routeId} for the 3-opt-optimized full route.
-     *
-     * partial: true  → this response contains only the first N stops (NN order).
-     *          false → this response contains the full 3-opt-optimized route.
-     */
     private String routeId;
     private boolean partial;
+    private List<String> warnings;
 
-    @com.fasterxml.jackson.annotation.JsonProperty("total_distance_meters")
+    // --- REPARAȚIA AICI: Am restaurat formatul snake_case pentru API-ul public ---
+
+    @JsonProperty("total_distance_meters")
     private double totalDistanceMeters;
-    @com.fasterxml.jackson.annotation.JsonProperty("estimated_time_seconds")
-    private int estimatedTimeSeconds;
-    @com.fasterxml.jackson.annotation.JsonProperty("total_stops")
+
+    @JsonProperty("estimated_time_seconds")
+    private long estimatedTimeSeconds;
+
+    @JsonProperty("total_stops")
     private int totalStops;
 
-    /**
-     * 3-arg constructor kept for backward compatibility with existing tests
-     * (RoutingResponseTest, RoutingControllerTest).
-     * Sets routeId=null and partial=false — equivalent to an eager response.
-     */
-    public RoutingResponse(String status, List<RoutePoint> route, List<String> warnings) {
+    // Constructor
+    public RoutingResponse() {
+        this.route = new ArrayList<>();
+        this.warnings = new ArrayList<>();
+    }
+
+    // --- Getters & Setters ---
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
         this.status = status;
+    }
+
+    public List<RoutePoint> getRoute() {
+        return route;
+    }
+
+    public void setRoute(List<RoutePoint> route) {
         this.route = route;
+    }
+
+    public String getRouteId() {
+        return routeId;
+    }
+
+    public void setRouteId(String routeId) {
+        this.routeId = routeId;
+    }
+
+    public boolean isPartial() {
+        return partial;
+    }
+
+    public void setPartial(boolean partial) {
+        this.partial = partial;
+    }
+
+    public List<String> getWarnings() {
+        return warnings;
+    }
+
+    public void setWarnings(List<String> warnings) {
         this.warnings = warnings;
-        this.routeId = null;
-        this.partial = false;
-        this.totalDistanceMeters = 0.0;
-        this.estimatedTimeSeconds = 0;
-        this.totalStops = 0;
     }
 
-    // ------------------------------------------------------------------
-    // Factory methods — use these instead of constructors in new code
-    // ------------------------------------------------------------------
-
-    /** Full eager response: 3-opt done, no routeId needed. */
-    public static RoutingResponse eager(List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, null, false, 0.0, 0, 0);
+    public double getTotalDistanceMeters() {
+        return totalDistanceMeters;
     }
 
-    /** Partial lazy response: first N stops, full route computing in background. */
-    public static RoutingResponse partial(String routeId, List<RoutePoint> partialRoute, List<String> warnings) {
-        return new RoutingResponse("partial", partialRoute, warnings, routeId, true, 0.0, 0, 0);
+    public void setTotalDistanceMeters(double totalDistanceMeters) {
+        this.totalDistanceMeters = totalDistanceMeters;
     }
 
-    /** Full response retrieved from Redis after background optimization. */
-    public static RoutingResponse full(String routeId, List<RoutePoint> route, List<String> warnings) {
-        return new RoutingResponse("success", route, warnings, routeId, false, 0.0, 0, 0);
+    public long getEstimatedTimeSeconds() {
+        return estimatedTimeSeconds;
     }
 
-    /** Error response. */
-    public static RoutingResponse error(String message) {
-        return new RoutingResponse("error", List.of(), List.of(message), null, false, 0.0, 0, 0);
+    public void setEstimatedTimeSeconds(long estimatedTimeSeconds) {
+        this.estimatedTimeSeconds = estimatedTimeSeconds;
+    }
+
+    public int getTotalStops() {
+        return totalStops;
+    }
+
+    public void setTotalStops(int totalStops) {
+        this.totalStops = totalStops;
     }
 }

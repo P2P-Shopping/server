@@ -31,32 +31,27 @@ public class StompJwtAuthInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
 
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            UsernamePasswordAuthenticationToken authentication = resolveAuthentication(accessor);
-
-            if (authentication != null) {
-                accessor.setUser(authentication);
-                return MessageBuilder.fromMessage(message)
-                        .setHeader(SimpMessageHeaderAccessor.USER_HEADER, authentication)
-                        .build();
+            String token = resolveToken(accessor);
+            if (token != null) {
+                // Persist the token in the session attributes so subsequent frames (like SUBSCRIBE) can re-authenticate if needed.
+                if (accessor.getSessionAttributes() != null) {
+                    accessor.getSessionAttributes().put(JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE, token);
+                }
+                
+                UsernamePasswordAuthenticationToken authentication = jwtAuthFilter.authenticateToken(token);
+                if (authentication != null) {
+                    accessor.setUser(authentication);
+                    return MessageBuilder.fromMessage(message)
+                            .setHeader(SimpMessageHeaderAccessor.USER_HEADER, authentication)
+                            .build();
+                } else {
+                    throw new BadCredentialsException("Invalid JWT token in CONNECT frame");
+                }
             }
-
             return message;
         }
 
         return message;
-    }
-
-    private UsernamePasswordAuthenticationToken resolveAuthentication(StompHeaderAccessor accessor) {
-        String token = resolveToken(accessor);
-        if (token == null) {
-            return null;
-        }
-
-        UsernamePasswordAuthenticationToken authentication = jwtAuthFilter.authenticateToken(token);
-        if (authentication == null) {
-            throw new BadCredentialsException("Invalid JWT token");
-        }
-        return authentication;
     }
 
     private String resolveToken(StompHeaderAccessor accessor) {

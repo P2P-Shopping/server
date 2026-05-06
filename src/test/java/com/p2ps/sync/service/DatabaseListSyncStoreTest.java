@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.UUID;
 
@@ -33,7 +32,7 @@ class DatabaseListSyncStoreTest {
         updated.setChecked(true);
         updated.setLastUpdatedTimestamp(123L);
 
-        when(itemService.updateItemStatus(any(UUID.class), any(boolean.class), any())).thenReturn(updated);
+        when(itemService.updateItemFromSync(any(UUID.class), any())).thenReturn(updated);
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -53,8 +52,8 @@ class DatabaseListSyncStoreTest {
         DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
         UUID itemId = UUID.randomUUID();
 
-        when(itemService.updateItemStatus(any(UUID.class), any(boolean.class), any()))
-                .thenThrow(new OptimisticLockingFailureException("conflict"));
+        when(itemService.updateItemFromSync(any(UUID.class), any()))
+                .thenThrow(new org.springframework.dao.OptimisticLockingFailureException("conflict"));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
@@ -105,7 +104,7 @@ class DatabaseListSyncStoreTest {
         ListUpdatePayload result = store.apply("list-1", payload);
 
         assertSame(payload, result);
-        assertNull(result.getStatus());
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
     }
 
     @Test
@@ -119,5 +118,62 @@ class DatabaseListSyncStoreTest {
         ListUpdatePayload p2 = new ListUpdatePayload();
         p2.setItemId("");
         assertSame(p2, store.apply("list-1", p2));
+    }
+
+    @Test
+    void handlesAddAndDeleteActionsWithoutItemService() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload addPayload = new ListUpdatePayload();
+        addPayload.setAction(ActionType.ADD);
+        addPayload.setItemId(UUID.randomUUID().toString());
+        
+        ListUpdatePayload addResult = store.apply("list-1", addPayload);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, addResult.getStatus());
+        
+        ListUpdatePayload deletePayload = new ListUpdatePayload();
+        deletePayload.setAction(ActionType.DELETE);
+        deletePayload.setItemId(UUID.randomUUID().toString());
+        
+        ListUpdatePayload deleteResult = store.apply("list-1", deletePayload);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, deleteResult.getStatus());
+        
+        // Verify itemService was never called for these
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
+
+    @Test
+    void returnsEarlyForUnknownAction() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UNKNOWN);
+        payload.setItemId(UUID.randomUUID().toString());
+        
+        assertSame(payload, store.apply("list-1", payload));
+        assertNull(payload.getStatus());
+        
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
+
+    @Test
+    void returnsEarlyForNullAction() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(null);
+        payload.setItemId(UUID.randomUUID().toString());
+        
+        assertSame(payload, store.apply("list-1", payload));
+        
+        org.mockito.Mockito.verifyNoInteractions(itemService);
+    }
+
+    @Test
+    void returnsEarlyForBlankListId() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        
+        assertSame(payload, store.apply("   ", payload));
     }
 }

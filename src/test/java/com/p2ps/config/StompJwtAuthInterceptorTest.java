@@ -155,4 +155,24 @@ class StompJwtAuthInterceptorTest {
 
         assertThrows(BadCredentialsException.class, () -> interceptor.preSend(message, channel));
     }
+
+    @Test
+    void extractBearerToken_withMalformedPrefix_returnsOriginal() throws Exception {
+        StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(mock(JwtAuthFilter.class));
+        java.lang.reflect.Method method = StompJwtAuthInterceptor.class.getDeclaredMethod("extractBearerToken", String.class);
+        method.setAccessible(true);
+        
+        String result = (String) method.invoke(interceptor, "NotBearer token");
+        assertEquals("NotBearer token", result);
+    }
+
+    @Test
+    void extractBearerToken_withEmptyString_returnsNull() throws Exception {
+        StompJwtAuthInterceptor interceptor = new StompJwtAuthInterceptor(mock(JwtAuthFilter.class));
+        java.lang.reflect.Method method = StompJwtAuthInterceptor.class.getDeclaredMethod("extractBearerToken", String.class);
+        method.setAccessible(true);
+        
+        assertNull(method.invoke(interceptor, ""));
+        assertNull(method.invoke(interceptor, "   "));
+    }
 }

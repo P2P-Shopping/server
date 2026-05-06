@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -38,15 +37,21 @@ public class ListSyncController {
      * @return the exact payload to be broadcasted to all active subscribers of the room
      */
     @MessageMapping("/list/{listId}/update")
-    @SendTo("/topic/list/{listId}")
-    public ListUpdatePayload handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
+    public void handleListUpdate(@DestinationVariable String listId, ListUpdatePayload payload) {
         if (payload == null) {
             logger.warn("Received null payload for list update on room");
-            throw new IllegalArgumentException("Payload must not be null. Error thrown for: " + listId);
+            return;
         }
 
-        logger.debug("Routing action {} for room {}", payload.getAction(), listId);
-        return listSyncRouterService.route(listId, payload);
+        try {
+            ListUpdatePayload processedPayload = listSyncRouterService.route(listId, payload);
+            if (processedPayload != null) {
+                String destination = "/topic/list/" + listId;
+                messagingTemplate.convertAndSend(destination, processedPayload);
+            }
+        } catch (Exception e) {
+            logger.error("CRITICAL: Error processing list update", e);
+        }
     }
 
     /**

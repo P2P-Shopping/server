@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.dto.ItemLocationDTO;
 import com.p2ps.repository.StoreInventoryMapRepository;
+import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.service.MacroRoutingService;
 import com.p2ps.service.RoutingAsyncService;
@@ -46,6 +47,7 @@ public class RoutingController {
     private final MacroRoutingService macroRoutingService;
     private final StoreInventoryMapRepository inventoryMapRepository;
     private final LocationProcessorWorker locationProcessorWorker;
+    private final StoreMatchingEngine storeMatchingEngine;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
 
@@ -54,12 +56,14 @@ public class RoutingController {
             MacroRoutingService macroRoutingService,
             StoreInventoryMapRepository inventoryMapRepository,
             LocationProcessorWorker locationProcessorWorker,
+            StoreMatchingEngine storeMatchingEngine,
             StringRedisTemplate redis,
             ObjectMapper objectMapper) {
         this.routingService = routingService;
         this.macroRoutingService = macroRoutingService;
         this.inventoryMapRepository = inventoryMapRepository;
         this.locationProcessorWorker = locationProcessorWorker;
+        this.storeMatchingEngine = storeMatchingEngine;
         this.redis = redis;
         this.objectMapper = objectMapper;
     }
@@ -79,6 +83,25 @@ public class RoutingController {
     @PostMapping("/calculate")
     public RoutingResponse calculateRoute(@RequestBody RoutingRequest request) {
         return routingService.calculateOptimalRoute(request);
+    }
+
+    // -------------------------------------------------------------------------
+    // BE 3.3 — Store lookup: top recommended stores for the frontend
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/routing/lookup or /api/routing/stores-match
+     * Returns the top 3 matching stores, or [] when no stores match.
+     */
+    @PostMapping({"/lookup", "/stores-match"})
+    public ResponseEntity<java.util.List<StoreMatchingEngine.StoreMatchResult>> lookupStores(@RequestBody StoreMatchRequest request) {
+        java.util.List<StoreMatchingEngine.StoreMatchResult> results = storeMatchingEngine.findOptimalStores(
+                request.getUserLat(),
+                request.getUserLng(),
+                request.getRadiusInMeters(),
+                request.getItemIds()
+        );
+        return ResponseEntity.ok(results);
     }
 
     // -------------------------------------------------------------------------
@@ -180,4 +203,5 @@ public class RoutingController {
 
         return shouldTrigger.get();
     }
+
 }

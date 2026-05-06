@@ -39,11 +39,11 @@ public class AiService {
             "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry instead of leaving them null. Only leave catalogId null if no relevant catalog product exists. " +
             "RULE 1B (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
             "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
-            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'. If the user describes a dish, dessert, meal, or recipe idea such as negresa, clatite, soup, pasta, cake, or cookies, classify it as 'RECIPE' even if the word 'recipe' is not explicitly used. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
+            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. If the user describes a dish, dessert, meal, or recipe idea such as negresa, clatite, soup, pasta, cake, or cookies, classify it as 'RECIPE' even if the word 'recipe' is not explicitly used. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
             "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
     private static final String FINAL_JSON_PROMPT =
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
-            "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
+            "{\"listType\":\"RECIPE|FREQUENT|NORMAL\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
             "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. If the user described a dish or recipe, listType must be RECIPE. Do not add markdown, explanations, or prose.";
 
     private static final String DESCRIPTION = "description";
@@ -92,9 +92,11 @@ public class AiService {
                     Double lng = (Double) context.get("longitude");
                     if (lat == null || lng == null) return "User location not provided. Cannot search stores.";
                     int radius = (args.get(RADIUS_METERS) != null) ? (Integer) args.get(RADIUS_METERS) : 5000;
-                    List<String> idStrings = (List<String>) args.get(ITEM_IDS);
+                    Object rawItemIds = args.get(ITEM_IDS);
+                    if (!(rawItemIds instanceof List<?> rawIdList)) return "Item IDs not provided or invalid.";
+                    List<String> idStrings = rawIdList.stream().map(String.class::cast).toList();
                     List<UUID> itemIds = idStrings.stream().map(UUID::fromString).toList();
-                    return storeMatchingEngine.findOptimalStore(lat, lng, radius, itemIds);
+                    return storeMatchingEngine.findOptimalStores(lat, lng, radius, itemIds);
                 }
         ));
     }

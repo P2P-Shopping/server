@@ -25,10 +25,6 @@ public class ListSyncRouterService {
     private final ListSyncStore listSyncStore;
     private final LockingListSyncStore lockingWrapper;
 
-    ListSyncRouterService() {
-        this(new InMemoryListSyncStore());
-    }
-
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
         this.lockingWrapper = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
@@ -115,6 +111,7 @@ public class ListSyncRouterService {
             return payload;
         }
     }
+
 
     private static final class LockingListSyncStore implements ListSyncStore {
 

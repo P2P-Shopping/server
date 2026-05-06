@@ -10,7 +10,6 @@ import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
-import com.p2ps.lists.repo.UserProductHistoryRepository;
 import com.p2ps.auth.model.Users;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,9 +36,6 @@ class ItemServiceTest {
 
     @Mock
     private ShoppingListRepository shoppingListRepository;
-
-    @Mock
-    private UserProductHistoryRepository historyRepository;
 
     @InjectMocks
     private ItemService itemService;
@@ -245,5 +241,90 @@ class ItemServiceTest {
                 .isInstanceOf(ListValidationException.class);
 
         verify(itemRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void updateItemFromSync_Success_WithJsonContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setChecked(true);
+        payload.setContent("{\"name\":\"Synced Name\",\"brand\":\"Synced Brand\"}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.isChecked()).isTrue();
+        assertThat(result.getName()).isEqualTo("Synced Name");
+        assertThat(result.getBrand()).isEqualTo("Synced Brand");
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItemFromSync_Fallback_WithPlainContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("Simple Name Fallback");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Simple Name Fallback");
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItemFromSync_Success_WithAllFields() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{" +
+                "\"name\":\"Full Update\"," +
+                "\"brand\":\"Brand X\"," +
+                "\"quantity\":\"5\"," +
+                "\"price\":10.5," +
+                "\"category\":\"Food\"" +
+                "}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Full Update");
+        assertThat(result.getBrand()).isEqualTo("Brand X");
+        assertThat(result.getQuantity()).isEqualTo("5");
+        assertThat(result.getPrice()).isEqualByComparingTo(new BigDecimal("10.5"));
+        assertThat(result.getCategory()).isEqualTo("Food");
+    }
+
+    @Test
+    void addItemToList_WithNullRecurrent_DefaultsToFalse() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setIsRecurrent(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.isRecurrent()).isFalse();
+    }
+
+    @Test
+    void updateItem_WithNullFields_DoesNotChangeThem() {
+        ItemRequest req = new ItemRequest();
+        // All fields null
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getName()).isEqualTo("Old Item");
+        verify(itemRepository).save(mockItem);
     }
 }
