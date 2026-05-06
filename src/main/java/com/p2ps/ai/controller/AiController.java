@@ -26,7 +26,7 @@ public class AiController {
     }
 
     /**
-     * @deprecated Use {@link #generateListMultimodal(MultipartFile, String, Principal)} instead.
+     * @deprecated Use {@link #generateListMultimodal(MultipartFile, String, Double, Double, Principal)} instead.
      * Scheduled for removal in version 3.0.0.
      */
     @Deprecated(since = "2.1", forRemoval = true)
@@ -63,9 +63,11 @@ public class AiController {
             }
         }
 
+        String userEmail = principal != null ? principal.getName() : null;
+
         // Send data towards Orchestrator for AI processing
         // (Gatekeeper returns a response directly, not saving anything in database)
-        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(image, text, latitude, longitude);
+        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(image, text, latitude, longitude, userEmail);
 
         return ResponseEntity.ok(response);
     }

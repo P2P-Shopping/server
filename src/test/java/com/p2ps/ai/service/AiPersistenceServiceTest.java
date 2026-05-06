@@ -46,7 +46,7 @@ class AiPersistenceServiceTest {
         UUID existingListId = UUID.randomUUID();
         ParsedItemResponse item = new ParsedItemResponse();
         item.setGenericName("Milk ");
-        item.setQuantity(1.5);
+        item.setQuantity("1.5");
         item.setUnit("L");
 
         // Act

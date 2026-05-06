@@ -1,29 +1,44 @@
 package com.p2ps.ai.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.dto.RecipeRequest;
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
+import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
+import com.p2ps.util.ProductStringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class AiOrchestrationService {
 
     private final AiService aiService;
     private final AiPersistenceService aiPersistenceService;
+    private final ProductResolutionService productResolutionService;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
-    public AiOrchestrationService(AiService aiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
+    public AiOrchestrationService(
+            AiService aiService,
+            AiPersistenceService aiPersistenceService,
+            ProductResolutionService productResolutionService,
+            UserRepository userRepository,
+            Optional<ObjectMapper> objectMapper
+    ) {
         this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
+        this.productResolutionService = productResolutionService;
+        this.userRepository = userRepository;
         this.objectMapper = objectMapper.orElseGet(ObjectMapper::new);
     }
 
@@ -65,24 +80,24 @@ public class AiOrchestrationService {
     }
 
     // Multimodal and Gatekeeper Flow
-    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
+    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude, String userEmail) {
         int maxRetries = 2;
         Exception lastException = null;
         String lastRawResult = null;
-
+        AiGenerationResponse response = null;
         for (int i = 0; i <= maxRetries; i++) {
             try {
                 // Receive the generated JSON from AI Service
-                String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude);
+                String rawResult = aiService.extractFromMultimodal(image, text, latitude, longitude, userEmail);
                 lastRawResult = rawResult;
                 String jsonResult = extractJson(rawResult);
 
                 // Map the JSON to the response object
-                AiGenerationResponse response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
+                response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
 
                 // Validation
                 if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
-                    return response;
+                    break; // Success
                 }
             } catch (AiProcessingException e) {
                 if (e.getStatus() != HttpStatus.UNPROCESSABLE_CONTENT) {
@@ -92,6 +107,16 @@ public class AiOrchestrationService {
             } catch (Exception e) {
                 lastException = e;
             }
+            response = null; // Reset if failed validation
+        }
+
+        if (response != null) {
+            Users user = null;
+            if (userEmail != null && !userEmail.isBlank()) {
+                user = userRepository.findByEmail(userEmail).orElse(null);
+            }
+            normalizeDetectedProducts(response, user);
+            return response;
         }
 
         throw new AiProcessingException(
@@ -130,4 +155,40 @@ public class AiOrchestrationService {
         if (sanitized.length() <= 240) return sanitized;
         return sanitized.substring(0, 240) + "...";
     }
+
+    private void normalizeDetectedProducts(AiGenerationResponse response, Users user) {
+        // Extragem email-ul în siguranță pentru a preveni NullPointerException
+        String email = (user != null) ? user.getEmail() : null;
+
+        for (ParsedItemResponse item : response.getItems()) {
+            if (item != null) {
+                String keyword = ProductStringUtils.firstNonBlank(item.getGenericName(), item.getSpecificName(), item.getBrand());
+                if (keyword != null) {
+                    // Java face căutarea INSTANT, direct pe backend!
+                    productResolutionService.resolveForUser(keyword, email)
+                            .ifPresent(match -> applyResolvedProduct(item, match));
+                }
+            }
+        }
+    }
+    private void applyResolvedProduct(ParsedItemResponse item, ProductResolutionService.ResolvedProduct match) {
+        ProductCatalog catalogProduct = match.catalogProduct();
+        item.setGenericName(ProductStringUtils.firstNonBlank(
+                match.matchedName(),
+                catalogProduct != null ? catalogProduct.getGenericName() : null,
+                item.getGenericName()
+        ));
+
+        if (catalogProduct != null) {
+            item.setCatalogId(catalogProduct.getId() != null ? catalogProduct.getId().toString() : item.getCatalogId());
+            item.setSpecificName(ProductStringUtils.firstNonBlank(catalogProduct.getSpecificName(), item.getSpecificName()));
+            item.setBrand(ProductStringUtils.firstNonBlank(catalogProduct.getBrand(), item.getBrand(), match.brand()));
+            item.setCategory(ProductStringUtils.firstNonBlank(catalogProduct.getCategory(), item.getCategory(), match.category()));
+            return;
+        }
+
+        item.setBrand(ProductStringUtils.firstNonBlank(item.getBrand(), match.brand()));
+        item.setCategory(ProductStringUtils.firstNonBlank(item.getCategory(), match.category()));
+    }
+
 }

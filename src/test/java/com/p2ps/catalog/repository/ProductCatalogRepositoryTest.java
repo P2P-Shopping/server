@@ -1,6 +1,7 @@
 package com.p2ps.catalog.repository;
 
 import com.p2ps.catalog.model.ProductCatalog;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,6 +56,23 @@ class ProductCatalogRepositoryTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void ensureSearchFunctionsExist() {
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS unaccent");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE FUNCTION public.f_unaccent(input_text TEXT)
+            RETURNS TEXT
+            LANGUAGE sql
+            IMMUTABLE
+            PARALLEL SAFE
+            STRICT
+            AS $$
+                SELECT public.unaccent('public.unaccent', input_text)
+            $$
+        """);
+    }
 
     @Test
     void shouldFindBySpecificNameAndBrand() {
@@ -199,5 +217,65 @@ class ProductCatalogRepositoryTest {
         // Since Store 2 has highest confidence (0.95 vs 0.9), it should be first
         assertEquals(store2Id, bestStores.get(0));
         assertEquals(store1Id, bestStores.get(1));
+    }
+
+    @Test
+    void shouldFindProductsUsingFuzzyKeywordSearch() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Oua");
+        product.setSpecificName("Oua de gaina M");
+        product.setBrand("Ferma");
+        product.setPurchaseCount(25);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeywordFuzzy("ou");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Oua", results.get(0).getGenericName());
+    }
+
+    @Test
+    void shouldFindProductsUsingKeywordSearchWithoutDiacritics() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Lamai");
+        product.setSpecificName("Lamai verzi");
+        product.setBrand("Fresh");
+        product.setPurchaseCount(12);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeyword("lămâi");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Lamai", results.get(0).getGenericName());
+    }
+
+    @Test
+    void shouldFindProductsUsingKeywordSearchByBrandWithoutDiacritics() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Iaurt");
+        product.setSpecificName("Iaurt grecesc");
+        product.setBrand("Frăguța");
+        product.setPurchaseCount(8);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeyword("fraguta");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Frăguța", results.get(0).getBrand());
+    }
+
+    @Test
+    void shouldFindProductsUsingFuzzyKeywordSearchWithoutDiacritics() {
+        ProductCatalog product = new ProductCatalog();
+        product.setGenericName("Lamai");
+        product.setSpecificName("Lamai verzi");
+        product.setBrand("Fresh");
+        product.setPurchaseCount(12);
+        repository.saveAndFlush(product);
+
+        List<ProductCatalog> results = repository.searchByKeywordFuzzy("lămâi");
+
+        assertFalse(results.isEmpty());
+        assertEquals("Lamai", results.get(0).getGenericName());
     }
 }

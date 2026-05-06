@@ -1,5 +1,7 @@
 package com.p2ps.lists.service;
 
+import com.p2ps.catalog.repository.ProductCatalogRepository;
+import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -41,6 +43,12 @@ class ItemServiceTest {
 
     @Mock
     private UserProductHistoryRepository historyRepository;
+
+    @Mock
+    private ProductCatalogRepository catalogRepository;
+
+    @Mock
+    private CatalogService catalogService;
 
     @InjectMocks
     private ItemService itemService;
@@ -88,6 +96,7 @@ class ItemServiceTest {
         assertThat(result.getPrice()).isEqualTo(BigDecimal.TEN);
         assertThat(result.isRecurrent()).isTrue();
         verify(itemRepository).save(any(Item.class));
+        verifyNoInteractions(historyRepository, catalogRepository, catalogService);
     }
 
     @Test
@@ -220,6 +229,13 @@ class ItemServiceTest {
     }
 
     @Test
+    void addItemsToList_ReturnsEmptyList_WhenRequestIsEmpty() {
+        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(), userEmail);
+        assertThat(result).isEmpty();
+        verifyNoInteractions(itemRepository, historyRepository, catalogRepository, catalogService);
+    }
+
+    @Test
     void addItemsToList_Success() {
         ItemRequest req1 = new ItemRequest(); req1.setName("Item 1");
         ItemRequest req2 = new ItemRequest(); req2.setName("Item 2");
@@ -234,6 +250,23 @@ class ItemServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getName()).isEqualTo("Item 1");
         verify(itemRepository).saveAll(anyList());
+        verifyNoInteractions(historyRepository, catalogRepository, catalogService);
+    }
+
+    @Test
+    void addItemsToList_ThrowsAccessDenied_WhenWrongUser() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        List<ItemRequest> requests = List.of(req);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        assertThatThrownBy(() -> itemService.addItemsToList(listId, requests, "hacker@user.com"))
+                .isInstanceOf(ListAccessDeniedException.class)
+                .hasMessageContaining("You do not have permission to add items to this list");
+
+        verify(itemRepository, never()).saveAll(anyList());
+        verifyNoInteractions(historyRepository, catalogRepository, catalogService);
     }
 
     @Test
