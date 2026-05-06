@@ -17,6 +17,7 @@ import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,18 +36,23 @@ public class ItemService {
     private final ShoppingListRepository shoppingListRepository;
     private final UserProductHistoryRepository historyRepository;
     private final ProductCatalogRepository catalogRepository;
-    private final CatalogService catalogService; // Adaugat serviciul!
+    private final CatalogService catalogService;
     private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
-    // Constructor actualizat
-    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository,
-                       UserProductHistoryRepository historyRepository, ProductCatalogRepository catalogRepository,
-                       CatalogService catalogService) {
+    private final ItemService self;
+
+    public ItemService(ItemRepository itemRepository, 
+                       ShoppingListRepository shoppingListRepository, 
+                       UserProductHistoryRepository historyRepository,
+                       ProductCatalogRepository catalogRepository,
+                       CatalogService catalogService,
+                       @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.historyRepository = historyRepository;
         this.catalogRepository = catalogRepository;
         this.catalogService = catalogService;
+        this.self = self;
     }
 
     @Transactional
@@ -67,30 +73,34 @@ public class ItemService {
         List<Item> existingItems = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
 
         if (!existingItems.isEmpty()) {
-            Item primaryItem = existingItems.get(0);
-
-            for (int i = 1; i < existingItems.size(); i++) {
-                Item duplicate = existingItems.get(i);
-                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
-                itemRepository.delete(duplicate);
-            }
-
-            primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
-            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-
-            if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
-            if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
-            if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
-            if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
-
-            try {
-                return mapToDTO(itemRepository.save(primaryItem));
-            } catch (org.springframework.dao.DataIntegrityViolationException e) {
-                // In case of a race condition where another thread merged or added it, retry the merge
-                return addItemToList(listId, request, userEmail);
-            }
+            return mergeAndSaveItem(listId, request, userEmail, existingItems);
         }
 
+        return createAndSaveNewItem(listId, request, userEmail, list, normalizedItemName);
+    }
+
+    private ItemDTO mergeAndSaveItem(UUID listId, ItemRequest request, String userEmail, List<Item> existingItems) {
+        Item primaryItem = existingItems.get(0);
+
+        for (int i = 1; i < existingItems.size(); i++) {
+            Item duplicate = existingItems.get(i);
+            primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+            itemRepository.delete(duplicate);
+        }
+
+        primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+        primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+        updateItemFields(primaryItem, request);
+
+        try {
+            return mapToDTO(itemRepository.save(primaryItem));
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
+            return self.addItemToList(listId, request, userEmail);
+        }
+    }
+
+    private ItemDTO createAndSaveNewItem(UUID listId, ItemRequest request, String userEmail, ShoppingList list, String normalizedItemName) {
         Item item = new Item();
         item.setName(normalizedItemName);
         item.setShoppingList(list);
@@ -104,10 +114,16 @@ public class ItemService {
 
         try {
             return mapToDTO(itemRepository.save(item));
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // Concurrent add: item was likely created between find and save. Retry as merge.
-            return addItemToList(listId, request, userEmail);
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
+            return self.addItemToList(listId, request, userEmail);
         }
+    }
+
+    private void updateItemFields(Item item, ItemRequest request) {
+        if (request.getBrand() != null) item.setBrand(request.getBrand());
+        if (request.getPrice() != null) item.setPrice(request.getPrice());
+        if (request.getCategory() != null) item.setCategory(request.getCategory());
+        if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
     }
 
     @Transactional
@@ -143,55 +159,59 @@ public class ItemService {
         String mapKey = normalizedItemName.toLowerCase();
 
         if (batchMap.containsKey(mapKey)) {
-            Item existingInBatch = batchMap.get(mapKey);
-            existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
-            existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
+            mergeIntoBatch(batchMap.get(mapKey), request);
         } else {
-            List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
-
-            if (!existingInDb.isEmpty()) {
-                Item primaryItem = existingInDb.get(0);
-
-                for (int i = 1; i < existingInDb.size(); i++) {
-                    Item duplicate = existingInDb.get(i);
-                    primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
-                    itemRepository.delete(duplicate);
-                }
-
-                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
-                primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-
-                if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
-                if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
-                if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
-                if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
-
-                batchMap.put(mapKey, primaryItem);
-            } else {
-                Item newItem = new Item();
-                newItem.setName(normalizedItemName);
-                newItem.setShoppingList(list);
-                newItem.setBrand(request.getBrand());
-                newItem.setQuantity(request.getQuantity());
-                newItem.setPrice(request.getPrice());
-                newItem.setCategory(request.getCategory());
-                newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-                newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-                newItem.setCreatedAt(System.currentTimeMillis());
-
-                batchMap.put(mapKey, newItem);
-            }
+            resolveAndMergeFromDb(listId, list, request, batchMap, normalizedItemName, mapKey);
         }
+    }
+
+    private void mergeIntoBatch(Item existingInBatch, ItemRequest request) {
+        existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
+        existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
+    }
+
+    private void resolveAndMergeFromDb(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap, String normalizedItemName, String mapKey) {
+        List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+
+        if (!existingInDb.isEmpty()) {
+            Item primaryItem = existingInDb.get(0);
+            for (int i = 1; i < existingInDb.size(); i++) {
+                Item duplicate = existingInDb.get(i);
+                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                itemRepository.delete(duplicate);
+            }
+            primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+            updateItemFields(primaryItem, request);
+            batchMap.put(mapKey, primaryItem);
+        } else {
+            batchMap.put(mapKey, createNewItemForBatch(list, request, normalizedItemName));
+        }
+    }
+
+    private Item createNewItemForBatch(ShoppingList list, ItemRequest request, String normalizedItemName) {
+        Item newItem = new Item();
+        newItem.setName(normalizedItemName);
+        newItem.setShoppingList(list);
+        newItem.setBrand(request.getBrand());
+        newItem.setQuantity(request.getQuantity());
+        newItem.setPrice(request.getPrice());
+        newItem.setCategory(request.getCategory());
+        newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+        newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+        newItem.setCreatedAt(System.currentTimeMillis());
+        saveToHistory(newItem, list.getUser());
+        return newItem;
     }
 
     @Transactional
     public List<ItemDTO> addItemsToListWithRetry(UUID listId, List<ItemRequest> requests, String userEmail) {
         try {
-            return addItemsToList(listId, requests, userEmail);
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return self.addItemsToList(listId, requests, userEmail);
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
             // If any item in the batch fails due to a concurrent addition, retry the whole batch
             // The batch logic naturally handles existing DB items by merging.
-            return addItemsToList(listId, requests, userEmail);
+            return self.addItemsToList(listId, requests, userEmail);
         }
     }
 
@@ -254,30 +274,34 @@ public class ItemService {
         }
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
-            try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                ItemDTO dto = mapper.readValue(payload.getContent(), ItemDTO.class);
-                if (dto.getName() != null) {
-                    if (dto.getName().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
-                    item.setName(dto.getName());
-                }
-                if (dto.getBrand() != null) item.setBrand(dto.getBrand());
-                if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
-                if (dto.getPrice() != null) {
-                    validatePrice(dto.getPrice());
-                    item.setPrice(dto.getPrice());
-                }
-                if (dto.getCategory() != null) item.setCategory(dto.getCategory());
-            } catch (ListValidationException e) {
-                throw e;
-            } catch (Exception _) {
-                if (payload.getContent().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
-                item.setName(payload.getContent());
-            }
+            applySyncContent(item, payload.getContent());
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         return mapToDTO(itemRepository.save(item));
+    }
+
+    private void applySyncContent(Item item, String content) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            ItemDTO dto = mapper.readValue(content, ItemDTO.class);
+            if (dto.getName() != null) {
+                if (dto.getName().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
+                item.setName(dto.getName());
+            }
+            if (dto.getBrand() != null) item.setBrand(dto.getBrand());
+            if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
+            if (dto.getPrice() != null) {
+                validatePrice(dto.getPrice());
+                item.setPrice(dto.getPrice());
+            }
+            if (dto.getCategory() != null) item.setCategory(dto.getCategory());
+        } catch (ListValidationException e) {
+            throw e;
+        } catch (Exception _) {
+            if (content.trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
+            item.setName(content);
+        }
     }
 
     @Transactional

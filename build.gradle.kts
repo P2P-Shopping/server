@@ -20,6 +20,10 @@ repositories {
     mavenCentral()
 }
 
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 val springdocVersion = "3.0.2"
 val jjwtVersion = "0.13.0"
 val testcontainersVersion = "1.21.4"

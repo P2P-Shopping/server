@@ -6,7 +6,6 @@ import com.p2ps.ai.core.AiTool;
 import com.p2ps.ai.core.ToolRegistry;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
-import com.p2ps.catalog.service.CatalogService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,7 +25,6 @@ public class AiService {
     private final AiClient aiClient;
     private final ToolRegistry toolRegistry;
     private final StoreMatchingEngine storeMatchingEngine;
-    private final CatalogService catalogService;
 
     private static final String SYSTEM_PROMPT =
             "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
@@ -51,10 +49,9 @@ public class AiService {
     private static final String RADIUS_METERS = "radius_meters";
     private static final String ITEM_IDS = "item_ids";
 
-    public AiService(AiClient aiClient, CatalogService catalogService, StoreMatchingEngine storeMatchingEngine) {
+    public AiService(AiClient aiClient, StoreMatchingEngine storeMatchingEngine) {
         this.aiClient = aiClient;
         this.toolRegistry = new ToolRegistry();
-        this.catalogService = catalogService;
         this.storeMatchingEngine = storeMatchingEngine;
     }
 

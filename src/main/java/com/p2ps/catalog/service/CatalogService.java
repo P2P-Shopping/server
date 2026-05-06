@@ -1,6 +1,5 @@
 package com.p2ps.catalog.service;
 
-import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.dto.ProductSuggestionDTO;
 import com.p2ps.catalog.model.ProductCatalog;
@@ -12,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class CatalogService {
@@ -79,52 +77,55 @@ public class CatalogService {
         String cleanKeyword = keyword.trim();
         Map<String, ProductSuggestionDTO> suggestionsMap = new LinkedHashMap<>();
 
-        // User history
-        if (userEmail != null && !userEmail.isBlank()) {
-            Optional<Users> userOpt = userRepository.findByEmail(userEmail);
-            if (userOpt.isPresent()) {
-                Users user = userOpt.get();
-                List<UserProductHistoryRepository.HistoryMatch> historyMatches =
-                        userProductHistoryRepository.findMatches(user.getId(), cleanKeyword);
+        addHistorySuggestions(userEmail, cleanKeyword, suggestionsMap);
+        addCatalogSuggestions(cleanKeyword, suggestionsMap);
 
-                for (UserProductHistoryRepository.HistoryMatch match : historyMatches) {
-                    String bestName = ProductStringUtils.firstNonBlank(
-                            match.getItemName(), match.getCatalogSpecificName(), match.getCatalogGenericName()
-                    );
-                    if (bestName != null && !suggestionsMap.containsKey(bestName)) {
-                        suggestionsMap.put(bestName, new ProductSuggestionDTO(
-                                bestName,
-                                match.getBrand(),
-                                match.getCategory(),
-                                match.getPrice(),
-                                "1"
-                        ));
-                    }
-                }
-            }
-        }
+        return suggestionsMap.values().stream().limit(10).toList();
+    }
 
-        // Global catalog
-        if (suggestionsMap.size() < 10) {
-            List<ProductCatalog> catalogMatches = catalogRepository.searchByKeyword(cleanKeyword);
+    private void addHistorySuggestions(String userEmail, String keyword, Map<String, ProductSuggestionDTO> suggestionsMap) {
+        if (userEmail == null || userEmail.isBlank()) return;
 
-            for (ProductCatalog catalogMatch : catalogMatches) {
+        userRepository.findByEmail(userEmail).ifPresent(user -> {
+            List<UserProductHistoryRepository.HistoryMatch> historyMatches =
+                    userProductHistoryRepository.findMatches(user.getId(), keyword);
+
+            for (UserProductHistoryRepository.HistoryMatch match : historyMatches) {
                 String bestName = ProductStringUtils.firstNonBlank(
-                        catalogMatch.getSpecificName(), catalogMatch.getGenericName()
+                        match.getItemName(), match.getCatalogSpecificName(), match.getCatalogGenericName()
                 );
-                if (bestName != null && !suggestionsMap.containsKey(bestName)) {
-                    suggestionsMap.put(bestName, new ProductSuggestionDTO(
-                            bestName,
-                            catalogMatch.getBrand(),
-                            catalogMatch.getCategory(),
-                            catalogMatch.getEstimatedPrice(),
+                if (bestName != null) {
+                    suggestionsMap.computeIfAbsent(bestName, k -> new ProductSuggestionDTO(
+                            k,
+                            match.getBrand(),
+                            match.getCategory(),
+                            match.getPrice(),
                             "1"
                     ));
                 }
-                if (suggestionsMap.size() >= 10) break;
             }
-        }
+        });
+    }
 
-        return suggestionsMap.values().stream().limit(10).collect(Collectors.toList());
+    private void addCatalogSuggestions(String keyword, Map<String, ProductSuggestionDTO> suggestionsMap) {
+        if (suggestionsMap.size() >= 10) return;
+
+        List<ProductCatalog> catalogMatches = catalogRepository.searchByKeyword(keyword);
+
+        for (ProductCatalog catalogMatch : catalogMatches) {
+            String bestName = ProductStringUtils.firstNonBlank(
+                    catalogMatch.getSpecificName(), catalogMatch.getGenericName()
+            );
+            if (bestName != null) {
+                suggestionsMap.computeIfAbsent(bestName, k -> new ProductSuggestionDTO(
+                        k,
+                        catalogMatch.getBrand(),
+                        catalogMatch.getCategory(),
+                        catalogMatch.getEstimatedPrice(),
+                        "1"
+                ));
+            }
+            if (suggestionsMap.size() >= 10) break;
+        }
     }
 }

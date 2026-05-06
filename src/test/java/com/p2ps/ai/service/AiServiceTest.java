@@ -57,7 +57,7 @@ class AiServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         // Updated constructor to include catalogService
-        aiService = new AiService(aiClient, catalogService, storeMatchingEngine);
+        aiService = new AiService(aiClient, storeMatchingEngine);
 
         Field toolRegistryField = AiService.class.getDeclaredField("toolRegistry");
         toolRegistryField.setAccessible(true);
@@ -186,7 +186,7 @@ class AiServiceTest {
         byte[] jpegHeader = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
 
         // Updated constructor to include catalogService
-        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+        AiService service = new AiService(aiClient, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, jpegHeader);
@@ -199,7 +199,7 @@ class AiServiceTest {
         byte[] invalid = "not-an-image".getBytes();
 
         // Updated constructor to include catalogService
-        AiService service = new AiService(aiClient, catalogService, storeMatchingEngine);
+        AiService service = new AiService(aiClient, storeMatchingEngine);
         java.lang.reflect.Method method = service.getClass().getDeclaredMethod("detectMimeTypeSecurely", byte[].class);
         method.setAccessible(true);
         String result = (String) method.invoke(service, invalid);
