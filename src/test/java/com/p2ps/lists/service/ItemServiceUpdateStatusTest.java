@@ -104,16 +104,18 @@ class ItemServiceUpdateStatusTest {
     }
 
     @Test
-    void updateItemStatusShouldReuseCatalogMatchWhenFound() {
+    void updateItemStatusShouldReuseCatalogMatchWhenFoundAndSameBrand() {
         UUID itemId = UUID.randomUUID();
         Item item = buildItem();
         item.setName("Milk");
+        item.setBrand("Brand A"); // Same brand as catalog
         Users user = item.getShoppingList().getUser();
         user.setId(10);
 
         ProductCatalog catalogProduct = new ProductCatalog();
         catalogProduct.setId(UUID.randomUUID());
         catalogProduct.setSpecificName("Milk 1L");
+        catalogProduct.setBrand("Brand A"); // Match brand
 
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -157,6 +159,47 @@ class ItemServiceUpdateStatusTest {
                 "Local",
                 "Altele",
                 new BigDecimal("12.50")
+        );
+        verify(historyRepository).save(any(UserProductHistory.class));
+    }
+
+    @Test
+    void updateItemStatusShouldCreateCatalogEntryWhenMatchExistsButDifferentBrand() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem();
+        item.setName("Milk");
+        item.setBrand("Different Brand"); // Different brand than what the catalog has
+        item.setPrice(new BigDecimal("5.00"));
+        item.setCategory("Dairy");
+        Users user = item.getShoppingList().getUser();
+        user.setId(12);
+
+        // This is what the fuzzy search finds, but the brand is different
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setSpecificName("Milk 1L");
+        catalogProduct.setBrand("Brand A");
+
+        // The newly created catalog product
+        ProductCatalog newCatalogProduct = new ProductCatalog();
+        newCatalogProduct.setId(UUID.randomUUID());
+        newCatalogProduct.setSpecificName("Milk");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(12, "Milk")).thenReturn(null);
+        when(catalogRepository.searchByKeywordFuzzy("Milk")).thenReturn(java.util.List.of(catalogProduct));
+        when(catalogService.recordPurchase("Milk", "Milk", "Different Brand", "Dairy", new BigDecimal("5.00")))
+                .thenReturn(newCatalogProduct);
+
+        itemService.updateItemStatus(itemId, true, 123L);
+
+        verify(catalogService).recordPurchase(
+                "Milk",
+                "Milk",
+                "Different Brand",
+                "Dairy",
+                new BigDecimal("5.00")
         );
         verify(historyRepository).save(any(UserProductHistory.class));
     }

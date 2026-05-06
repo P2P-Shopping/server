@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,11 +34,12 @@ class DatabaseListSyncStoreTest {
         updated.setChecked(true);
         updated.setLastUpdatedTimestamp(123L);
 
-        when(itemService.updateItemFromSync(any(UUID.class), any())).thenReturn(updated);
+        when(itemService.updateItemStatus(any(UUID.class), anyBoolean(), anyLong())).thenReturn(updated);
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
         payload.setItemId(itemId.toString());
+        payload.setChecked(true);
         payload.setTimestamp(100L);
 
         ListUpdatePayload result = store.apply("list-1", payload);
@@ -52,12 +55,13 @@ class DatabaseListSyncStoreTest {
         DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
         UUID itemId = UUID.randomUUID();
 
-        when(itemService.updateItemFromSync(any(UUID.class), any()))
+        when(itemService.updateItemStatus(any(UUID.class), anyBoolean(), any()))
                 .thenThrow(new org.springframework.dao.OptimisticLockingFailureException("conflict"));
 
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
         payload.setItemId(itemId.toString());
+        payload.setChecked(true);
 
         ListUpdatePayload result = store.apply("list-1", payload);
 

@@ -14,6 +14,8 @@ import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
+import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.catalog.model.ProductCatalog;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private ItemRepository itemRepository;
+
+    @Mock
+    private UserProductHistoryRepository historyRepository;
 
     @InjectMocks
     private ShoppingListService shoppingListService;
@@ -564,7 +569,7 @@ class ShoppingListServiceTest {
     }
 
     @Test
-    void markReceiptItemPurchased_shouldMarkMatchingItem() {
+    void markReceiptItemPurchased_shouldMarkMatchingItemAndSaveToHistory() {
         String userEmail = "ana@example.com";
         Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
         user.setId(1);
@@ -588,6 +593,7 @@ class ShoppingListServiceTest {
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         org.mockito.Mockito.lenient().when(shoppingListRepository.save(any(ShoppingList.class))).thenReturn(list);
         org.mockito.Mockito.lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(1, "Lapte")).thenReturn(null);
 
         shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
 
@@ -595,6 +601,7 @@ class ShoppingListServiceTest {
         assertEquals("Zuzu", item.getBrand());
         assertEquals(new BigDecimal("10.50"), item.getPrice());
         verify(itemRepository).save(item);
+        verify(historyRepository).save(any(UserProductHistory.class));
     }
 
     @Test
@@ -633,6 +640,7 @@ class ShoppingListServiceTest {
 
         assertTrue(item.isChecked());
         assertEquals(catalogProduct, item.getCatalogItem());
+        verify(historyRepository).save(any(UserProductHistory.class));
     }
 
     @Test
@@ -668,6 +676,7 @@ class ShoppingListServiceTest {
 
         assertTrue(uncheckedItem.isChecked());
         verify(itemRepository).save(uncheckedItem);
+        verify(historyRepository).save(any(UserProductHistory.class));
     }
 
     @Test
@@ -753,6 +762,7 @@ class ShoppingListServiceTest {
         shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
 
         assertEquals("Dairy", item.getCategory());
+        verify(historyRepository).save(any(UserProductHistory.class));
     }
 
     @Test

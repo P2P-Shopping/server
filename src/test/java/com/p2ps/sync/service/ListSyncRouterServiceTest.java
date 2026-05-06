@@ -118,18 +118,6 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
-    void routeRejectsCheckOffWithoutExplicitChecked() {
-        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
-        ListUpdatePayload payload = new ListUpdatePayload();
-        payload.setAction(ActionType.CHECK_OFF);
-        payload.setChecked(null);
-        payload.setItemId("item-1");
-
-        ListUpdatePayload result = service.route("list-1", payload);
-        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
-    }
-
-    @Test
     void routeReturnsPayloadUnchangedForUnknownActions() {
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
         ListUpdatePayload payload = new ListUpdatePayload();

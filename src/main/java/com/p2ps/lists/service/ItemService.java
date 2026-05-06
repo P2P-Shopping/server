@@ -249,6 +249,7 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
+        boolean wasChecked = item.isChecked();
         if (payload.getChecked() != null) {
             item.setChecked(payload.getChecked());
         }
@@ -277,6 +278,12 @@ public class ItemService {
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        
+        // SALVĂM ÎN ISTORIC/CATALOG DOAR DACĂ A FOST BIFAT (CUMPĂRAT) via SYNC
+        if (!wasChecked && item.isChecked()) {
+            saveToHistory(item, item.getShoppingList().getUser());
+        }
+        
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -380,10 +387,13 @@ public class ItemService {
             catalogItem = resolveCatalogByFuzzySearch(itemName);
         }
 
-        // 2. Daca tot nu l-am gasit, INSEAMNA CA E NOU! Il cream noi acum!
-        if (catalogItem == null) {
-            String categoryToSave = (item.getCategory() != null && !item.getCategory().isBlank())
-                    ? item.getCategory() : "Altele";
+        String categoryToSave = (item.getCategory() != null && !item.getCategory().isBlank())
+                ? item.getCategory() : "Altele";
+
+        // 2. Daca tot nu l-am gasit INSEAMNA CA E NOU! Il cream noi acum!
+        // SAU daca l-am gasit, dar item-ul curent are un alt brand fata de catalog, cream un produs nou pentru noul brand
+        if (catalogItem == null || 
+            (item.getBrand() != null && !item.getBrand().isBlank() && catalogItem.getBrand() != null && !catalogItem.getBrand().equalsIgnoreCase(item.getBrand()))) {
 
             catalogItem = catalogService.recordPurchase(
                     itemName,            // genericName

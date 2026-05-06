@@ -16,6 +16,8 @@ import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
+import com.p2ps.lists.model.UserProductHistory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +32,13 @@ public class ShoppingListService {
     private final UserRepository userRepository;
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
     private final ItemRepository itemRepository;
+    private final UserProductHistoryRepository historyRepository;
 
-    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository) {
+    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, UserProductHistoryRepository historyRepository) {
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
+        this.historyRepository = historyRepository;
     }
 
     @Transactional
@@ -199,6 +203,34 @@ public class ShoppingListService {
         }
 
         itemRepository.save(matchedItem);
+
+        // Also save to user product history
+        saveToUserHistory(matchedItem, list.getUser());
+    }
+
+    private void saveToUserHistory(Item item, Users user) {
+        if (user == null || user.getId() == null) {
+            return;
+        }
+        
+        String itemName = item.getName();
+        if (itemName == null || itemName.isBlank()) {
+            return;
+        }
+
+        UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
+        if (history == null) {
+            history = new UserProductHistory();
+            history.setUser(user);
+            history.setCustomName(itemName);
+        }
+
+        if (item.getCatalogItem() != null) {
+            history.setCatalogItem(item.getCatalogItem());
+        }
+
+        history.setLastAddedTimestamp(System.currentTimeMillis());
+        historyRepository.save(history);
     }
 
     private boolean matchesReceiptItem(Item item, ParsedItemResponse receiptItem, ProductCatalog catalogProduct) {
