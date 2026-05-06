@@ -4,9 +4,9 @@ import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
 import com.p2ps.ai.core.AiTool;
 import com.p2ps.ai.core.ToolRegistry;
-import com.p2ps.catalog.service.CatalogService;
-import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.exception.AiProcessingException;
+import com.p2ps.service.StoreMatchingEngine;
+import com.p2ps.catalog.service.CatalogService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,29 +25,29 @@ public class AiService {
 
     private final AiClient aiClient;
     private final ToolRegistry toolRegistry;
-    private final CatalogService catalogService;
     private final StoreMatchingEngine storeMatchingEngine;
+    private final CatalogService catalogService;
 
     private static final String SYSTEM_PROMPT =
             "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
-            "LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian. " +
-            "VISUAL RULES (CRITICAL): " +
-            "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
-            "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
-            "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
-            "RULE 1 (DYNAMIC SEARCH): You have access to tools to search our product catalog and find nearby stores. ALWAYS search the catalog for generic ingredients to map them to real-world products. " +
-            "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry instead of leaving them null. Only leave catalogId null if no relevant catalog product exists. " +
-            "RULE 1B (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
-            "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
-            "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'NORMAL'. If the user describes a dish, dessert, meal, or recipe idea such as negresa, clatite, soup, pasta, cake, or cookies, classify it as 'RECIPE' even if the word 'recipe' is not explicitly used. For 'FREQUENT', assign categories (Dairy, Produce, etc.). " +
-            "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
+                    "LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian. " +
+                    "VISUAL RULES (CRITICAL): " +
+                    "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
+                    "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
+                    "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
+                    "RULE 1 (DYNAMIC SEARCH): You have access to tools to search our product catalog and find nearby stores. ALWAYS search the catalog for generic ingredients to map them to real-world products. " +
+                    "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry. Only leave catalogId null if no relevant catalog product exists. " +
+                    "RULE 1B (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
+                    "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
+                    "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'. " +
+                    "RECIPE LOGIC: If the user describes a dish, dessert, meal, or recipe idea (e.g., negresa, clatite, ciorba, pasta, cake), classify it as 'RECIPE' even if the word 'recipe' is not used. " +
+                    "CRITICAL CATEGORY RULE: The 'category' field MUST be chosen EXACTLY from this strict list: [Fructe și Legume, Lactate și Ouă, Carne, Băcănie, Dulciuri, Curățenie, Altele]. DO NOT invent categories! " +
+                    "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
     private static final String FINAL_JSON_PROMPT =
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
-            "{\"listType\":\"RECIPE|FREQUENT|NORMAL\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
-            "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. If the user described a dish or recipe, listType must be RECIPE. Do not add markdown, explanations, or prose.";
-
+                    "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
+                    "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. Remember to use the STRICT category list. Do not add markdown, explanations, or prose.";
     private static final String DESCRIPTION = "description";
-    private static final String KEYWORD = "keyword";
     private static final String RADIUS_METERS = "radius_meters";
     private static final String ITEM_IDS = "item_ids";
 
@@ -60,22 +60,6 @@ public class AiService {
 
     @PostConstruct
     public void initTools() {
-        toolRegistry.register(new AiTool(
-                "search_catalog",
-                "Search the global product catalog for a generic item or keyword and return the best matching real products with ids, brands, and specific names.",
-                Map.of(
-                        "type", "OBJECT",
-                        "properties", Map.of(
-                                KEYWORD, Map.of("type", "STRING", DESCRIPTION, "The product name or keyword to search for.")
-                        ),
-                        "required", List.of(KEYWORD)
-                ),
-                (args, context) -> {
-                    String keyword = (String) args.get(KEYWORD);
-                    return catalogService.searchProductsByName(keyword);
-                }
-        ));
-
         toolRegistry.register(new AiTool(
                 "find_optimal_store",
                 "Find the best nearby store based on user location and item availability.",
@@ -94,14 +78,20 @@ public class AiService {
                     int radius = (args.get(RADIUS_METERS) != null) ? (Integer) args.get(RADIUS_METERS) : 5000;
                     Object rawItemIds = args.get(ITEM_IDS);
                     if (!(rawItemIds instanceof List<?> rawIdList)) return "Item IDs not provided or invalid.";
-                    List<String> idStrings = rawIdList.stream().map(String.class::cast).toList();
+                    
+                    @SuppressWarnings("unchecked")
+                    List<String> idStrings = rawIdList.stream()
+                            .filter(String.class::isInstance)
+                            .map(String.class::cast)
+                            .toList();
+                            
                     List<UUID> itemIds = idStrings.stream().map(UUID::fromString).toList();
                     return storeMatchingEngine.findOptimalStores(lat, lng, radius, itemIds);
                 }
         ));
     }
 
-    public String extractFromMultimodal(MultipartFile image, String text, Double latitude, Double longitude) {
+    public String extractFromMultimodal(MultipartFile image, String text, Double latitude, Double longitude, String userEmail) {
         List<AiMessage> messages = new ArrayList<>();
         List<AiMessage.Part> userParts = new ArrayList<>();
 
@@ -131,39 +121,51 @@ public class AiService {
         Map<String, Object> context = new HashMap<>();
         context.put("latitude", latitude);
         context.put("longitude", longitude);
+        context.put("userEmail", userEmail);
 
         return processAiResponseLoop(messages, context);
     }
 
     private String processAiResponseLoop(List<AiMessage> messages, Map<String, Object> context) {
-        while (true) {
-            AiMessage response = aiClient.generateResponse(messages, toolRegistry.getAvailableTools());
-            messages.add(response);
+        // 1. Facem un SINGUR apel rapid către AI (scutim quota și timp)
+        AiMessage response = aiClient.generateResponse(messages, toolRegistry.getAvailableTools());
+        messages.add(response);
 
-            List<AiMessage.ToolCallPart> toolCalls = response.parts().stream()
-                    .filter(p -> p instanceof AiMessage.ToolCallPart)
-                    .map(p -> (AiMessage.ToolCallPart) p)
-                    .toList();
+        List<AiMessage.ToolCallPart> toolCalls = response.parts().stream()
+                .filter(p -> p instanceof AiMessage.ToolCallPart)
+                .map(p -> (AiMessage.ToolCallPart) p)
+                .toList();
 
-            if (!toolCalls.isEmpty()) {
-                List<AiMessage.Part> toolResponses = new ArrayList<>();
-                for (AiMessage.ToolCallPart call : toolCalls) {
-                    Object result = toolRegistry.executeTool(call.name(), call.arguments(), context);
-                    toolResponses.add(new AiMessage.ToolResponsePart(call.name(), result));
-                }
-                messages.add(new AiMessage("function", toolResponses));
-            } else {
-                String rawResponse = response.parts().stream()
-                        .filter(p -> p instanceof AiMessage.TextPart)
-                        .map(p -> ((AiMessage.TextPart) p).text())
-                        .collect(Collectors.joining("\n"));
-                return finalizeStructuredJson(messages, rawResponse);
+        // 2. Dacă a folosit tool-ul de locație (find_optimal_store), îl rulăm
+        if (!toolCalls.isEmpty()) {
+            List<AiMessage.Part> toolResponses = new ArrayList<>();
+            for (AiMessage.ToolCallPart call : toolCalls) {
+                Object result = toolRegistry.executeTool(call.name(), call.arguments(), context);
+                toolResponses.add(new AiMessage.ToolResponsePart(call.name(), result));
             }
+            messages.add(new AiMessage("function", toolResponses));
+
+            // Lăsăm AI-ul să includă magazinul în textul final
+            AiMessage locationResponse = aiClient.generateResponse(messages, Collections.emptyList());
+            String rawResponse = locationResponse.parts().stream()
+                    .filter(p -> p instanceof AiMessage.TextPart)
+                    .map(p -> ((AiMessage.TextPart) p).text())
+                    .collect(Collectors.joining("\n"));
+            return finalizeStructuredJson(messages, rawResponse);
         }
+
+        // 3. Dacă nu e nevoie de locație, returnăm instant textul generat!
+        String rawResponse = response.parts().stream()
+                .filter(p -> p instanceof AiMessage.TextPart)
+                .map(p -> ((AiMessage.TextPart) p).text())
+                .collect(Collectors.joining("\n"));
+
+        return finalizeStructuredJson(messages, rawResponse);
     }
 
     public String extractIngredientsAsJson(String rawRecipeText) {
-        return extractFromMultimodal(null, rawRecipeText, null, null);
+        // Punem null ca userEmail aici pentru cazurile simple fara autentificare
+        return extractFromMultimodal(null, rawRecipeText, null, null, null);
     }
 
     private String detectMimeTypeSecurely(byte[] bytes) {
@@ -182,7 +184,7 @@ public class AiService {
                 reader.dispose();
             }
         } catch (IOException _) {
-            // IOException expected for invalid/non-image data; return null to indicate unknown type
+            // Treat unreadable bytes as an unsupported image format.
         }
         return null;
     }

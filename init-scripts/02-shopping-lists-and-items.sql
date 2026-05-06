@@ -1,4 +1,16 @@
+
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
+CREATE OR REPLACE FUNCTION public.f_unaccent(input_text TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+STRICT
+AS $$
+    SELECT public.unaccent('public.unaccent', input_text)
+$$;
 
 CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     id UUID PRIMARY KEY,
@@ -11,16 +23,19 @@ CREATE TABLE IF NOT EXISTS p2p_product_catalog (
     );
 
 CREATE TABLE IF NOT EXISTS user_product_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     catalog_id UUID REFERENCES p2p_product_catalog(id) ON DELETE SET NULL,
     custom_name VARCHAR(255) NOT NULL,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_added_timestamp BIGINT
     );
 
-CREATE INDEX idx_user_history_user_id ON user_product_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_product_history(user_id);
 -- Adaugam index de trigrame pe numele custom pentru a pastra cautarea rapida
-CREATE INDEX trgm_idx_user_history_custom_name ON user_product_history USING gin (lower(custom_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_user_history_custom_name
+    ON user_product_history USING gin (lower(custom_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_user_history_custom_name_unaccent
+    ON user_product_history USING gin (f_unaccent(lower(custom_name)) gin_trgm_ops);
 
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10, 2);
@@ -43,7 +58,7 @@ CREATE TABLE IF NOT EXISTS shopping_list_collaborators (
     PRIMARY KEY (shopping_list_id, user_id),
     CONSTRAINT fk_collaborators_list FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE,
     CONSTRAINT fk_collaborators_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
+);
 
 
 ALTER TABLE shopping_lists ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'NORMAL';
@@ -82,3 +97,10 @@ CREATE INDEX IF NOT EXISTS idx_items_name_trgm ON items USING gin (LOWER(name) g
 CREATE INDEX IF NOT EXISTS idx_catalog_generic_name_trgm ON p2p_product_catalog USING gin (LOWER(generic_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_specific_name_trgm ON p2p_product_catalog USING gin (LOWER(specific_name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_catalog_brand_trgm ON p2p_product_catalog USING gin (LOWER(COALESCE(brand, '')) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_generic_name_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(generic_name)) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_specific_name_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(specific_name)) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS trgm_idx_catalog_brand_unaccent
+    ON p2p_product_catalog USING gin (f_unaccent(lower(COALESCE(brand, ''))) gin_trgm_ops);
+

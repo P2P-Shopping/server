@@ -1,5 +1,8 @@
 package com.p2ps.lists.service;
 
+import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.repository.ProductCatalogRepository;
+import com.p2ps.catalog.service.CatalogService; // Adaugat!
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -12,6 +15,8 @@ import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -25,21 +30,28 @@ import java.util.regex.Pattern;
 @Service
 public class ItemService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ItemService.class);
     private static final String ITEM_NOT_FOUND = "Item not found";
 
     private final ItemRepository itemRepository;
     private final ShoppingListRepository shoppingListRepository;
     private final UserProductHistoryRepository historyRepository;
+    private final ProductCatalogRepository catalogRepository;
+    private final CatalogService catalogService;
     private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     @Autowired
     @Lazy
     private ItemService self;
 
-    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository, UserProductHistoryRepository historyRepository) {
+    public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository,
+                       UserProductHistoryRepository historyRepository, ProductCatalogRepository catalogRepository,
+                       CatalogService catalogService) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.historyRepository = historyRepository;
+        this.catalogRepository = catalogRepository;
+        this.catalogService = catalogService;
     }
 
     @Transactional
@@ -99,7 +111,6 @@ public class ItemService {
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
 
-        saveToHistory(item.getName(), list.getUser());
         try {
             return mapToDTO(itemRepository.save(item));
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
@@ -188,7 +199,7 @@ public class ItemService {
         newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
-        saveToHistory(newItem.getName(), list.getUser());
+        saveToHistory(newItem, list.getUser());
         return newItem;
     }
 
@@ -212,7 +223,6 @@ public class ItemService {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
         }
 
-
         if (request.getName() != null) {
             if (request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
@@ -233,6 +243,7 @@ public class ItemService {
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
+
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -243,6 +254,11 @@ public class ItemService {
 
         item.setChecked(checked);
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+        // SALVĂM ÎN ISTORIC/CATALOG DOAR DACĂ A FOST BIFAT (CUMPĂRAT)
+        if (checked) {
+            saveToHistory(item, item.getShoppingList().getUser());
+        }
 
         return mapToDTO(itemRepository.save(item));
     }
@@ -371,14 +387,62 @@ public class ItemService {
         }
     }
 
-    private void saveToHistory(String itemName, com.p2ps.auth.model.Users user) {
+    private void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
+        String itemName = item.getName();
         UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
         if (history == null) {
             history = new UserProductHistory();
             history.setUser(user);
             history.setCustomName(itemName);
         }
+
+        ProductCatalog catalogItem = item.getCatalogItem();
+
+        // 1. Cautam in catalogul global prin fuzzy search
+        if (catalogItem == null) {
+            catalogItem = resolveCatalogByFuzzySearch(itemName);
+        }
+
+        // 2. Daca tot nu l-am gasit, INSEAMNA CA E NOU! Il cream noi acum!
+        if (catalogItem == null) {
+            String categoryToSave = (item.getCategory() != null && !item.getCategory().isBlank())
+                    ? item.getCategory() : "Altele";
+
+            catalogItem = catalogService.recordPurchase(
+                    itemName,            // genericName
+                    itemName,            // specificName
+                    item.getBrand(),     // brand
+                    categoryToSave,      // category
+                    item.getPrice()      // price
+            );
+
+            // Atasam noul produs catalogat inapoi pe item
+            item.setCatalogItem(catalogItem);
+            logger.info("Created new global catalog entry for a purchased item.");
+        }
+
+        // 3. Salvam in history cu catalog_id-ul aferent
+        if (catalogItem != null) {
+            history.setCatalogItem(catalogItem);
+        }
+
         history.setLastAddedTimestamp(System.currentTimeMillis());
         historyRepository.save(history);
+    }
+
+    /**
+     * Performs a fuzzy search against the global product catalog (p2p_product_catalog)
+     * using pg_trgm similarity matching. Returns the best match or null if nothing found.
+     */
+    private ProductCatalog resolveCatalogByFuzzySearch(String itemName) {
+        List<ProductCatalog> matches = catalogRepository.searchByKeywordFuzzy(itemName);
+        if (matches != null && !matches.isEmpty()) {
+            ProductCatalog bestMatch = matches.get(0);
+            logger.debug("Fuzzy catalog match for '{}': {} (id={})",
+                    itemName, bestMatch.getSpecificName(), bestMatch.getId());
+            return bestMatch;
+        }
+        logger.debug("No fuzzy catalog match found for '{}', leaving catalogId as null", itemName);
+        return null;
     }
 }
