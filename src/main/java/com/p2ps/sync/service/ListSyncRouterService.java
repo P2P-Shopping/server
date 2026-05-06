@@ -2,11 +2,17 @@ package com.p2ps.sync.service;
 
 import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
+import com.p2ps.sync.concurrency.RoomManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,10 +23,12 @@ public class ListSyncRouterService {
     private static final Logger logger = LoggerFactory.getLogger(ListSyncRouterService.class);
 
     private final ListSyncStore listSyncStore;
+    private final LockingListSyncStore lockingWrapper;
 
     @Autowired
     public ListSyncRouterService(ListSyncStore listSyncStore) {
-        this.listSyncStore = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
+        this.lockingWrapper = new LockingListSyncStore(Objects.requireNonNull(listSyncStore, "listSyncStore"));
+        this.listSyncStore = this.lockingWrapper;
     }
 
     /**
@@ -62,12 +70,53 @@ public class ListSyncRouterService {
         };
     }
 
+    /**
+     * Processes a batch of updates chronologically through the concurrency controller.
+     */
+    public List<ListUpdatePayload> routeBatch(String listId, List<ListUpdatePayload> payloads) {
+        if (payloads == null || payloads.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        logger.info("Processing batch of {} updates", payloads.size());
+
+        // Sort by client-side timestamp to ensure chronological processing
+        List<ListUpdatePayload> sortedPayloads = payloads.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingLong(p -> p.getTimestamp() != null ? p.getTimestamp() : 0L))
+                .toList();
+
+        List<ListUpdatePayload> results = new ArrayList<>();
+        for (ListUpdatePayload p : sortedPayloads) {
+            try {
+                results.add(route(listId, p));
+            } catch (Exception e) {
+                logger.error("Failed to route payload {} for list {}: {}", p.getItemId(), listId, e.getMessage());
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Periodic task to evict idle locks and rooms to prevent memory leaks.
+     */
+    @Scheduled(fixedRate = 60000) // Every minute
+    public void performCleanup() {
+        lockingWrapper.cleanup();
+    }
+
+    private static final class InMemoryListSyncStore implements ListSyncStore {
+        @Override
+        public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
+            return payload;
+        }
+    }
+
+
     private static final class LockingListSyncStore implements ListSyncStore {
 
-        private static final long LOCK_WINDOW_MILLIS = 50L;
-
         private final ListSyncStore delegate;
-        private final Map<String, LockState> locks = new ConcurrentHashMap<>();
+        private final Map<String, RoomManager> rooms = new ConcurrentHashMap<>();
 
         private LockingListSyncStore(ListSyncStore delegate) {
             this.delegate = Objects.requireNonNull(delegate, "delegate");
@@ -75,79 +124,26 @@ public class ListSyncRouterService {
 
         @Override
         public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
-            String itemId = payload.getItemId();
-            if (itemId == null || itemId.isBlank()) {
-                return delegate.apply(listId, payload);
+            RoomManager room = rooms.computeIfAbsent(listId, id -> new RoomManager());
+            ListUpdatePayload processed = room.processUpdate(payload);
+            
+            // If the concurrency controller rejected the update, return immediately without persisting
+            if (ListUpdatePayload.STATUS_REJECTION.equals(processed.getStatus())) {
+                return processed;
             }
-
-            String key = listId + "::" + itemId;
-            LockState state = locks.computeIfAbsent(key, ignored -> new LockState());
-            synchronized (state) {
-                long previousLastAccessed = state.lastAccessedMillis;
-
-                long waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
-                while (waitMillis > 0) {
-                    try {
-                        state.wait(waitMillis);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("Interrupted while waiting for item lock: " + key, e);
-                    }
-                    waitMillis = state.lockedUntilMillis - System.currentTimeMillis();
-                }
-
-                long currentTime = System.currentTimeMillis();
-                state.lockedUntilMillis = currentTime + LOCK_WINDOW_MILLIS;
-                Long timestamp = payload.getTimestamp();
-                if (timestamp != null && timestamp <= state.lastTimestamp) {
-                    payload.setChecked(state.checked);
-                    payload.setTimestamp(state.timestamp);
-                    payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
-                    state.notifyAll();
-                    state.lastAccessedMillis = currentTime;
-                    evictIfNeeded(key, state, false, previousLastAccessed, currentTime);
-                    return payload;
-                }
-
-                ListUpdatePayload routed = delegate.apply(listId, payload);
-                if (!ListUpdatePayload.STATUS_REJECTION.equals(routed.getStatus())) {
-                    if (routed.getChecked() != null) {
-                        state.checked = routed.getChecked();
-                    }
-                    if (routed.getTimestamp() != null) {
-                        state.timestamp = routed.getTimestamp();
-                        state.lastTimestamp = routed.getTimestamp();
-                    }
-                }
-
-                state.notifyAll();
-                state.lastAccessedMillis = currentTime;
-                boolean successfulDelete = payload.getAction() == ActionType.DELETE
-                        && ListUpdatePayload.STATUS_SUCCESS.equals(routed.getStatus());
-                evictIfNeeded(key, state, successfulDelete, previousLastAccessed, currentTime);
-                return routed;
-            }
+            
+            // Otherwise, delegate to the persistence store
+            return delegate.apply(listId, processed);
         }
 
-        private void evictIfNeeded(String key, LockState state, boolean successfulDelete,
-                                   long previousLastAccessed, long currentTime) {
-            if (successfulDelete || (!state.isLocked(currentTime)
-                    && previousLastAccessed > 0
-                    && currentTime - previousLastAccessed > LOCK_WINDOW_MILLIS)) {
-                locks.remove(key, state);
-            }
-        }
-
-        private static final class LockState {
-            private long lockedUntilMillis;
-            private long lastTimestamp;
-            private long lastAccessedMillis;
-            private Boolean checked;
-            private Long timestamp;
-
-            private boolean isLocked(long currentTime) {
-                return lockedUntilMillis > currentTime;
-            }
+        public void cleanup() {
+            logger.debug("Starting concurrency lock cleanup for {} rooms", rooms.size());
+            rooms.keySet().forEach(listId -> rooms.compute(listId, (id, rm) -> {
+                if (rm == null) return null;
+                rm.cleanupIdleLocks();
+                return rm.getActiveLockCount() == 0 ? null : rm;
+            }));
         }
     }
 }
+
