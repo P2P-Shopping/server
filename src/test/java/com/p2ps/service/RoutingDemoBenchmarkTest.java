@@ -84,11 +84,11 @@ class RoutingDemoBenchmarkTest {
 
         // 5. Printăm dovada de performanță exact așa cum se cere
         System.out.println("\n--- REZULTATE BENCHMARK ---");
-        System.out.printf(" Timp procesare paralela (100 request-uri masive): %d ms\n", totalTimeMs);
+        System.out.printf(" Timp procesare paralela (100 request-uri masive): %d ms%n", totalTimeMs);
         System.out.println("-------------------------------------------------------------------------");
-        System.out.printf(" Distanta NN (Nearest Neighbor): %.2f metri\n", distNnAna);
-        System.out.printf(" Distanta 3-Opt (Optimizata)  : %.2f metri\n", dist3OptAna);
-        System.out.printf(" CONCLUZIE: Algoritmul 3-Opt a redus distanța cu %.2f%% față de NN!\n", improvementAna);
+        System.out.printf(" Distanta NN (Nearest Neighbor): %.2f metri%n", distNnAna);
+        System.out.printf(" Distanta 3-Opt (Optimizata)  : %.2f metri%n", dist3OptAna);
+        System.out.printf(" CONCLUZIE: Algoritmul 3-Opt a redus distanța cu %.2f%% față de NN!%n", improvementAna);
         System.out.println("=========================================================================\n");
 
         // 6. Validări de test (pentru a-l ține pe verde)
