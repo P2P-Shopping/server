@@ -16,6 +16,13 @@ import java.util.UUID;
 @Setter
 public class ShoppingList {
 
+    public ShoppingList() {}
+
+    public ShoppingList(String title, Users user) {
+        this.title = title;
+        this.user = user;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
