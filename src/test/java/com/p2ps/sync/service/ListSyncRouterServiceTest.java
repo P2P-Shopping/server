@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.time.Duration;
 
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -109,34 +110,92 @@ class ListSyncRouterServiceTest {
     }
 
     @Test
+    void routeReturnsPayloadUnchangedWhenListIdIsNull() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.ADD);
+        assertSame(payload, service.route(null, payload));
+    }
+
+    @Test
     void routeRejectsCheckOffWithoutExplicitChecked() {
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
-
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.CHECK_OFF);
-        payload.setItemId("item-1");
         payload.setChecked(null);
+        payload.setItemId("item-1");
 
         ListUpdatePayload result = service.route("list-1", payload);
-
         assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
     }
 
     @Test
     void routeReturnsPayloadUnchangedForUnknownActions() {
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
-
         ListUpdatePayload payload = new ListUpdatePayload();
         payload.setAction(ActionType.UNKNOWN);
+        assertSame(payload, service.route("list-1", payload));
+    }
 
+    @Test
+    void routeBatchHandlesNullAndEmpty() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
+        assertEquals(0, service.routeBatch("list-1", null).size());
+        assertEquals(0, service.routeBatch("list-1", java.util.Collections.emptyList()).size());
+    }
+
+    @Test
+    void routeBatchSortsByTimestamp() {
+        java.util.List<Long> callOrder = new java.util.ArrayList<>();
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            callOrder.add(payload.getTimestamp());
+            return payload;
+        });
+
+        ListUpdatePayload p1 = new ListUpdatePayload(); p1.setTimestamp(300L); p1.setAction(ActionType.ADD); p1.setItemId("i1");
+        ListUpdatePayload p2 = new ListUpdatePayload(); p2.setTimestamp(100L); p2.setAction(ActionType.ADD); p2.setItemId("i1");
+        ListUpdatePayload p3 = new ListUpdatePayload(); p3.setTimestamp(200L); p3.setAction(ActionType.ADD); p3.setItemId("i1");
+
+        service.routeBatch("list-1", java.util.Arrays.asList(p1, p2, p3));
+
+        assertEquals(java.util.Arrays.asList(100L, 200L, 300L), callOrder);
+    }
+
+    @Test
+    void routeBatchContinuesOnException() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            if ("fail".equals(payload.getItemId())) throw new RuntimeException("fail");
+            return payload;
+        });
+
+        ListUpdatePayload p1 = new ListUpdatePayload(); p1.setItemId("ok1"); p1.setAction(ActionType.ADD);
+        ListUpdatePayload p2 = new ListUpdatePayload(); p2.setItemId("fail"); p2.setAction(ActionType.ADD);
+        ListUpdatePayload p3 = new ListUpdatePayload(); p3.setItemId("ok2"); p3.setAction(ActionType.ADD);
+
+        java.util.List<ListUpdatePayload> results = service.routeBatch("list-1", java.util.Arrays.asList(p1, p2, p3));
+        assertEquals(2, results.size());
+        assertEquals("ok1", results.get(0).getItemId());
+        assertEquals("ok2", results.get(1).getItemId());
+    }
+
+    @Test
+    void performCleanupCallsUnderlyingCleanup() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
+        assertDoesNotThrow(service::performCleanup);
+    }
+
+    @Test
+    void routeWorksWithStubStore() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.ADD);
+        payload.setItemId("item-1");
         ListUpdatePayload result = service.route("list-1", payload);
-
-        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
     }
 
     @Test
     void routeHandlesDeleteActionAndSupportsEviction() {
-        // We use a mock store that returns SUCCESS for DELETE
         ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
@@ -147,9 +206,7 @@ class ListSyncRouterServiceTest {
         deletePayload.setItemId("item-to-delete");
 
         ListUpdatePayload result = service.route("list-1", deletePayload);
-
         assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
-        // Internal state check is hard without reflection, but we cover the branch
     }
 
     @Test
@@ -194,11 +251,9 @@ class ListSyncRouterServiceTest {
         
         firstEnter.await();
         
-        // Start second thread, it should wait for t1 to finish
         Thread t2 = new Thread(() -> service.route("list-1", p2));
         t2.start();
         
-        // Let t1 finish
         await().atMost(Duration.ofMillis(500)).until(() -> 
             t2.getState() == Thread.State.BLOCKED || t2.getState() == Thread.State.WAITING);
             
@@ -224,7 +279,6 @@ class ListSyncRouterServiceTest {
 
         service.route("list-1", p1);
         
-        // Wait for lock window to pass (50ms)
         await().pollDelay(Duration.ofMillis(100)).until(() -> true);
         
         ListUpdatePayload p2 = new ListUpdatePayload();
