@@ -65,13 +65,7 @@ public class AiController {
 
         // Send data towards Orchestrator for AI processing
         // (Gatekeeper returns a response directly, not saving anything in database)
-        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(
-                image,
-                text,
-                latitude,
-                longitude,
-                principal != null ? principal.getName() : null
-        );
+        AiGenerationResponse response = aiOrchestrationService.generateShoppingItems(image, text, latitude, longitude);
 
         return ResponseEntity.ok(response);
     }

@@ -11,7 +11,11 @@ class RoutingResponseTest {
     @Test
     void shouldExposeConstructorValues() {
         List<RoutePoint> route = List.of(new RoutePoint("item_101", "Lapte", 47.151800, 27.588000));
-        RoutingResponse response = new RoutingResponse("success", route, List.of());
+
+        RoutingResponse response = new RoutingResponse();
+        response.setStatus("success");
+        response.setRoute(route);
+        response.setWarnings(List.of());
 
         assertEquals("success", response.getStatus());
         assertEquals(route, response.getRoute());
@@ -19,7 +23,11 @@ class RoutingResponseTest {
 
     @Test
     void shouldAllowUpdatingStatusAndRoute() {
-        RoutingResponse response = new RoutingResponse("success", List.of(), List.of());
+        RoutingResponse response = new RoutingResponse();
+        response.setStatus("success");
+        response.setRoute(List.of());
+        response.setWarnings(List.of());
+
         List<RoutePoint> updatedRoute = List.of(new RoutePoint("item_103", "Mere", 47.151900, 27.587950));
 
         response.setStatus("updated");

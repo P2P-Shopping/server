@@ -1,5 +1,6 @@
 package com.p2ps.config;
 
+import com.p2ps.auth.security.JwtAuthFilter;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullUnmarked;
@@ -32,9 +33,11 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     private static final Pattern VALID_LIST_ID = Pattern.compile("^[a-zA-Z0-9-]+$");
 
     private final ShoppingListRepository shoppingListRepository;
+    private final JwtAuthFilter jwtAuthFilter;
 
-    public RoomSubscriptionInterceptor(ShoppingListRepository shoppingListRepository) {
+    public RoomSubscriptionInterceptor(ShoppingListRepository shoppingListRepository, JwtAuthFilter jwtAuthFilter) {
         this.shoppingListRepository = shoppingListRepository;
+        this.jwtAuthFilter = jwtAuthFilter;
     }
 
     /**
@@ -68,7 +71,7 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     private boolean handleSubscription(StompHeaderAccessor accessor, String destination) {
         Authentication auth = getAuthenticatedUser(accessor);
         if (auth == null) {
-            logger.warn("Security Alert: Blocked subscription attempt without authenticated principal");
+            logger.error("Security Alert: Blocked subscription attempt to {} without authenticated principal", destination);
             return false;
         }
 
@@ -86,6 +89,16 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
         if (principal instanceof Authentication auth && auth.isAuthenticated()) {
             return auth;
         }
+
+        // Fallback: Check session attributes for the token and re-authenticate.
+        // This is necessary when using native WebSockets where the principal might not be fully propagated to all interceptors.
+        if (accessor.getSessionAttributes() != null) {
+            String token = (String) accessor.getSessionAttributes().get(JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE);
+            if (token != null) {
+                return jwtAuthFilter.authenticateToken(token);
+            }
+        }
+
         return null;
     }
 

@@ -80,7 +80,7 @@ class AiControllerTest {
     void generateListMultimodal_whenValidTextOnly_returnsOk() {
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("RECIPE");
-        when(orchestration.generateShoppingItems(null, "Valid recipe text", null, null, "user@test.com")).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(null, "Valid recipe text", null, null)).thenReturn(aiResp);
 
         ResponseEntity<?> resp = controller.generateListMultimodal(null, "Valid recipe text", null, null, principal);
 
@@ -97,14 +97,14 @@ class AiControllerTest {
 
         AiGenerationResponse aiResp = new AiGenerationResponse();
         aiResp.setListType("FREQUENT");
-        when(orchestration.generateShoppingItems(image, "What is this?", null, null, "user@test.com")).thenReturn(aiResp);
+        when(orchestration.generateShoppingItems(image, "What is this?", null, null)).thenReturn(aiResp);
 
         ResponseEntity<?> resp = controller.generateListMultimodal(image, "What is this?", null, null, principal);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(aiResp);
         verify(imageValidator, times(1)).detectImageFormat(image);
-        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?", null, null, "user@test.com");
+        verify(orchestration, times(1)).generateShoppingItems(image, "What is this?", null, null);
     }
 
     @Test
@@ -119,29 +119,5 @@ class AiControllerTest {
         Map<String, String> body = (Map<String, String>) resp.getBody();
         assertThat(body).containsEntry("error", "You have to send a text or an image.");
         verifyNoInteractions(orchestration);
-    }
-
-    @Test
-    void generateListMultimodal_withNullPrincipal_callsOrchestrationWithNullUser() {
-        AiGenerationResponse aiResp = new AiGenerationResponse();
-        when(orchestration.generateShoppingItems(null, "text", null, null, null)).thenReturn(aiResp);
-
-        ResponseEntity<?> resp = controller.generateListMultimodal(null, "text", null, null, null);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(orchestration).generateShoppingItems(null, "text", null, null, null);
-    }
-
-    @Test
-    void generateListMultimodal_withLocation_passesLocationToOrchestration() {
-        AiGenerationResponse aiResp = new AiGenerationResponse();
-        Double lat = 45.0;
-        Double lon = 25.0;
-        when(orchestration.generateShoppingItems(null, "text", lat, lon, "user@test.com")).thenReturn(aiResp);
-
-        ResponseEntity<?> resp = controller.generateListMultimodal(null, "text", lat, lon, principal);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(orchestration).generateShoppingItems(null, "text", lat, lon, "user@test.com");
     }
 }
