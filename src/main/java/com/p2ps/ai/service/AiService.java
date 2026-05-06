@@ -92,9 +92,11 @@ public class AiService {
                     Double lng = (Double) context.get("longitude");
                     if (lat == null || lng == null) return "User location not provided. Cannot search stores.";
                     int radius = (args.get(RADIUS_METERS) != null) ? (Integer) args.get(RADIUS_METERS) : 5000;
-                    List<String> idStrings = (List<String>) args.get(ITEM_IDS);
+                    Object rawItemIds = args.get(ITEM_IDS);
+                    if (!(rawItemIds instanceof List<?> rawIdList)) return "Item IDs not provided or invalid.";
+                    List<String> idStrings = rawIdList.stream().map(String.class::cast).toList();
                     List<UUID> itemIds = idStrings.stream().map(UUID::fromString).toList();
-                    return storeMatchingEngine.findOptimalStore(lat, lng, radius, itemIds);
+                    return storeMatchingEngine.findOptimalStores(lat, lng, radius, itemIds);
                 }
         ));
     }
