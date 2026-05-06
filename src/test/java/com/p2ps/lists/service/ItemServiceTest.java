@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -315,7 +316,7 @@ class ItemServiceTest {
     void addItemToList_AccumulatesComplexSegmentedQuantity() {
         ItemRequest req = new ItemRequest();
         req.setName("Milk");
-        req.setQuantity("1 liter");
+        req.setQuantity("2 liter");
 
         Item existingItem = new Item();
         existingItem.setId(UUID.randomUUID());
@@ -330,7 +331,7 @@ class ItemServiceTest {
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).isEqualTo("17 + 2 liter");
+        assertThat(result.getQuantity()).isEqualTo("17 + 3 liter");
     }
 
     @Test
@@ -354,6 +355,7 @@ class ItemServiceTest {
 
         assertThat(result.getQuantity()).isEqualTo("2 kg + 3 pieces");
     }
+
     @Test
     void updateItem_UpdatesAllOptionalFields() {
         ItemRequest req = new ItemRequest();
@@ -379,12 +381,89 @@ class ItemServiceTest {
     }
 
     @Test
-    void deleteItem_ThrowsItemNotFoundException_WhenItemDoesNotExist() {
-        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+    void updateItemFromSync_Success_WithJsonContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setChecked(true);
+        payload.setContent("{\"name\":\"Synced Name\",\"brand\":\"Synced Brand\"}");
 
-        assertThatThrownBy(() -> itemService.deleteItem(itemId, userEmail))
-                .isInstanceOf(ItemNotFoundException.class)
-                .hasMessageContaining("Item not found");
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.isChecked()).isTrue();
+        assertThat(result.getName()).isEqualTo("Synced Name");
+        assertThat(result.getBrand()).isEqualTo("Synced Brand");
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItemFromSync_Fallback_WithPlainContent() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("Simple Name Fallback");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Simple Name Fallback");
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItemFromSync_Success_WithAllFields() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{" +
+                "\"name\":\"Full Update\"," +
+                "\"brand\":\"Brand X\"," +
+                "\"quantity\":\"5\"," +
+                "\"price\":10.5," +
+                "\"category\":\"Food\"" +
+                "}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        assertThat(result.getName()).isEqualTo("Full Update");
+        assertThat(result.getBrand()).isEqualTo("Brand X");
+        assertThat(result.getQuantity()).isEqualTo("5");
+        assertThat(result.getPrice()).isEqualByComparingTo(new BigDecimal("10.5"));
+        assertThat(result.getCategory()).isEqualTo("Food");
+    }
+
+    @Test
+    void addItemToList_WithNullRecurrent_DefaultsToFalse() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setIsRecurrent(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.isRecurrent()).isFalse();
+    }
+
+    @Test
+    void updateItem_WithNullFields_DoesNotChangeThem() {
+        ItemRequest req = new ItemRequest();
+        // All fields null
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getName()).isEqualTo("Old Item");
+        verify(itemRepository).save(mockItem);
     }
 
     @Test

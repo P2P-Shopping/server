@@ -6,6 +6,7 @@ import com.p2ps.repository.StoreInventoryMapRepository;
 import com.p2ps.service.LocationProcessorWorker;
 import com.p2ps.service.MacroRoutingService;
 import com.p2ps.service.RoutingService;
+import com.p2ps.service.StoreMatchingEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
@@ -30,6 +31,7 @@ class RoutingControllerTest {
     private MacroRoutingService macroRoutingService;
     private StoreInventoryMapRepository inventoryMapRepository;
     private LocationProcessorWorker locationProcessorWorker;
+    private StoreMatchingEngine storeMatchingEngine;
     private StringRedisTemplate redis;
     private ObjectMapper objectMapper;
 
@@ -41,6 +43,7 @@ class RoutingControllerTest {
         macroRoutingService = mock(MacroRoutingService.class);
         inventoryMapRepository = mock(StoreInventoryMapRepository.class);
         locationProcessorWorker = mock(LocationProcessorWorker.class);
+        storeMatchingEngine = mock(StoreMatchingEngine.class);
         redis = mock(StringRedisTemplate.class);
         objectMapper = new ObjectMapper();
 
@@ -49,6 +52,7 @@ class RoutingControllerTest {
                 macroRoutingService,
                 inventoryMapRepository,
                 locationProcessorWorker,
+                storeMatchingEngine,
                 redis,
                 objectMapper
         );
@@ -61,16 +65,18 @@ class RoutingControllerTest {
     @Test
     void shouldReturnSuccessStatusAndMockRouteWhenCalculateRouteIsCalled() {
         RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"), 0);
-        RoutingResponse mockResponse = new RoutingResponse(
-                "success",
-                List.of(
-                        new RoutePoint("user_loc", "Punctul Albastru (Tu)", 47.151726, 27.587914),
-                        new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
-                        new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
-                        new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
-                ),
-                List.of()
-        );
+
+        RoutingResponse mockResponse = new RoutingResponse();
+        mockResponse.setStatus("success");
+        mockResponse.setRoute(List.of(
+                new RoutePoint("user_loc", "Punctul Albastru (Tu)", 47.151726, 27.587914),
+                new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
+                new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
+                new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
+        ));
+        mockResponse.setWarnings(List.of());
+        mockResponse.setPartial(false);
+
         when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
 
         RoutingResponse response = controller.calculateRoute(request);
@@ -78,16 +84,21 @@ class RoutingControllerTest {
         assertEquals("success", response.getStatus());
         assertNotNull(response.getRoute());
         assertEquals(4, response.getRoute().size());
-        assertEquals("user_loc", response.getRoute().get(0).getItemId());
+        assertEquals("user_loc", response.getRoute().getFirst().getItemId());
         assertFalse(response.isPartial());
     }
 
     @Test
     void shouldReturnMockRouteForEmptyItemList() {
         RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of(), 0);
-        RoutingResponse mockResponse = new RoutingResponse("success", List.of(
+
+        RoutingResponse mockResponse = new RoutingResponse();
+        mockResponse.setStatus("success");
+        mockResponse.setRoute(List.of(
                 new RoutePoint("user_loc", "Tu", 47.151726, 27.587914)
-        ), List.of());
+        ));
+        mockResponse.setWarnings(List.of());
+
         when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
 
         RoutingResponse response = controller.calculateRoute(request);
@@ -97,6 +108,46 @@ class RoutingControllerTest {
     }
 
     @Test
+    void lookupStores_shouldReturn200AndTopStoresWhenMatchesExist() {
+        StoreMatchRequest request = new StoreMatchRequest();
+        request.setUserLat(47.15);
+        request.setUserLng(27.58);
+        request.setRadiusInMeters(5000);
+        request.setItemIds(List.of(UUID.randomUUID(), UUID.randomUUID()));
+
+        List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0),
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0)
+        );
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(matches);
+
+        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(2, response.getBody().size());
+        assertEquals("Store A", response.getBody().getFirst().storeName());
+    }
+
+    @Test
+    void lookupStores_shouldReturn200AndEmptyListWhenNoStoresMatch() {
+        StoreMatchRequest request = new StoreMatchRequest();
+        request.setUserLat(47.15);
+        request.setUserLng(27.58);
+        request.setRadiusInMeters(5000);
+        request.setItemIds(List.of(UUID.randomUUID()));
+
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(List.of());
+
+        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void getFullRoute_shouldReturn202WhenRouteNotYetInRedisButPending() {
         ValueOperations<String, String> ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
@@ -109,6 +160,7 @@ class RoutingControllerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void getFullRoute_shouldReturn404WhenRouteNotYetInRedisAndNotPending() {
         ValueOperations<String, String> ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
@@ -121,12 +173,20 @@ class RoutingControllerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void getFullRoute_shouldReturn200WithRouteWhenPresentInRedis() throws Exception {
         String routeId = "test-route-id";
-        RoutingResponse fullRoute = RoutingResponse.full(routeId, List.of(
+
+        RoutingResponse fullRoute = new RoutingResponse();
+        fullRoute.setStatus("success");
+        fullRoute.setRouteId(routeId);
+        fullRoute.setRoute(List.of(
                 new RoutePoint("user_loc", "Tu", 47.15, 27.58),
                 new RoutePoint("item_1", "Lapte", 47.16, 27.59)
-        ), List.of());
+        ));
+        fullRoute.setWarnings(List.of());
+        fullRoute.setPartial(false);
+
         String json = objectMapper.writeValueAsString(fullRoute);
 
         ValueOperations<String, String> ops = mock(ValueOperations.class);
