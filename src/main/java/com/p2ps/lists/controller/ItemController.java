@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -31,6 +32,17 @@ public class ItemController {
         ItemDTO createdItem = itemService.addItemToList(listId, request, authentication.getName());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(createdItem);
+    }
+
+    @PostMapping("/lists/{listId}/items/batch")
+    public ResponseEntity<List<ItemDTO>> addMultipleItems(
+            @PathVariable UUID listId,
+            @RequestBody @Valid List<@Valid ItemRequest> requests,
+            Authentication authentication) {
+
+        List<ItemDTO> createdItems = itemService.addItemsToList(listId, requests, authentication.getName());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdItems);
     }
 
     @PutMapping("/items/{itemId}")

@@ -10,6 +10,7 @@ import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
 import com.p2ps.auth.model.Users;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +38,9 @@ class ItemServiceTest {
 
     @Mock
     private ShoppingListRepository shoppingListRepository;
+
+    @Mock
+    private UserProductHistoryRepository historyRepository;
 
     @InjectMocks
     private ItemService itemService;
@@ -74,6 +79,7 @@ class ItemServiceTest {
         req.setIsRecurrent(true);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -220,6 +226,7 @@ class ItemServiceTest {
         List<ItemRequest> requests = List.of(req1, req2);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
@@ -241,6 +248,159 @@ class ItemServiceTest {
                 .isInstanceOf(ListValidationException.class);
 
         verify(itemRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void addItemToList_MergesHistoricalDuplicates_AndMaintainsPrecision() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Flour");
+        req.setQuantity("2.2 kg");
+
+        Item duplicate1 = new Item();
+        duplicate1.setId(UUID.randomUUID());
+        duplicate1.setName("Flour");
+        duplicate1.setQuantity("1.1 kg");
+
+        Item duplicate2 = new Item();
+        duplicate2.setId(UUID.randomUUID());
+        duplicate2.setName("Flour");
+        duplicate2.setQuantity("1 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
+                .thenReturn(List.of(duplicate1, duplicate2));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("4.3 kg");
+        assertThat(result.isRecurrent()).isFalse();
+
+        verify(itemRepository, times(1)).delete(duplicate2);
+        verify(itemRepository).save(duplicate1);
+    }
+
+    @Test
+    void addItemToList_PreservesMetadataInMerge() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Flour");
+        req.setCategory("Baking");
+        req.setIsRecurrent(true);
+
+        Item existing = new Item();
+        existing.setId(UUID.randomUUID());
+        existing.setName("Flour");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
+                .thenReturn(List.of(existing));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getCategory()).isEqualTo("Baking");
+        assertThat(result.isRecurrent()).isTrue();
+    }
+
+    @Test
+    void addItemsToList_MergesDuplicatesWithinSameBatch() {
+        ItemRequest req1 = new ItemRequest();
+        req1.setName("Eggs");
+        req1.setQuantity("2");
+
+        ItemRequest req2 = new ItemRequest();
+        req2.setName("Milk");
+        req2.setQuantity("1 liter");
+
+        ItemRequest req3 = new ItemRequest();
+        req3.setName("eggs"); // Different case
+        req3.setQuantity("4");
+
+        List<ItemRequest> requests = List.of(req1, req2, req3);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(any(UUID.class), anyString()))
+                .thenReturn(List.of());
+
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+
+        assertThat(result).hasSize(2);
+
+        Optional<ItemDTO> eggsItem = result.stream().filter(i -> i.getName().equalsIgnoreCase("Eggs")).findFirst();
+        assertThat(eggsItem).isPresent();
+        assertThat(eggsItem.get().getQuantity()).isEqualTo("6");
+    }
+
+    @Test
+    void addItemToList_AccumulatesComplexSegmentedQuantity() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        req.setQuantity("2 liter");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Milk");
+        existingItem.setQuantity("17 + 1 liter");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Milk"))
+                .thenReturn(List.of(existingItem));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("17 + 3 liter");
+    }
+
+    @Test
+    void addItemToList_FallsBackToConcatenation_WhenUnitsDiffer() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Apples");
+        req.setQuantity("3 pieces");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Apples");
+        existingItem.setQuantity("2 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apples"))
+                .thenReturn(List.of(existingItem));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("2 kg + 3 pieces");
+    }
+
+    @Test
+    void updateItem_UpdatesAllOptionalFields() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Updated Milk");
+        req.setBrand("Zuzu");
+        req.setQuantity("2 litri");
+        req.setPrice(new BigDecimal("15.5"));
+        req.setCategory("Dairy");
+        req.setIsRecurrent(true);
+        req.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getBrand()).isEqualTo("Zuzu");
+        assertThat(result.getQuantity()).isEqualTo("2 litri");
+        assertThat(result.getPrice()).isEqualTo(new BigDecimal("15.5"));
+        assertThat(result.getCategory()).isEqualTo("Dairy");
+        assertThat(result.isRecurrent()).isTrue();
+        assertThat(result.isChecked()).isTrue();
     }
 
     @Test
@@ -301,12 +461,39 @@ class ItemServiceTest {
     }
 
     @Test
+    void updateItemFromSync_ThrowsValidationException_WhenNameIsBlank() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{\"name\":\"  \"}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.updateItemFromSync(itemId, payload))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Item name cannot be empty");
+    }
+
+    @Test
+    void updateItemFromSync_ThrowsValidationException_WhenPriceIsNegative() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        payload.setContent("{\"price\":-10}");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        assertThatThrownBy(() -> itemService.updateItemFromSync(itemId, payload))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Price must be zero or positive");
+    }
+
+    @Test
     void addItemToList_WithNullRecurrent_DefaultsToFalse() {
         ItemRequest req = new ItemRequest();
         req.setName("Milk");
         req.setIsRecurrent(null);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -326,5 +513,58 @@ class ItemServiceTest {
 
         assertThat(result.getName()).isEqualTo("Old Item");
         verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void addItemsToList_MergesWithExistingDbItems_AndCleansHistoricalDuplicates() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Zahar");
+        req.setQuantity("1 kg");
+
+        Item dbDuplicate1 = new Item();
+        dbDuplicate1.setId(UUID.randomUUID());
+        dbDuplicate1.setName("Zahar");
+        dbDuplicate1.setQuantity("2 kg");
+
+        Item dbDuplicate2 = new Item();
+        dbDuplicate2.setId(UUID.randomUUID());
+        dbDuplicate2.setName("Zahar");
+        dbDuplicate2.setQuantity("0.5 kg");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Zahar"))
+                .thenReturn(List.of(dbDuplicate1, dbDuplicate2));
+
+        lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getQuantity()).isEqualTo("3.5 kg"); // 1 + 2 + 0.5
+
+        verify(itemRepository).delete(dbDuplicate2);
+    }
+
+    @Test
+    void addItemToList_ReturnsNewQuantity_WhenOldQuantityIsBlank() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Apa");
+        req.setQuantity("2 sticle");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Apa");
+        existingItem.setQuantity("   ");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apa"))
+                .thenReturn(List.of(existingItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("2 sticle");
     }
 }
