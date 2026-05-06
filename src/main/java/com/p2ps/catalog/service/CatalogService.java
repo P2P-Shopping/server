@@ -106,7 +106,7 @@ public class CatalogService {
 
         // Global catalog
         if (suggestionsMap.size() < 10) {
-            List<ProductCatalog> catalogMatches = catalogRepository.searchByKeywordFuzzy(cleanKeyword);
+            List<ProductCatalog> catalogMatches = catalogRepository.searchByKeyword(cleanKeyword);
 
             for (ProductCatalog catalogMatch : catalogMatches) {
                 String bestName = ProductStringUtils.firstNonBlank(
