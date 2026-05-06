@@ -1,7 +1,11 @@
 package com.p2ps.catalog.service;
 
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
+import com.p2ps.catalog.dto.ProductSuggestionDTO;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
+import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,6 +19,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,8 +30,16 @@ class CatalogServiceTest {
     @Mock
     private ProductCatalogRepository catalogRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private UserProductHistoryRepository userProductHistoryRepository;
+
     @InjectMocks
     private CatalogService catalogService;
+
+    // --- TESTE EXISTENTE COMBINATE ȘI REVIZUITE ---
 
     @Test
     void recordPurchaseShouldReturnNullWhenSpecificNameIsBlank() {
@@ -49,10 +64,7 @@ class CatalogServiceTest {
 
         ProductCatalog result = catalogService.recordPurchase(genericName, specificName, brand, category, price);
 
-        // Verify upsert was called correctly
         verify(catalogRepository).upsertProduct(genericName, specificName, brand, category, price);
-
-        // Verify the service returns the product found after upsert
         assertNotNull(result);
         assertEquals(specificName, result.getSpecificName());
     }
@@ -67,6 +79,20 @@ class CatalogServiceTest {
         catalogService.recordPurchase(null, specificName, brand, "Category", BigDecimal.ONE);
 
         verify(catalogRepository).upsertProduct(eq("Unknown"), eq(specificName), eq(brand), any(), any());
+    }
+
+    @Test
+    void recordPurchaseShouldThrowExceptionWhenProductNotFoundAfterUpsert() {
+        String specificName = "Ghost Product";
+        String brand = "Ghost Brand";
+
+        when(catalogRepository.findBySpecificNameAndBrand(specificName, brand)).thenReturn(Optional.empty());
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            catalogService.recordPurchase("Generic", specificName, brand, "Category", BigDecimal.TEN);
+        });
+
+        assertTrue(exception.getMessage().contains("Product should have been created by upsert"));
     }
 
     @Test
@@ -103,19 +129,6 @@ class CatalogServiceTest {
         assertEquals(expectedStores, result);
         verify(catalogRepository).findBestStoresForCatalogProduct(catalogId);
     }
-    @Test
-    void recordPurchaseShouldThrowExceptionWhenProductNotFoundAfterUpsert() {
-        String specificName = "Ghost Product";
-        String brand = "Ghost Brand";
-
-        when(catalogRepository.findBySpecificNameAndBrand(specificName, brand)).thenReturn(Optional.empty());
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            catalogService.recordPurchase("Generic", specificName, brand, "Category", BigDecimal.TEN);
-        });
-
-        assertTrue(exception.getMessage().contains("Product should have been created by upsert"));
-    }
 
     @Test
     void searchProductsByNameShouldReturnEmptyListWhenKeywordIsNull() {
@@ -136,7 +149,7 @@ class CatalogServiceTest {
     @Test
     void searchProductsByNameShouldReturnMatchesWhenKeywordIsValid() {
         ProductCatalog p1 = new ProductCatalog();
-        p1.setGenericName("Lapte");
+        p1.setSpecificName("Lapte");
 
         when(catalogRepository.searchByKeyword("lapte")).thenReturn(List.of(p1));
 
@@ -144,5 +157,93 @@ class CatalogServiceTest {
 
         assertEquals(1, result.size());
         verify(catalogRepository).searchByKeyword("lapte");
+    }
+
+    // --- TESTE NOI PENTRU TASK 4 (suggestProducts) ---
+
+    @Test
+    void suggestProductsShouldReturnEmptyListWhenKeywordIsBlank() {
+        assertTrue(catalogService.suggestProducts(null, "user@test.com").isEmpty());
+        assertTrue(catalogService.suggestProducts("  ", "user@test.com").isEmpty());
+    }
+
+    @Test
+    void suggestProductsShouldPrioritizeUserHistory() {
+        String email = "user@test.com";
+        Integer userId = 1;
+        Users user = new Users();
+        user.setId(userId);
+
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
+
+        UserProductHistoryRepository.HistoryMatch match = mock(UserProductHistoryRepository.HistoryMatch.class);
+        lenient().when(match.getItemName()).thenReturn("Produs din Istoric");
+        lenient().when(match.getBrand()).thenReturn("BrandIstoric");
+        lenient().when(match.getPrice()).thenReturn(BigDecimal.valueOf(10));
+
+        lenient().when(userProductHistoryRepository.findMatches(anyInt(), anyString())).thenReturn(List.of(match));
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of());
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("apa", email);
+
+        assertFalse(results.isEmpty(), "Results should not be empty");
+        assertEquals("Produs din Istoric", results.get(0).name());
+    }
+
+    @Test
+    void suggestProductsShouldFallbackToGlobalCatalogAndAvoidDuplicates() {
+        String email = "user@test.com";
+        Integer userId = 2;
+        Users user = new Users();
+        user.setId(userId);
+
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
+
+        UserProductHistoryRepository.HistoryMatch historyMatch = mock(UserProductHistoryRepository.HistoryMatch.class);
+        lenient().when(historyMatch.getItemName()).thenReturn("Apa Plata");
+
+        ProductCatalog catalogMatch = new ProductCatalog();
+        catalogMatch.setSpecificName("Apa Plata");
+        catalogMatch.setBrand("Dorna");
+
+        lenient().when(userProductHistoryRepository.findMatches(anyInt(), anyString())).thenReturn(List.of(historyMatch));
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(catalogMatch));
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("apa", email);
+
+        assertEquals(1, results.size(), "Should avoid duplicates and return exactly 1 item");
+        assertEquals("Apa Plata", results.get(0).name());
+    }
+
+    @Test
+    void suggestProductsShouldLimitResultsTo10() {
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        List<ProductCatalog> largeCatalog = new java.util.ArrayList<>();
+        for (int i = 0; i < 15; i++) {
+            ProductCatalog p = new ProductCatalog();
+            p.setSpecificName("Produs " + i);
+            p.setGenericName("Generic " + i);
+            largeCatalog.add(p);
+        }
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(largeCatalog);
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
+
+        assertEquals(10, results.size(), "Should limit results to exactly 10 items");
+    }
+
+    @Test
+    void suggestProductsShouldWorkEvenIfUserNotFound() {
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        ProductCatalog p = new ProductCatalog();
+        p.setSpecificName("Produs Global");
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "unknown@test.com");
+
+        assertEquals(1, results.size(), "Should return global results if user doesn't exist");
+        assertEquals("Produs Global", results.get(0).name());
     }
 }
