@@ -122,7 +122,7 @@ class CatalogServiceTest {
         List<ProductCatalog> result = catalogService.searchProductsByName(null);
 
         assertTrue(result.isEmpty());
-        verify(catalogRepository, never()).searchByKeywordFuzzy(any());
+        verify(catalogRepository, never()).searchByKeyword(any());
     }
 
     @Test
@@ -130,7 +130,7 @@ class CatalogServiceTest {
         List<ProductCatalog> result = catalogService.searchProductsByName("   ");
 
         assertTrue(result.isEmpty());
-        verify(catalogRepository, never()).searchByKeywordFuzzy(any());
+        verify(catalogRepository, never()).searchByKeyword(any());
     }
 
     @Test
@@ -138,11 +138,11 @@ class CatalogServiceTest {
         ProductCatalog p1 = new ProductCatalog();
         p1.setGenericName("Lapte");
 
-        when(catalogRepository.searchByKeywordFuzzy("lapte")).thenReturn(List.of(p1));
+        when(catalogRepository.searchByKeyword("lapte")).thenReturn(List.of(p1));
 
         List<ProductCatalog> result = catalogService.searchProductsByName("  lapte  ");
 
         assertEquals(1, result.size());
-        verify(catalogRepository).searchByKeywordFuzzy("lapte");
+        verify(catalogRepository).searchByKeyword("lapte");
     }
 }

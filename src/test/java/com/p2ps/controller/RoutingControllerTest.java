@@ -65,16 +65,18 @@ class RoutingControllerTest {
     @Test
     void shouldReturnSuccessStatusAndMockRouteWhenCalculateRouteIsCalled() {
         RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"), 0);
-        RoutingResponse mockResponse = new RoutingResponse(
-                "success",
-                List.of(
-                        new RoutePoint("user_loc", "Punctul Albastru (Tu)", 47.151726, 27.587914),
-                        new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
-                        new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
-                        new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
-                ),
-                List.of()
-        );
+
+        RoutingResponse mockResponse = new RoutingResponse();
+        mockResponse.setStatus("success");
+        mockResponse.setRoute(List.of(
+                new RoutePoint("user_loc", "Punctul Albastru (Tu)", 47.151726, 27.587914),
+                new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
+                new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
+                new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
+        ));
+        mockResponse.setWarnings(List.of());
+        mockResponse.setPartial(false);
+
         when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
 
         RoutingResponse response = controller.calculateRoute(request);
@@ -89,9 +91,14 @@ class RoutingControllerTest {
     @Test
     void shouldReturnMockRouteForEmptyItemList() {
         RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of(), 0);
-        RoutingResponse mockResponse = new RoutingResponse("success", List.of(
+
+        RoutingResponse mockResponse = new RoutingResponse();
+        mockResponse.setStatus("success");
+        mockResponse.setRoute(List.of(
                 new RoutePoint("user_loc", "Tu", 47.151726, 27.587914)
-        ), List.of());
+        ));
+        mockResponse.setWarnings(List.of());
+
         when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
 
         RoutingResponse response = controller.calculateRoute(request);
@@ -169,10 +176,17 @@ class RoutingControllerTest {
     @SuppressWarnings("unchecked")
     void getFullRoute_shouldReturn200WithRouteWhenPresentInRedis() throws Exception {
         String routeId = "test-route-id";
-        RoutingResponse fullRoute = RoutingResponse.full(routeId, List.of(
+
+        RoutingResponse fullRoute = new RoutingResponse();
+        fullRoute.setStatus("success");
+        fullRoute.setRouteId(routeId);
+        fullRoute.setRoute(List.of(
                 new RoutePoint("user_loc", "Tu", 47.15, 27.58),
                 new RoutePoint("item_1", "Lapte", 47.16, 27.59)
-        ), List.of());
+        ));
+        fullRoute.setWarnings(List.of());
+        fullRoute.setPartial(false);
+
         String json = objectMapper.writeValueAsString(fullRoute);
 
         ValueOperations<String, String> ops = mock(ValueOperations.class);
