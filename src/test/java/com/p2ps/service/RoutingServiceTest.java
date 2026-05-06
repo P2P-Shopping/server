@@ -175,10 +175,10 @@ class RoutingServiceTest {
         double improvementPct = ((nnDistance - threeOptDistance) / nnDistance) * 100;
 
         System.out.println("--- Routing Algorithm Benchmark (Demo Mode) ---");
-        System.out.printf("Shopping List Size: %d items\n", numItems);
-        System.out.printf("Nearest Neighbor Distance: %.2f meters\n", nnDistance);
-        System.out.printf("3-Opt Optimized Distance: %.2f meters\n", threeOptDistance);
-        System.out.printf("3-Opt a redus distanța cu %.2f%% față de NN\n", improvementPct);
+        System.out.printf("Shopping List Size: %d items%n", numItems);
+        System.out.printf("Nearest Neighbor Distance: %.2f meters%n", nnDistance);
+        System.out.printf("3-Opt Optimized Distance: %.2f meters%n", threeOptDistance);
+        System.out.printf("3-Opt a redus distanța cu %.2f%% față de NN%n", improvementPct);
         System.out.println("-----------------------------------------------");
 
         // Validate that 3-Opt is at least as good as NN

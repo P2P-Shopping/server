@@ -105,14 +105,6 @@ public class ListSyncRouterService {
         lockingWrapper.cleanup();
     }
 
-    private static final class InMemoryListSyncStore implements ListSyncStore {
-        @Override
-        public ListUpdatePayload apply(String listId, ListUpdatePayload payload) {
-            return payload;
-        }
-    }
-
-
     private static final class LockingListSyncStore implements ListSyncStore {
 
         private final ListSyncStore delegate;

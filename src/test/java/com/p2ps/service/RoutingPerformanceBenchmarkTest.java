@@ -60,7 +60,7 @@ class RoutingPerformanceBenchmarkTest {
                         47.150 + (i * 0.0001),
                         27.580 + (i * 0.0001),
                         1.0))
-                .collect(Collectors.toList());
+                .toList();
 
         List<String> productIds = mockLocations.stream()
                 .map(RoutingService.ProductLocation::itemId)
@@ -126,12 +126,12 @@ class RoutingPerformanceBenchmarkTest {
 
         // --- 4. AFIȘARE CONSOLĂ ---
         System.out.println("\n --- REZULTATE BENCHMARK DEMO ---");
-        System.out.printf("Dimensiune Lista: %d produse reale\n", productIds.size());
-        System.out.printf("Timp execuție paralelă (%d requesturi simultane): %d ms\n", numSimulations, totalTimeMs);
+        System.out.printf("Dimensiune Lista: %d produse reale%n", productIds.size());
+        System.out.printf("Timp execuție paralelă (%d requesturi simultane): %d ms%n", numSimulations, totalTimeMs);
         System.out.println("-------------------------------------------------------------------------");
-        System.out.printf(" Distanta generata cu Nearest Neighbor: %.2f metri\n", distNn);
-        System.out.printf(" Distanta optimizata cu 3-Opt: %.2f metri\n", dist3Opt);
-        System.out.printf("CONCLUZIE: 3-Opt a redus distanța cu %.2f%% față de NN!\n", improvement);
+        System.out.printf(" Distanta generata cu Nearest Neighbor: %.2f metri%n", distNn);
+        System.out.printf(" Distanta optimizata cu 3-Opt: %.2f metri%n", dist3Opt);
+        System.out.printf("CONCLUZIE: 3-Opt a redus distanța cu %.2f%% față de NN!%n", improvement);
         System.out.println("=========================================================================\n");
 
         // Asertare matematică finală
