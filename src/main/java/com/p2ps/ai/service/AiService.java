@@ -6,7 +6,6 @@ import com.p2ps.ai.core.AiTool;
 import com.p2ps.ai.core.ToolRegistry;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.service.StoreMatchingEngine;
-import com.p2ps.catalog.service.CatalogService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
