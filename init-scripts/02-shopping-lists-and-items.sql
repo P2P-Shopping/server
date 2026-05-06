@@ -103,3 +103,4 @@ CREATE INDEX IF NOT EXISTS trgm_idx_catalog_specific_name_unaccent
     ON p2p_product_catalog USING gin (f_unaccent(lower(specific_name)) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS trgm_idx_catalog_brand_unaccent
     ON p2p_product_catalog USING gin (f_unaccent(lower(COALESCE(brand, ''))) gin_trgm_ops);
+

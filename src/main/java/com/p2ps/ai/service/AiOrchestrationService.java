@@ -1,5 +1,6 @@
 package com.p2ps.ai.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.dto.AiGenerationResponse;
@@ -34,6 +35,7 @@ public class AiOrchestrationService {
             UserRepository userRepository,
             java.util.Optional<ObjectMapper> objectMapper
     ) {
+    public AiOrchestrationService(AiService aiService, AiPersistenceService aiPersistenceService, java.util.Optional<ObjectMapper> objectMapper) {
         this.aiService = aiService;
         this.aiPersistenceService = aiPersistenceService;
         this.productResolutionService = productResolutionService;
@@ -79,13 +81,7 @@ public class AiOrchestrationService {
     }
 
     // Multimodal and Gatekeeper Flow
-    public AiGenerationResponse generateShoppingItems(
-            MultipartFile image,
-            String text,
-            Double latitude,
-            Double longitude,
-            String userEmail
-    ) {
+    public AiGenerationResponse generateShoppingItems(MultipartFile image, String text, Double latitude, Double longitude) {
         int maxRetries = 2;
         Exception lastException = null;
         String lastRawResult = null;
@@ -98,11 +94,11 @@ public class AiOrchestrationService {
                 String jsonResult = extractJson(rawResult);
 
                 // Map the JSON to the response object
-                response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
+                AiGenerationResponse response = objectMapper.readValue(jsonResult, AiGenerationResponse.class);
 
                 // Validation
                 if (response != null && response.getItems() != null && !response.getItems().isEmpty()) {
-                    break;
+                    return response;
                 }
             } catch (AiProcessingException e) {
                 if (e.getStatus() != HttpStatus.UNPROCESSABLE_CONTENT) {

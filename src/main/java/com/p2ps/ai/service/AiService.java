@@ -33,30 +33,27 @@ public class AiService {
                     "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
                     "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
                     "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
-                    "RULE 1: Output the ingredients exactly as you see them or deduce them. Leave catalogId as null. "  +
-                    "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry instead of leaving them null. Only leave catalogId null if no relevant catalog product exists. " +
+                    "RULE 1 (DYNAMIC SEARCH): You have access to tools to search our product catalog and find nearby stores. ALWAYS search the catalog for generic ingredients to map them to real-world products. " +
+                    "RULE 1A (CATALOG MAPPING): If catalog results exist, prefer a real catalog product. Fill specificName, brand, and catalogId from the best matching catalog entry. Only leave catalogId null if no relevant catalog product exists. " +
                     "RULE 1B (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
                     "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
                     "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'. " +
+                    "RECIPE LOGIC: If the user describes a dish, dessert, meal, or recipe idea (e.g., negresa, clatite, ciorba, pasta, cake), classify it as 'RECIPE' even if the word 'recipe' is not used. " +
                     "CRITICAL CATEGORY RULE: The 'category' field MUST be chosen EXACTLY from this strict list: [Fructe și Legume, Lactate și Ouă, Carne, Băcănie, Dulciuri, Curățenie, Altele]. DO NOT invent categories! " +
-                    "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null (e.g. 'kg', 'g', 'buc', 'litri')\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
-
+                    "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
     private static final String FINAL_JSON_PROMPT =
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
                     "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
-                    "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. If the user described a dish or recipe, listType must be RECIPE. Do not add markdown, explanations, or prose.";
-
+                    "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. Remember to use the STRICT category list. Do not add markdown, explanations, or prose.";
     private static final String DESCRIPTION = "description";
-
+    private static final String KEYWORD = "keyword";
     private static final String RADIUS_METERS = "radius_meters";
     private static final String ITEM_IDS = "item_ids";
 
-    public AiService(
-            AiClient aiClient,
-            StoreMatchingEngine storeMatchingEngine
-    ) {
+    public AiService(AiClient aiClient, CatalogService catalogService, StoreMatchingEngine storeMatchingEngine) {
         this.aiClient = aiClient;
         this.toolRegistry = new ToolRegistry();
+        this.catalogService = catalogService;
         this.storeMatchingEngine = storeMatchingEngine;
     }
 
@@ -80,10 +77,13 @@ public class AiService {
                     Double lng = (Double) context.get("longitude");
                     if (lat == null || lng == null) return "User location not provided. Cannot search stores.";
                     int radius = (args.get(RADIUS_METERS) != null) ? (Integer) args.get(RADIUS_METERS) : 5000;
+                    Object rawItemIds = args.get(ITEM_IDS);
+                    if (!(rawItemIds instanceof List<?> rawIdList)) return "Item IDs not provided or invalid.";
+                    List<String> idStrings = rawIdList.stream().map(String.class::cast).toList();
                     @SuppressWarnings("unchecked")
                     List<String> idStrings = (List<String>) args.get(ITEM_IDS);
                     List<UUID> itemIds = idStrings.stream().map(UUID::fromString).toList();
-                    return storeMatchingEngine.findOptimalStore(lat, lng, radius, itemIds);
+                    return storeMatchingEngine.findOptimalStores(lat, lng, radius, itemIds);
                 }
         ));
     }

@@ -59,7 +59,14 @@ public class RoutingAsyncService {
         try {
             List<RoutePoint> optimized = optimizer.threeOptImprove(fullNnRoute);
 
-            RoutingResponse fullResponse = RoutingResponse.full(routeId, optimized, warnings);
+            // Updated instantiation to use constructor and setters
+            RoutingResponse fullResponse = new RoutingResponse();
+            fullResponse.setStatus("success");
+            fullResponse.setRouteId(routeId);
+            fullResponse.setRoute(optimized);
+            fullResponse.setWarnings(warnings);
+            fullResponse.setPartial(false);
+
             fullResponse.setTotalDistanceMeters(optimizer.routeDistance(optimized));
             fullResponse.setTotalStops(optimized.size() - 1);
             fullResponse.setEstimatedTimeSeconds((int) (fullResponse.getTotalDistanceMeters() / 1.4));

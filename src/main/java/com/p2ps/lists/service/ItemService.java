@@ -21,9 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.UUID;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ItemService {
@@ -36,6 +36,7 @@ public class ItemService {
     private final UserProductHistoryRepository historyRepository;
     private final ProductCatalogRepository catalogRepository;
     private final CatalogService catalogService; // Adaugat serviciul!
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     // Constructor actualizat
     public ItemService(ItemRepository itemRepository, ShoppingListRepository shoppingListRepository,
@@ -62,20 +63,139 @@ public class ItemService {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
         }
 
-        Item item = new Item();
-        item.setName(request.getName());
-        item.setShoppingList(list);
+        String normalizedItemName = request.getName().trim();
+        List<Item> existingItems = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
 
+        if (!existingItems.isEmpty()) {
+            Item primaryItem = existingItems.get(0);
+
+            for (int i = 1; i < existingItems.size(); i++) {
+                Item duplicate = existingItems.get(i);
+                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                itemRepository.delete(duplicate);
+            }
+
+            primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+            primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+            if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
+            if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
+            if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
+            if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
+
+            try {
+                return mapToDTO(itemRepository.save(primaryItem));
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // In case of a race condition where another thread merged or added it, retry the merge
+                return addItemToList(listId, request, userEmail);
+            }
+        }
+
+        Item item = new Item();
+        item.setName(normalizedItemName);
+        item.setShoppingList(list);
         item.setBrand(request.getBrand());
         item.setQuantity(request.getQuantity());
         item.setPrice(request.getPrice());
         item.setCategory(request.getCategory());
-
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
 
         return mapToDTO(itemRepository.save(item));
+        saveToHistory(item.getName(), list.getUser());
+        try {
+            return mapToDTO(itemRepository.save(item));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Concurrent add: item was likely created between find and save. Retry as merge.
+            return addItemToList(listId, request, userEmail);
+        }
+    }
+
+    @Transactional
+    public List<ItemDTO> addItemsToList(UUID listId, List<ItemRequest> requests, String userEmail) {
+        if (requests == null || requests.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.canBeModifiedBy(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to add items to this list");
+        }
+
+        Map<String, Item> batchMap = new LinkedHashMap<>();
+
+        for (ItemRequest request : requests) {
+            processItemRequest(listId, list, request, batchMap);
+        }
+
+        List<Item> saved = itemRepository.saveAll(new ArrayList<>(batchMap.values()));
+        return saved.stream().map(this::mapToDTO).toList();
+    }
+
+    private void processItemRequest(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap) {
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new ListValidationException("Item name cannot be empty");
+        }
+        validatePrice(request.getPrice());
+
+        String normalizedItemName = request.getName().trim();
+        String mapKey = normalizedItemName.toLowerCase();
+
+        if (batchMap.containsKey(mapKey)) {
+            Item existingInBatch = batchMap.get(mapKey);
+            existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
+            existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
+        } else {
+            List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+
+            if (!existingInDb.isEmpty()) {
+                Item primaryItem = existingInDb.get(0);
+
+                for (int i = 1; i < existingInDb.size(); i++) {
+                    Item duplicate = existingInDb.get(i);
+                    primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), duplicate.getQuantity()));
+                    itemRepository.delete(duplicate);
+                }
+
+                primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
+                primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+                if (request.getBrand() != null) primaryItem.setBrand(request.getBrand());
+                if (request.getPrice() != null) primaryItem.setPrice(request.getPrice());
+                if (request.getCategory() != null) primaryItem.setCategory(request.getCategory());
+                if (request.getIsRecurrent() != null) primaryItem.setRecurrent(request.getIsRecurrent());
+
+                batchMap.put(mapKey, primaryItem);
+            } else {
+                Item newItem = new Item();
+                newItem.setName(normalizedItemName);
+                newItem.setShoppingList(list);
+                newItem.setBrand(request.getBrand());
+                newItem.setQuantity(request.getQuantity());
+                newItem.setPrice(request.getPrice());
+                newItem.setCategory(request.getCategory());
+                newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+                newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+                newItem.setCreatedAt(System.currentTimeMillis());
+
+                saveToHistory(newItem.getName(), list.getUser());
+                batchMap.put(mapKey, newItem);
+            }
+        }
+    }
+
+    @Transactional
+    public List<ItemDTO> addItemsToListWithRetry(UUID listId, List<ItemRequest> requests, String userEmail) {
+        try {
+            return addItemsToList(listId, requests, userEmail);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // If any item in the batch fails due to a concurrent addition, retry the whole batch
+            // The batch logic naturally handles existing DB items by merging.
+            return addItemsToList(listId, requests, userEmail);
+        }
     }
 
     @Transactional
@@ -137,17 +257,24 @@ public class ItemService {
         }
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
-            // If content is present, it might be a JSON string of ItemDTO or just the name
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 ItemDTO dto = mapper.readValue(payload.getContent(), ItemDTO.class);
-                if (dto.getName() != null) item.setName(dto.getName());
+                if (dto.getName() != null) {
+                    if (dto.getName().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
+                    item.setName(dto.getName());
+                }
                 if (dto.getBrand() != null) item.setBrand(dto.getBrand());
                 if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
-                if (dto.getPrice() != null) item.setPrice(dto.getPrice());
+                if (dto.getPrice() != null) {
+                    validatePrice(dto.getPrice());
+                    item.setPrice(dto.getPrice());
+                }
                 if (dto.getCategory() != null) item.setCategory(dto.getCategory());
+            } catch (ListValidationException e) {
+                throw e;
             } catch (Exception _) {
-                // Fallback: treat content as the item name
+                if (payload.getContent().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
                 item.setName(payload.getContent());
             }
         }
@@ -174,7 +301,6 @@ public class ItemService {
         }
     }
 
-
     private ItemDTO mapToDTO(Item item) {
         ItemDTO dto = new ItemDTO();
         dto.setId(item.getId());
@@ -190,48 +316,68 @@ public class ItemService {
         return dto;
     }
 
-    @Transactional
-    public List<ItemDTO> addItemsToList(UUID listId, List<ItemRequest> requests, String userEmail) {
-        if (requests == null || requests.isEmpty()) {
-            return new ArrayList<>();
-        }
+    private String sumStringQuantities(String oldQ, String newQ) {
+        if (oldQ == null || oldQ.trim().isEmpty()) return newQ;
+        if (newQ == null || newQ.trim().isEmpty()) return oldQ;
 
-        ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+        Map<String, BigDecimal> unitSums = new LinkedHashMap<>();
+        List<String> unparseableParts = new ArrayList<>();
 
-        if (!list.canBeModifiedBy(userEmail)) {
-            throw new ListAccessDeniedException("You do not have permission to add items to this list");
-        }
+        parseAndAccumulate(oldQ, unitSums, unparseableParts);
+        parseAndAccumulate(newQ, unitSums, unparseableParts);
 
+        List<String> finalParts = new ArrayList<>();
+
+        for (Map.Entry<String, BigDecimal> entry : unitSums.entrySet()) {
+            String valStr = entry.getValue().stripTrailingZeros().toPlainString();
+            String unit = entry.getKey();
+
+            if (unit.isEmpty()) {
+                finalParts.add(valStr);
+            } else {
+                finalParts.add(valStr + " " + unit);
         List<Item> items = new ArrayList<>();
         for (ItemRequest request : requests) {
             if (request.getName() == null || request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
             }
-            validatePrice(request.getPrice());
+        }
 
-            Item item = new Item();
-            item.setName(request.getName());
-            item.setShoppingList(list);
-            item.setBrand(request.getBrand());
-            item.setQuantity(request.getQuantity());
-            item.setPrice(request.getPrice());
-            item.setCategory(request.getCategory());
-            item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-            item.setLastUpdatedTimestamp(System.currentTimeMillis());
-            item.setCreatedAt(System.currentTimeMillis());
+        finalParts.addAll(unparseableParts);
 
+        return String.join(" + ", finalParts);
+    }
             items.add(item);
         }
 
-        List<Item> saved = itemRepository.saveAll(items);
+    private void parseAndAccumulate(String quantityStr, Map<String, BigDecimal> unitSums, List<String> unparseableParts) {
+        String[] parts = quantityStr.split("\\+");
 
-        return saved.stream().map(this::mapToDTO).toList();
+        for (String part : parts) {
+            String cleanPart = part.trim();
+            if (cleanPart.isEmpty()) continue;
+
+            Matcher matcher = QUANTITY_PATTERN.matcher(cleanPart);
+            if (matcher.matches()) {
+                try {
+                    BigDecimal val = new BigDecimal(matcher.group(1).replace(",", "."));
+                    String unit = matcher.group(2).trim().toLowerCase();
+                    BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
+                    unitSums.put(unit, currentSum.add(val));
+                } catch (NumberFormatException _) {
+                    unparseableParts.add(cleanPart);
+                }
+            } else {
+                unparseableParts.add(cleanPart);
+            }
+        }
     }
 
     // Metoda actualizata primeste tot Item-ul!
     private void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
         String itemName = item.getName();
+
+    private void saveToHistory(String itemName, com.p2ps.auth.model.Users user) {
         UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
         if (history == null) {
             history = new UserProductHistory();
