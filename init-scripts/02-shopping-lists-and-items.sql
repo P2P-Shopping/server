@@ -79,11 +79,13 @@ CREATE TABLE IF NOT EXISTS items (
     version BIGINT DEFAULT 0,
     list_id UUID NOT NULL,
     catalog_id UUID,
+    external_item_id VARCHAR(255),
     CONSTRAINT fk_list FOREIGN KEY (list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE,
     CONSTRAINT fk_catalog FOREIGN KEY (catalog_id) REFERENCES p2p_product_catalog(id) ON DELETE SET NULL
     );
 
 ALTER TABLE items ADD COLUMN IF NOT EXISTS catalog_id UUID;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS external_item_id VARCHAR(255);
 ALTER TABLE items DROP CONSTRAINT IF EXISTS fk_catalog;
 ALTER TABLE items ADD CONSTRAINT fk_catalog FOREIGN KEY (catalog_id) REFERENCES p2p_product_catalog(id) ON DELETE SET NULL;
 
@@ -91,6 +93,9 @@ CREATE INDEX IF NOT EXISTS idx_shopping_lists_user ON shopping_lists(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_catalog ON items(catalog_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_items_external_item_id
+    ON items (external_item_id)
+    WHERE external_item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_catalog_purchase_count ON p2p_product_catalog(purchase_count DESC);
 CREATE INDEX IF NOT EXISTS idx_collaborators_user ON shopping_list_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_name_trgm ON items USING gin (LOWER(name) gin_trgm_ops);
