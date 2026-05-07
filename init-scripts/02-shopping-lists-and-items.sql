@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_shopping_lists_user ON shopping_lists(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_catalog ON items(catalog_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_items_external_item_id
+CREATE INDEX IF NOT EXISTS idx_items_external_item_id
     ON items (external_item_id)
     WHERE external_item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_catalog_purchase_count ON p2p_product_catalog(purchase_count DESC);

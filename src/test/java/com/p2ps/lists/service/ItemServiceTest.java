@@ -91,6 +91,7 @@ class ItemServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("Milk")).thenReturn(Optional.empty());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -99,6 +100,22 @@ class ItemServiceTest {
         assertThat(result.getPrice()).isEqualTo(BigDecimal.TEN);
         assertThat(result.isRecurrent()).isTrue();
         verify(itemRepository).save(any(Item.class));
+    }
+
+    @Test
+    void addItemToList_AttachesExternalItemId_WhenRoutableMatchExists() {
+        ItemRequest req = new ItemRequest();
+        req.setName("item_123");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "item_123")).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("item_123")).thenReturn(Optional.of("item_123"));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("item_123");
+        verify(itemRepository).save(argThat(item -> "item_123".equals(item.getExternalItemId())));
     }
 
     @Test

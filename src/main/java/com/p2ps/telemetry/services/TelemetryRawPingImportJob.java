@@ -101,7 +101,7 @@ public class TelemetryRawPingImportJob {
             WHERE external_store_id IS NOT NULL
         """);
         jdbcTemplate.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_items_external_item_id
+            CREATE INDEX IF NOT EXISTS idx_items_external_item_id
             ON items (external_item_id)
             WHERE external_item_id IS NOT NULL
         """);

@@ -68,4 +68,7 @@ public class Item {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "catalog_id")
     private ProductCatalog catalogItem;
+
+    @Column(name = "external_item_id", length = 255)
+    private String externalItemId;
 }
