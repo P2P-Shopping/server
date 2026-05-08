@@ -293,9 +293,9 @@ public class RoutingService {
         if (turnAngle > -45 && turnAngle <= 45) {
             return "mergi înainte";
         } else if (turnAngle > 45 && turnAngle <= 135) {
-            return "ia-o la stânga";
-        } else if (turnAngle < -45 && turnAngle >= -135) {
             return "ia-o la dreapta";
+        } else if (turnAngle < -45 && turnAngle >= -135) {
+            return "ia-o la stânga";
         } else {
             return "întoarce-te";
         }
