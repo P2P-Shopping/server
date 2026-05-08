@@ -69,25 +69,25 @@ public class ProximityMatchingService {
 
         for (ActiveListLocation location : nearbyLists) {
             String debounceKey = buildDebounceKey(pingDTO.getDeviceId(), location.getListId());
-
-            if (isDebounced(debounceKey)) {
-                log.debug("[PROXIMITY] Skipping notification for device: {}, list: {} — debounce active",
-                        pingDTO.getDeviceId(), location.getListId());
-                continue;
-            }
-
             sendNotificationAndDebounce(pingDTO, location, debounceKey);
         }
     }
 
-    private boolean isDebounced(String debounceKey) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(debounceKey));
-    }
 
     private void sendNotificationAndDebounce(LocationPingDTO pingDTO,
                                              ActiveListLocation location,
                                              String debounceKey) {
         String deepLink = appBaseUrl + "/list/" + location.getListId();
+
+        // Atomic SET NX EX — eliminates TOCTOU race condition
+        Boolean isNew = redisTemplate.opsForValue()
+                .setIfAbsent(debounceKey, "1", debounceHours, TimeUnit.HOURS);
+
+        if (!Boolean.TRUE.equals(isNew)) {
+            log.debug("[PROXIMITY] Skipping notification for device: {}, list: {} — debounce active",
+                    pingDTO.getDeviceId(), location.getListId());
+            return;
+        }
 
         fcmService.sendProximityAlert(
                 pingDTO.getFcmToken(),
@@ -95,9 +95,6 @@ public class ProximityMatchingService {
                 "A shopping list item is available near your current location.",
                 deepLink
         );
-
-        // Set debounce key — device will not be notified again for this list for debounceHours
-        redisTemplate.opsForValue().set(debounceKey, "1", debounceHours, TimeUnit.HOURS);
 
         log.info("[PROXIMITY] Notification dispatched and debounce set for device: {}, list: {}",
                 pingDTO.getDeviceId(), location.getListId());

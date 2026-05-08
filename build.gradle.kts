@@ -51,7 +51,6 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
     runtimeOnly("org.postgresql:postgresql")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-test-autoconfigure")
@@ -96,4 +95,13 @@ tasks.jacocoTestReport {
 
 tasks.test {
     finalizedBy(tasks.jacocoTestReport)
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("io.netty:netty-codec-http:4.2.13.Final")
+        force("io.netty:netty-codec-http2:4.2.13.Final")
+        force("io.netty:netty-codec-dns:4.2.13.Final")
+        force("io.netty:netty-codec-compression:4.2.13.Final")
+    }
 }

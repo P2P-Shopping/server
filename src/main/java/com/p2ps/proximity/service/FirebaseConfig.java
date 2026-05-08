@@ -32,15 +32,13 @@ public class FirebaseConfig {
             return;
         }
 
-        try {
-            InputStream serviceAccount = new ClassPathResource(serviceAccountPath).getInputStream();
-
+        try (InputStream serviceAccount = new ClassPathResource(serviceAccountPath).getInputStream()) {
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
                     .build();
-
             FirebaseApp.initializeApp(options);
             log.info("[FIREBASE] Firebase Admin SDK initialized successfully.");
+
 
         } catch (IOException e) {
             log.error("[FIREBASE] Failed to initialize Firebase Admin SDK. " +

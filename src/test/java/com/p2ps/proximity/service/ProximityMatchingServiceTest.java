@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -75,8 +77,9 @@ class ProximityMatchingServiceTest {
 
         when(activeListLocationRepository.findByCoordinatesNear(any(Point.class), any(Distance.class)))
                 .thenReturn(List.of(nearby));
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(true);
 
         proximityMatchingService.processLocationPing(ping);
 
@@ -86,7 +89,7 @@ class ProximityMatchingServiceTest {
                 anyString(),
                 contains("list-001")
         );
-        verify(valueOperations).set(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS));
+        verify(valueOperations).setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS));
     }
 
     @Test
@@ -96,12 +99,13 @@ class ProximityMatchingServiceTest {
 
         when(activeListLocationRepository.findByCoordinatesNear(any(Point.class), any(Distance.class)))
                 .thenReturn(List.of(nearby));
-        when(redisTemplate.hasKey(anyString())).thenReturn(true);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(false);
 
         proximityMatchingService.processLocationPing(ping);
 
         verify(fcmService, never()).sendProximityAlert(any(), any(), any(), any());
-        verify(redisTemplate, never()).opsForValue();
     }
 
     @Test
@@ -114,7 +118,7 @@ class ProximityMatchingServiceTest {
         proximityMatchingService.processLocationPing(ping);
 
         verify(fcmService, never()).sendProximityAlert(any(), any(), any(), any());
-        verify(redisTemplate, never()).hasKey(anyString());
+        verify(redisTemplate, never()).opsForValue();
     }
 
     @Test
@@ -125,13 +129,14 @@ class ProximityMatchingServiceTest {
 
         when(activeListLocationRepository.findByCoordinatesNear(any(Point.class), any(Distance.class)))
                 .thenReturn(List.of(loc1, loc2));
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(true);
 
         proximityMatchingService.processLocationPing(ping);
 
         verify(fcmService, times(2)).sendProximityAlert(any(), any(), any(), any());
-        verify(valueOperations, times(2)).set(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS));
+        verify(valueOperations, times(2)).setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS));
     }
 
     @Test
@@ -142,19 +147,20 @@ class ProximityMatchingServiceTest {
 
         when(activeListLocationRepository.findByCoordinatesNear(any(Point.class), any(Distance.class)))
                 .thenReturn(List.of(loc1, loc2));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         String debounceKey1 = "proximity:notified:device-001:list-001";
         String debounceKey2 = "proximity:notified:device-001:list-002";
-        when(redisTemplate.hasKey(debounceKey1)).thenReturn(true);
-        when(redisTemplate.hasKey(debounceKey2)).thenReturn(false);
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq(debounceKey1), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(false);
+        when(valueOperations.setIfAbsent(eq(debounceKey2), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(true);
 
         proximityMatchingService.processLocationPing(ping);
 
         ArgumentCaptor<String> deepLinkCaptor = ArgumentCaptor.forClass(String.class);
         verify(fcmService, times(1)).sendProximityAlert(any(), any(), any(), deepLinkCaptor.capture());
-        assert deepLinkCaptor.getValue().contains("list-002");
-        verify(valueOperations, times(1)).set(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS));
+        assertTrue(deepLinkCaptor.getValue().contains("list-002"));
     }
 
     @Test
@@ -164,13 +170,14 @@ class ProximityMatchingServiceTest {
 
         when(activeListLocationRepository.findByCoordinatesNear(any(Point.class), any(Distance.class)))
                 .thenReturn(List.of(nearby));
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+                .thenReturn(true);
 
         proximityMatchingService.processLocationPing(ping);
 
         ArgumentCaptor<String> deepLinkCaptor = ArgumentCaptor.forClass(String.class);
         verify(fcmService).sendProximityAlert(any(), any(), any(), deepLinkCaptor.capture());
-        assert deepLinkCaptor.getValue().equals("http://localhost:5173/list/list-xyz");
+        assertEquals("http://localhost:5173/list/list-xyz", deepLinkCaptor.getValue());
     }
 }

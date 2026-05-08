@@ -1,5 +1,6 @@
 package com.p2ps.proximity.service;
 
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
@@ -26,6 +27,11 @@ public class FcmService {
      * @param deepLink  URL to open inside the WebView when the user taps the notification
      */
     public void sendProximityAlert(String fcmToken, String title, String body, String deepLink) {
+        if (FirebaseApp.getApps().isEmpty()) {
+            log.warn("[FCM] Firebase is not initialized. Skipping notification to token: {}", fcmToken);
+            return;
+        }
+
         Message message = Message.builder()
                 .setToken(fcmToken)
                 .setNotification(Notification.builder()
