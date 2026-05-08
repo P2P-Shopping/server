@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +110,77 @@ class TelemetryRawPingImportJobTest {
         importJob.importNewTelemetryRecords();
 
         verify(mongoTemplate, never()).find(any(), eq(TelemetryRecord.class));
+    }
+
+    @Test
+    void requiredTelemetrySchemaPresent_shouldReturnTrueWhenAllTablesExist() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("store_geofences"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("items"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("users"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("shopping_lists"))).thenReturn(true);
+
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "requiredTelemetrySchemaPresent");
+
+        assert result != null && result;
+        verify(jdbcTemplate, times(4)).queryForObject(anyString(), eq(Boolean.class), anyString());
+    }
+
+    @Test
+    void requiredTelemetrySchemaPresent_shouldReturnFalseWhenOneTableMissing() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("store_geofences"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("items"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("users"))).thenReturn(false);
+
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "requiredTelemetrySchemaPresent");
+
+        assert result != null && !result;
+    }
+
+    @Test
+    void tableExists_shouldReturnFalseOnException() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), anyString()))
+                .thenThrow(new RuntimeException("Connection error"));
+
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "some_table");
+
+        assert result != null && !result;
+    }
+
+    @Test
+    void tableExists_shouldReturnTrueWhenTableExists() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("items"))).thenReturn(true);
+
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "items");
+
+        assert result != null && result;
+    }
+
+    @Test
+    void tableExists_shouldReturnFalseWhenTableDoesNotExist() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("nonexistent"))).thenReturn(false);
+
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "nonexistent");
+
+        assert result != null && !result;
+    }
+
+    @Test
+    void initialize_shouldSkipSchemaSetupWhenSchemaNotPresent() {
+        TelemetryRawPingImportJob newJob = new TelemetryRawPingImportJob(mongoTemplate, jdbcTemplate, dataSource);
+        ReflectionTestUtils.setField(newJob, "schedulingEnabled", true);
+        ReflectionTestUtils.setField(newJob, "importEnabled", true);
+        ReflectionTestUtils.setField(newJob, "batchSize", 500);
+        ReflectionTestUtils.setField(newJob, "autoProvisionDimensions", true);
+        ReflectionTestUtils.setField(newJob, "postgresDetected", true);
+
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("store_geofences"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("items"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("users"))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq("shopping_lists"))).thenReturn(false);
+
+        newJob.initialize();
+
+        verify(jdbcTemplate, never()).execute(contains("CREATE TABLE IF NOT EXISTS telemetry_import_state"));
     }
 
     private TelemetryRecord record(PingStatus status) {
