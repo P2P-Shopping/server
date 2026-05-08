@@ -100,7 +100,7 @@ class ItemServiceUpdateStatusTest {
         assertEquals(false, result.isChecked());
         verify(historyRepository, never())
                 .findByUser_IdAndCustomNameIgnoreCase(any(), any());
-        verify(catalogRepository, never()).searchByKeywordFuzzy(any());
+        verify(catalogRepository, never()).searchByKeywordStrict(any());
         verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any());
     }
 
@@ -119,17 +119,17 @@ class ItemServiceUpdateStatusTest {
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(10, "Milk")).thenReturn(null);
-        when(catalogRepository.searchByKeywordFuzzy("Milk")).thenReturn(java.util.List.of(catalogProduct));
+        when(catalogRepository.searchByKeywordStrict("Milk")).thenReturn(java.util.List.of(catalogProduct));
 
         itemService.updateItemStatus(itemId, true, 123L);
 
-        verify(catalogRepository).searchByKeywordFuzzy("Milk");
+        verify(catalogRepository).searchByKeywordStrict("Milk");
         verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any());
         verify(historyRepository).save(any(UserProductHistory.class));
     }
 
     @Test
-    void updateItemStatusShouldCreateCatalogEntryWhenNoMatchExists() {
+    void updateItemStatusShouldSaveOnlyToHistoryWhenNoCatalogMatchExists() {
         UUID itemId = UUID.randomUUID();
         Item item = buildItem();
         item.setName("Cheese");
@@ -139,26 +139,16 @@ class ItemServiceUpdateStatusTest {
         Users user = item.getShoppingList().getUser();
         user.setId(11);
 
-        ProductCatalog catalogProduct = new ProductCatalog();
-        catalogProduct.setId(UUID.randomUUID());
-        catalogProduct.setSpecificName("Cheese");
-
         when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(11, "Cheese")).thenReturn(null);
-        when(catalogRepository.searchByKeywordFuzzy("Cheese")).thenReturn(null);
-        when(catalogService.recordPurchase("Cheese", "Cheese", "Local", "Altele", new BigDecimal("12.50")))
-                .thenReturn(catalogProduct);
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(11, "Cheese Local")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Cheese Local")).thenReturn(java.util.List.of());
 
         itemService.updateItemStatus(itemId, true, 123L);
 
-        verify(catalogService).recordPurchase(
-                "Cheese",
-                "Cheese",
-                "Local",
-                "Altele",
-                new BigDecimal("12.50")
-        );
+        verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any());
+        verify(catalogRepository, never()).save(any());
         verify(historyRepository).save(any(UserProductHistory.class));
     }
 
@@ -208,6 +198,7 @@ class ItemServiceUpdateStatusTest {
 
     private Item buildItem() {
         Users user = new Users("ana@example.com", "secret", "Ana", "Ionescu");
+        user.setId(10); // set ID to avoid NPE in search hierarchy
         ShoppingList shoppingList = new ShoppingList();
         shoppingList.setId(UUID.randomUUID());
         shoppingList.setTitle("Weekly groceries");

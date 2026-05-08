@@ -47,7 +47,6 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
                        @Param("category") String category,
                        @Param("price") BigDecimal price);
 
-    // Transformata in Native Query pentru a suporta unaccent()
     @Query(value = """
             SELECT p.*
             FROM p2p_product_catalog p
@@ -58,7 +57,6 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             """, nativeQuery = true)
     List<ProductCatalog> searchByKeyword(@Param("keyword") String keyword);
 
-    // Adaugat unaccent() peste tot pentru fuzzy search
     @Query(value = """
             SELECT p.*
             FROM p2p_product_catalog p
@@ -77,4 +75,24 @@ public interface ProductCatalogRepository extends JpaRepository<ProductCatalog, 
             LIMIT 10
             """, nativeQuery = true)
     List<ProductCatalog> searchByKeywordFuzzy(@Param("keyword") String keyword);
+
+    @Query(value = """
+            SELECT p.*
+            FROM p2p_product_catalog p
+            WHERE similarity(f_unaccent(LOWER(p.generic_name)), f_unaccent(LOWER(:keyword))) > 0.85
+               OR similarity(f_unaccent(LOWER(p.specific_name)), f_unaccent(LOWER(:keyword))) > 0.85
+               OR similarity(f_unaccent(LOWER(CONCAT_WS(' ', p.specific_name, p.brand))), f_unaccent(LOWER(:keyword))) > 0.85
+               OR similarity(f_unaccent(LOWER(CONCAT_WS(' ', p.generic_name, p.brand))), f_unaccent(LOWER(:keyword))) > 0.85
+               OR f_unaccent(LOWER(p.generic_name)) = f_unaccent(LOWER(:keyword))
+               OR f_unaccent(LOWER(p.specific_name)) = f_unaccent(LOWER(:keyword))
+            ORDER BY GREATEST(
+                    similarity(f_unaccent(LOWER(p.generic_name)), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(p.specific_name)), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(CONCAT_WS(' ', p.specific_name, p.brand))), f_unaccent(LOWER(:keyword))),
+                    similarity(f_unaccent(LOWER(CONCAT_WS(' ', p.generic_name, p.brand))), f_unaccent(LOWER(:keyword)))
+                ) DESC,
+                p.purchase_count DESC
+            LIMIT 10
+            """, nativeQuery = true)
+    List<ProductCatalog> searchByKeywordStrict(@Param("keyword") String keyword);
 }

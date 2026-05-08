@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public interface ItemRepository extends JpaRepository<Item, UUID> {
     List<Item> findByShoppingListIdAndNameIgnoreCase(UUID shoppingListId, String name);
+    List<Item> findByShoppingListIdAndCatalogItem_Id(UUID shoppingListId, UUID catalogId);
 
     interface UserProductHistoryMatch {
         String getItemName();

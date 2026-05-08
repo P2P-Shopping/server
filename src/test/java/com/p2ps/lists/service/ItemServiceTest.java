@@ -1,5 +1,7 @@
 package com.p2ps.lists.service;
 
+import com.p2ps.ai.service.AiService;
+import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.lists.dto.ItemDTO;
@@ -10,6 +12,7 @@ import com.p2ps.lists.exception.ListValidationException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ShoppingList;
+import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
@@ -17,6 +20,7 @@ import com.p2ps.auth.model.Users;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,6 +55,9 @@ class ItemServiceTest {
     @Mock
     private CatalogService catalogService;
 
+    @Mock
+    private AiService aiService;
+
     @InjectMocks
     private ItemService itemService;
 
@@ -59,6 +66,7 @@ class ItemServiceTest {
     private String userEmail;
     private ShoppingList mockList;
     private Item mockItem;
+    private Users mockUser;
 
     @BeforeEach
     void setUp() {
@@ -66,12 +74,13 @@ class ItemServiceTest {
         itemId = UUID.randomUUID();
         userEmail = "test@user.com";
 
-        Users owner = new Users();
-        owner.setEmail(userEmail);
+        mockUser = new Users();
+        mockUser.setId(1);
+        mockUser.setEmail(userEmail);
 
         mockList = new ShoppingList();
         mockList.setId(listId);
-        mockList.setUser(owner);
+        mockList.setUser(mockUser);
 
         mockItem = new Item();
         mockItem.setId(itemId);
@@ -83,6 +92,211 @@ class ItemServiceTest {
     }
 
     @Test
+    void givenReceiptWithJunkItems_whenProcessed_thenAiFiltersJunkAndRefinesValidItems() {
+        ItemRequest validReq = new ItemRequest();
+        validReq.setName("lapte 1000g");
+        validReq.setPrice(new BigDecimal("5.0"));
+        
+        ItemRequest junkReq = new ItemRequest();
+        junkReq.setName("Garantie TV");
+        junkReq.setPrice(new BigDecimal("100.0"));
+
+        List<ItemRequest> requests = List.of(validReq, junkReq);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(anyInt(), anyString())).thenReturn(null);
+        lenient().when(catalogRepository.searchByKeywordStrict(anyString())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
+
+        // MOCK AI SERVICE to return ONLY the filtered/refined item
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> {
+            List<ItemDTO> dtos = invocation.getArgument(0);
+            ItemDTO validDto = dtos.stream().filter(d -> d.getName().equals("lapte 1000g")).findFirst().get();
+            // Refine name and unit
+            validDto.setName("Lapte");
+            validDto.setQuantity("1kg");
+            return List.of(validDto); // Dropped "Garantie TV"
+        });
+
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+
+        // Junk removed, so size is 1
+        assertThat(result).hasSize(1);
+        
+        ItemDTO savedItem = result.get(0);
+        assertThat(savedItem.getName()).isEqualTo("Lapte"); // Refined
+        assertThat(savedItem.getQuantity()).isEqualTo("1kg"); // Refined
+        assertThat(savedItem.getPrice()).isEqualTo(new BigDecimal("5.0")); // Preserved!
+        
+        ArgumentCaptor<List<Item>> listCaptor = ArgumentCaptor.forClass((Class) List.class);
+        verify(itemRepository).saveAll(listCaptor.capture());
+        
+        List<Item> savedEntities = listCaptor.getValue();
+        assertThat(savedEntities).hasSize(1);
+        assertThat(savedEntities.get(0).getName()).isEqualTo("Lapte");
+    }
+
+    @Test
+    void givenAiServiceFails_whenProcessed_thenFallbackToOriginalMappedItems() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Garantie TV");
+        List<ItemRequest> requests = List.of(req);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(anyInt(), anyString())).thenReturn(null);
+        lenient().when(catalogRepository.searchByKeywordStrict(anyString())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
+
+        // Simulate AI exception
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenThrow(new RuntimeException("LLM Timeout"));
+
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+
+        // Fallback occurred, item is kept as is
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("Garantie TV");
+    }
+
+    @Test
+    void givenUnknownProduct_whenAdded_thenSavedOnlyToItemAndHistoryWithNullCatalogId() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Unknown Magic Fruit");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Unknown Magic Fruit")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Unknown Magic Fruit")).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Unknown Magic Fruit")).thenReturn(List.of());
+        
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getName()).isEqualTo("Unknown Magic Fruit");
+        
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isNull();
+        assertThat(itemCaptor.getValue().getName()).isEqualTo("Unknown Magic Fruit");
+        
+        ArgumentCaptor<UserProductHistory> historyCaptor = ArgumentCaptor.forClass(UserProductHistory.class);
+        verify(historyRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getCatalogItem()).isNull();
+        assertThat(historyCaptor.getValue().getCustomName()).isEqualTo("Unknown Magic Fruit");
+        
+        verify(catalogRepository, never()).save(any());
+        verify(catalogService, never()).recordPurchase(anyString(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void givenKnownProduct_whenAdded_thenMappedToExistingCatalogId() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Milk");
+        
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Official Milk");
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Milk")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Milk")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Milk")).thenReturn(List.of());
+        
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getName()).isEqualTo("Milk"); // Preserves exact UX!
+        
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+        assertThat(itemCaptor.getValue().getName()).isEqualTo("Milk");
+        
+        ArgumentCaptor<UserProductHistory> historyCaptor = ArgumentCaptor.forClass(UserProductHistory.class);
+        verify(historyRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+        assertThat(historyCaptor.getValue().getCustomName()).isEqualTo("Milk");
+        
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void givenReceiptItemAlreadyOnList_whenProcessed_thenExistingItemIsUpdatedWithPriceAndNoDuplicateCreated() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Juice");
+        req.setBrand("Natural");
+        req.setPrice(new BigDecimal("10.0"));
+        req.setQuantity("1L");
+        
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Juice");
+        catalogProduct.setBrand("Natural");
+        
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Juice");
+        existingItem.setCatalogItem(catalogProduct);
+        existingItem.setQuantity("2L");
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Juice Natural")).thenReturn(null);
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Juice")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Juice Natural")).thenReturn(List.of(catalogProduct));
+        
+        // Match by catalogId
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of(existingItem));
+        
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getId()).isEqualTo(existingItem.getId());
+        assertThat(result.getPrice()).isEqualTo(new BigDecimal("10.0"));
+        assertThat(result.getQuantity()).isEqualTo("2L + 1L");
+        assertThat(result.getBrand()).isEqualTo("Natural");
+        
+        verify(itemRepository).save(existingItem);
+        verify(itemRepository, never()).saveAll(anyList()); 
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void givenItemWithSameNameButDifferentBrand_whenAdded_thenDoNotMergeAndCreateNewItem() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Lapte");
+        req.setBrand("Danone");
+        
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Lapte");
+        existingItem.setBrand(null); // Different brand
+        
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Lapte Danone")).thenReturn(null);
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Lapte")).thenReturn(null);
+        lenient().when(catalogRepository.searchByKeywordStrict("Lapte Danone")).thenReturn(List.of());
+        
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Lapte")).thenReturn(List.of(existingItem));
+        
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getId()).isNotEqualTo(existingItem.getId());
+        assertThat(result.getName()).isEqualTo("Lapte");
+        assertThat(result.getBrand()).isEqualTo("Danone");
+        
+        verify(itemRepository).save(any(Item.class));
+        verify(itemRepository, never()).delete(existingItem);
+    }
+
+    @Test
     void addItemToList_Success() {
         ItemRequest req = new ItemRequest();
         req.setName("Milk");
@@ -90,6 +304,8 @@ class ItemServiceTest {
         req.setIsRecurrent(true);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Milk")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Milk")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -244,7 +460,11 @@ class ItemServiceTest {
         List<ItemRequest> requests = List.of(req1, req2);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(catalogRepository.searchByKeywordStrict(anyString())).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
+        
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
@@ -301,6 +521,8 @@ class ItemServiceTest {
         duplicate2.setQuantity("1 kg");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Flour")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Flour")).thenReturn(List.of());
 
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
                 .thenReturn(List.of(duplicate1, duplicate2));
@@ -328,6 +550,8 @@ class ItemServiceTest {
         existing.setName("Flour");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Flour")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Flour")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Flour"))
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -355,8 +579,12 @@ class ItemServiceTest {
         List<ItemRequest> requests = List.of(req1, req2, req3);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(anyInt(), anyString())).thenReturn(null);
+        lenient().when(catalogRepository.searchByKeywordStrict(anyString())).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(any(UUID.class), anyString()))
                 .thenReturn(List.of());
+                
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -381,6 +609,8 @@ class ItemServiceTest {
         existingItem.setQuantity("17 + 1 liter");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Milk")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Milk")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Milk"))
                 .thenReturn(List.of(existingItem));
 
@@ -403,6 +633,8 @@ class ItemServiceTest {
         existingItem.setQuantity("2 kg");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Apples")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Apples")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apples"))
                 .thenReturn(List.of(existingItem));
 
@@ -527,6 +759,8 @@ class ItemServiceTest {
         req.setIsRecurrent(null);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Milk")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Milk")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -566,9 +800,13 @@ class ItemServiceTest {
         dbDuplicate2.setQuantity("0.5 kg");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Zahar")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Zahar")).thenReturn(List.of());
 
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Zahar"))
                 .thenReturn(List.of(dbDuplicate1, dbDuplicate2));
+
+        lenient().when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -593,6 +831,8 @@ class ItemServiceTest {
         existingItem.setQuantity("   ");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Apa")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Apa")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Apa"))
                 .thenReturn(List.of(existingItem));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -609,6 +849,11 @@ class ItemServiceTest {
         List<ItemRequest> requests = List.of(req);
         
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Item")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Item")).thenReturn(List.of());
+        
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
         when(itemRepository.saveAll(anyList())).thenReturn(List.of(new Item()));
 
         List<ItemDTO> results = itemService.addItemsToListWithRetry(listId, requests, userEmail);
@@ -626,6 +871,8 @@ class ItemServiceTest {
         existing.setQuantity("weird-box");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Mystery")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Mystery")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Mystery"))
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -647,6 +894,8 @@ class ItemServiceTest {
         existing.setQuantity("1 box + some stuff");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Mystery")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Mystery")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Mystery"))
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -661,6 +910,8 @@ class ItemServiceTest {
         req.setName("RaceConditionItem");
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RaceConditionItem")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("RaceConditionItem")).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RaceConditionItem"))
                 .thenReturn(List.of()); // First call: not found
         
