@@ -411,7 +411,7 @@ public class ItemService {
 
         // 1. Cautam in catalogul global prin fuzzy search
         if (catalogItem == null) {
-            catalogItem = resolveCatalogByFuzzySearch(itemName);
+            catalogItem = resolveCatalogByFuzzySearch(itemName, item.getBrand());
         }
 
         // 2. Daca tot nu l-am gasit, INSEAMNA CA E NOU! Il cream noi acum!
@@ -445,15 +445,28 @@ public class ItemService {
      * Performs a fuzzy search against the global product catalog (p2p_product_catalog)
      * using pg_trgm similarity matching. Returns the best match or null if nothing found.
      */
-    private ProductCatalog resolveCatalogByFuzzySearch(String itemName) {
-        List<ProductCatalog> matches = catalogRepository.searchByKeywordFuzzy(itemName);
-        if (matches != null && !matches.isEmpty()) {
-            ProductCatalog bestMatch = matches.get(0);
-            logger.debug("Fuzzy catalog match for '{}': {} (id={})",
-                    itemName, bestMatch.getSpecificName(), bestMatch.getId());
-            return bestMatch;
+    private ProductCatalog resolveCatalogByFuzzySearch(String itemName, String itemBrand) {
+        String searchKeyword = itemName;
+        if (itemBrand != null && !itemBrand.isBlank()) {
+            searchKeyword = itemName + " " + itemBrand;
         }
-        logger.debug("No fuzzy catalog match found for '{}', leaving catalogId as null", itemName);
+
+        List<ProductCatalog> matches = catalogRepository.searchByKeywordFuzzy(searchKeyword);
+        if (matches != null && !matches.isEmpty()) {
+            for (ProductCatalog match : matches) {
+                // If a specific brand was requested, ignore matches that have a DIFFERENT specific brand
+                if (itemBrand != null && !itemBrand.isBlank()) {
+                    if (match.getBrand() != null && !match.getBrand().isBlank() &&
+                            !match.getBrand().equalsIgnoreCase(itemBrand.trim())) {
+                        continue;
+                    }
+                }
+                logger.debug("Fuzzy catalog match for '{}' (brand '{}'): {} (id={})",
+                        itemName, itemBrand, match.getSpecificName(), match.getId());
+                return match;
+            }
+        }
+        logger.debug("No fuzzy catalog match found for '{}' (brand '{}'), leaving catalogId as null", itemName, itemBrand);
         return null;
     }
 }
