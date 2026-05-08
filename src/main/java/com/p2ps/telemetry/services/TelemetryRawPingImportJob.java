@@ -66,6 +66,11 @@ public class TelemetryRawPingImportJob {
             return;
         }
 
+        if (!requiredTelemetrySchemaPresent()) {
+            log.info("[TELEMETRY_IMPORT] Required telemetry schema is not present yet; skipping import job initialization.");
+            return;
+        }
+
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS telemetry_import_state (
                 job_name VARCHAR(100) PRIMARY KEY,
@@ -114,6 +119,30 @@ public class TelemetryRawPingImportJob {
             ensureSystemImportList();
         }
         log.info("[TELEMETRY_IMPORT] Import job initialized successfully.");
+    }
+
+    private boolean requiredTelemetrySchemaPresent() {
+        return tableExists("store_geofences")
+                && tableExists("items")
+                && tableExists("users")
+                && tableExists("shopping_lists");
+    }
+
+    private boolean tableExists(String tableName) {
+        try {
+            Boolean exists = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_name = ?
+                )
+            """, Boolean.class, tableName);
+            return Boolean.TRUE.equals(exists);
+        } catch (Exception e) {
+            log.debug("[TELEMETRY_IMPORT] Could not inspect table {}.", tableName, e);
+            return false;
+        }
     }
 
     @Scheduled(fixedDelayString = "${telemetry.raw-ping-import.fixed-delay-ms:30000}")
