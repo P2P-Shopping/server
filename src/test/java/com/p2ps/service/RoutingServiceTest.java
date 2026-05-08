@@ -97,7 +97,7 @@ class RoutingServiceTest {
 
         List<RoutePoint> route = optimizer.nearestNeighborTSP(start, List.of(far, near));
 
-        assertEquals(ITEM_1, route.get(0).getItemId());
+        assertEquals(ITEM_1, route.getFirst().getItemId());
     }
 
     @Test
@@ -164,7 +164,7 @@ class RoutingServiceTest {
 
         // Run Nearest Neighbor
         List<RoutePoint> nnRoute = new ArrayList<>(optimizer.nearestNeighborTSP(start, points));
-        nnRoute.add(0, start); // start point at the beginning to measure full distance
+        nnRoute.addFirst(start); // start point at the beginning to measure full distance
         double nnDistance = optimizer.routeDistance(nnRoute);
 
         // Run 3-Opt Improvement
@@ -314,7 +314,7 @@ class RoutingServiceTest {
         assertFalse(response.getRoute().isEmpty());
 
         // Route must NOT end with a checkout node
-        RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+        RoutePoint last = response.getRoute().getLast();
         assertNotEquals("checkout", last.getItemId());
     }
 
