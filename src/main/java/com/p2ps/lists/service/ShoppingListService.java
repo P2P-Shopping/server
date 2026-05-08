@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -288,10 +289,21 @@ public class ShoppingListService {
             throw new IllegalArgumentException("User is already a collaborator on this list");
         }
 
-        boolean alreadyInvited = invitationRepository.existsByShoppingListIdAndInviteeIdAndStatus(
-                listId, collaborator.getId(), InvitationStatus.PENDING);
-        if (alreadyInvited) {
-            throw new IllegalArgumentException("Invitation already pending for this user");
+        Optional<ListInvitation> existingInvitation = invitationRepository.findByShoppingListIdAndInviteeId(
+                listId, collaborator.getId());
+
+        if (existingInvitation.isPresent()) {
+            ListInvitation existing = existingInvitation.get();
+            if (existing.getStatus() == InvitationStatus.PENDING) {
+                throw new IllegalArgumentException("Invitation already pending for this user");
+            }
+            if (existing.getStatus() == InvitationStatus.ACCEPTED) {
+                throw new IllegalArgumentException("User has already accepted an invitation for this list");
+            }
+            existing.setInviter(list.getUser());
+            existing.setStatus(InvitationStatus.PENDING);
+            invitationRepository.save(existing);
+            return;
         }
 
         ListInvitation invitation = new ListInvitation();

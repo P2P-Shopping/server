@@ -1,11 +1,10 @@
 package com.p2ps.lists.service;
 
 import com.p2ps.auth.model.Users;
-import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.lists.dto.ListInvitationDTO;
+import com.p2ps.lists.exception.InvitationNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
-import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.InvitationStatus;
 import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ShoppingList;
@@ -22,14 +21,11 @@ public class InvitationService {
 
     private final ListInvitationRepository invitationRepository;
     private final ShoppingListRepository shoppingListRepository;
-    private final UserRepository userRepository;
 
     public InvitationService(ListInvitationRepository invitationRepository,
-                             ShoppingListRepository shoppingListRepository,
-                             UserRepository userRepository) {
+                             ShoppingListRepository shoppingListRepository) {
         this.invitationRepository = invitationRepository;
         this.shoppingListRepository = shoppingListRepository;
-        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -43,7 +39,7 @@ public class InvitationService {
     @Transactional
     public void acceptInvitation(UUID invitationId, String userEmail) {
         ListInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Invitation not found"));
+                .orElseThrow(() -> new InvitationNotFoundException("Invitation not found"));
 
         if (!invitation.getInvitee().getEmail().equals(userEmail)) {
             throw new ListAccessDeniedException("This invitation is not for you");
@@ -64,7 +60,7 @@ public class InvitationService {
     @Transactional
     public void declineInvitation(UUID invitationId, String userEmail) {
         ListInvitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Invitation not found"));
+                .orElseThrow(() -> new InvitationNotFoundException("Invitation not found"));
 
         if (!invitation.getInvitee().getEmail().equals(userEmail)) {
             throw new ListAccessDeniedException("This invitation is not for you");
