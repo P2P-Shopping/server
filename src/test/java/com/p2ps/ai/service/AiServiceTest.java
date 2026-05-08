@@ -206,4 +206,28 @@ class AiServiceTest {
 
         assertThat(result).isNull();
     }
+    @Test
+    void extractIngredientsAsJson_multiItemPrompt_includesMultiItemRule() {
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("{\"listType\":\"CART\",\"items\":[]}"))));
+
+        aiService.extractIngredientsAsJson("sugar and bananas");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(aiClient, org.mockito.Mockito.atLeastOnce()).generateResponse(captor.capture(), any());
+
+        @SuppressWarnings("unchecked")
+        List<AiMessage> messages = (List<AiMessage>) captor.getAllValues().get(0);
+
+        String prompt = messages.get(0).parts().stream()
+                .filter(part -> part instanceof AiMessage.TextPart)
+                .map(part -> ((AiMessage.TextPart) part).text())
+                .findFirst()
+                .orElse("");
+
+        assertThat(prompt)
+                .contains("MULTI-ITEM RULE")
+                .contains("sugar and bananas")
+                .contains("one separate object inside items for EACH item");
+    }
 }

@@ -29,6 +29,8 @@ public class AiService {
     private static final String SYSTEM_PROMPT =
             "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
                     "LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian. " +
+                    "MULTI-ITEM RULE (CRITICAL): If the user mentions multiple grocery items in one prompt, you MUST return one separate object inside items for EACH item. " +
+                    "Never merge multiple requested products into one item. For example, 'sugar and bananas' must produce two items: one for sugar and one for bananas. " +
                     "VISUAL RULES (CRITICAL): " +
                     "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
                     "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
@@ -44,6 +46,7 @@ public class AiService {
     private static final String FINAL_JSON_PROMPT =
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
                     "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
+                    "For multi-item requests, items MUST contain all requested items as separate objects. " +
                     "If catalog tool results were found, copy the chosen product's specificName, brand, and catalogId into the JSON. Preserve the user's language for genericName and category. Remember to use the STRICT category list. Do not add markdown, explanations, or prose.";
     private static final String DESCRIPTION = "description";
     private static final String RADIUS_METERS = "radius_meters";

@@ -238,8 +238,12 @@ public class ItemService {
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
 
-        if (request.getIsChecked() != null && request.getIsChecked() != item.isChecked()) {
+        if (request.getIsChecked() != null) {
+            boolean wasChecked = item.isChecked();
             item.setChecked(request.getIsChecked());
+            if (item.isChecked() && !wasChecked) {
+                saveToHistory(item, item.getShoppingList().getUser());
+            }
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
@@ -270,7 +274,11 @@ public class ItemService {
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
         if (payload.getChecked() != null) {
+            boolean wasChecked = item.isChecked();
             item.setChecked(payload.getChecked());
+            if (item.isChecked() && !wasChecked) {
+                saveToHistory(item, item.getShoppingList().getUser());
+            }
         }
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
@@ -388,7 +396,7 @@ public class ItemService {
         }
     }
 
-    private void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
+    void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
         String itemName = item.getName();
         UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
         if (history == null) {
