@@ -11,8 +11,11 @@ import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
+import com.p2ps.lists.model.InvitationStatus;
+import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.catalog.model.ProductCatalog;
@@ -52,6 +55,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private ItemRepository itemRepository;
+
+    @Mock
+    private ListInvitationRepository invitationRepository;
 
     @InjectMocks
     private ShoppingListService shoppingListService;
@@ -419,7 +425,7 @@ class ShoppingListServiceTest {
         assertEquals(new BigDecimal("1.5"), result.getItems().get(0).getPrice());
     }
     @Test
-    void shareListShouldAddCollaboratorWhenCalledByOwner() {
+    void shareListShouldCreatePendingInvitationWhenCalledByOwner() {
         String ownerEmail = "owner@example.com";
         String collabEmail = "collab@example.com";
         UUID listId = UUID.randomUUID();
@@ -435,11 +441,13 @@ class ShoppingListServiceTest {
         
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.existsByShoppingListIdAndInviteeIdAndStatus(listId, 2, InvitationStatus.PENDING)).thenReturn(false);
         
         shoppingListService.shareList(listId, collabEmail, ownerEmail);
         
-        assertTrue(list.getCollaborators().contains(collaborator));
-        verify(shoppingListRepository).save(list);
+        assertFalse(list.getCollaborators().contains(collaborator));
+        verify(invitationRepository).save(any(ListInvitation.class));
+        verify(shoppingListRepository, never()).save(list);
     }
 
     @Test
