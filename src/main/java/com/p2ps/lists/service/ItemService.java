@@ -257,11 +257,13 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
+        boolean wasChecked = item.isChecked();
+
         item.setChecked(checked);
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
-        // SALVĂM ÎN ISTORIC/CATALOG DOAR DACĂ A FOST BIFAT (CUMPĂRAT)
-        if (checked) {
+        // Salvăm în istoric doar când item-ul trece din nebifat în bifat.
+        if (checked && !wasChecked) {
             saveToHistory(item, item.getShoppingList().getUser());
         }
 

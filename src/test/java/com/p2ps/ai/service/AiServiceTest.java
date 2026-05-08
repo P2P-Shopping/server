@@ -214,20 +214,34 @@ class AiServiceTest {
         aiService.extractIngredientsAsJson("sugar and bananas");
 
         var captor = org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(aiClient, org.mockito.Mockito.atLeastOnce()).generateResponse(captor.capture(), any());
+        verify(aiClient, org.mockito.Mockito.atLeast(2)).generateResponse(captor.capture(), any());
 
         @SuppressWarnings("unchecked")
-        List<AiMessage> messages = (List<AiMessage>) captor.getAllValues().get(0);
+        List<AiMessage> firstCallMessages = (List<AiMessage>) captor.getAllValues().get(0);
 
-        String prompt = messages.get(0).parts().stream()
+        String initialPrompt = firstCallMessages.get(0).parts().stream()
                 .filter(part -> part instanceof AiMessage.TextPart)
                 .map(part -> ((AiMessage.TextPart) part).text())
                 .findFirst()
                 .orElse("");
 
-        assertThat(prompt)
+        @SuppressWarnings("unchecked")
+        List<AiMessage> finalizerCallMessages =
+                (List<AiMessage>) captor.getAllValues().get(captor.getAllValues().size() - 1);
+
+        String finalizerPrompt = finalizerCallMessages.get(finalizerCallMessages.size() - 1).parts().stream()
+                .filter(part -> part instanceof AiMessage.TextPart)
+                .map(part -> ((AiMessage.TextPart) part).text())
+                .findFirst()
+                .orElse("");
+
+        assertThat(initialPrompt)
                 .contains("MULTI-ITEM RULE")
                 .contains("sugar and bananas")
                 .contains("one separate object inside items for EACH item");
+
+        assertThat(finalizerPrompt)
+                .contains("For multi-item requests, items MUST contain all requested items as separate objects")
+                .contains("Previous draft");
     }
 }

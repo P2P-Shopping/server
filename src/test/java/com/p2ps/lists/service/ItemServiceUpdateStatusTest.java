@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -169,6 +170,40 @@ class ItemServiceUpdateStatusTest {
 
         assertThrows(ItemNotFoundException.class,
                 () -> itemService.updateItemStatus(itemId, true, 123L));
+    }
+
+    @Test
+    void updateItemStatus_whenUncheckedToChecked_savesToHistory() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem();
+        item.setName("Milk");
+        item.setChecked(false); // Unchecked
+        Users user = item.getShoppingList().getUser();
+        user.setId(10);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        itemService.updateItemStatus(itemId, true, 123L);
+
+        verify(historyRepository).findByUser_IdAndCustomNameIgnoreCase(any(), eq("Milk"));
+    }
+
+    @Test
+    void updateItemStatus_whenAlreadyChecked_doesNotSaveDuplicateHistory() {
+        UUID itemId = UUID.randomUUID();
+        Item item = buildItem();
+        item.setName("Milk");
+        item.setChecked(true); // Already checked
+        Users user = item.getShoppingList().getUser();
+        user.setId(10);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        itemService.updateItemStatus(itemId, true, 123L);
+
+        verify(historyRepository, never()).findByUser_IdAndCustomNameIgnoreCase(any(), any());
     }
 
     private Item buildItem() {
