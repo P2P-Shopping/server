@@ -175,8 +175,9 @@ class InvitationServiceTest {
     void acceptInvitationShouldThrowWhenNotFound() {
         when(invitationRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
 
+        UUID randomId = UUID.randomUUID();
         assertThrows(InvitationNotFoundException.class,
-                () -> invitationService.acceptInvitation(UUID.randomUUID(), "invitee@example.com"));
+                () -> invitationService.acceptInvitation(randomId, "invitee@example.com"));
     }
 
     @Test
@@ -229,7 +230,8 @@ class InvitationServiceTest {
     void declineInvitationShouldThrowWhenNotFound() {
         when(invitationRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
 
+        UUID randomId = UUID.randomUUID();
         assertThrows(InvitationNotFoundException.class,
-                () -> invitationService.declineInvitation(UUID.randomUUID(), "invitee@example.com"));
+                () -> invitationService.declineInvitation(randomId, "invitee@example.com"));
     }
 }
