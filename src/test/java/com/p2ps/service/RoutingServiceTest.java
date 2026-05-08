@@ -482,4 +482,55 @@ class RoutingServiceTest {
         assertEquals("error", response.getStatus());
         assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
     }
+
+    // -------------------------------------------------------------------------
+    // Audio Instructions tests (BE 3.2)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void addAudioInstructions_shouldSetDestinationForNullOrSmallList() {
+        // null list
+        assertDoesNotThrow(() -> service.addAudioInstructions(null));
+
+        // size 1 list
+        RoutePoint singlePoint = new RoutePoint("u", "Tu", 47.156, 27.587);
+        service.addAudioInstructions(List.of(singlePoint));
+        assertEquals("Ai ajuns la destinație.", singlePoint.getAudioInstruction());
+    }
+
+    @Test
+    void addAudioInstructions_shouldSetAudioInstructionsForRoute() {
+        RoutePoint user = new RoutePoint("u", "Tu", 47.156, 27.587);
+        RoutePoint p1 = new RoutePoint(ITEM_1, "Lapte", 47.157, 27.587); // move north
+        RoutePoint p2 = new RoutePoint(ITEM_2, "Paine", 47.157, 27.588); // move east -> turn right
+        RoutePoint p3 = new RoutePoint(ITEM_3, "Branza", 47.158, 27.588); // move north -> turn left
+
+        List<RoutePoint> route = List.of(user, p1, p2, p3);
+        service.addAudioInstructions(route);
+
+        assertNotNull(user.getAudioInstruction());
+        assertTrue(user.getAudioInstruction().contains("ia-o la dreapta pentru a găsi Paine"));
+
+        assertNotNull(p1.getAudioInstruction());
+        assertTrue(p1.getAudioInstruction().contains("ia-o la stânga pentru a găsi Branza"));
+
+        assertNotNull(p2.getAudioInstruction());
+        assertTrue(p2.getAudioInstruction().contains("vei ajunge la Branza"));
+
+        assertEquals("Ai ajuns la destinație.", p3.getAudioInstruction());
+    }
+
+    @Test
+    void addAudioInstructions_shouldDetectStraightAndTurnAround() {
+        RoutePoint user = new RoutePoint("u", "Tu", 47.156, 27.587);
+        RoutePoint p1 = new RoutePoint(ITEM_1, "A", 47.157, 27.587); // move north
+        RoutePoint p2 = new RoutePoint(ITEM_2, "B", 47.158, 27.587); // move north -> straight
+        RoutePoint p3 = new RoutePoint(ITEM_3, "C", 47.157, 27.587); // move south -> turn around
+
+        List<RoutePoint> route = List.of(user, p1, p2, p3);
+        service.addAudioInstructions(route);
+
+        assertTrue(user.getAudioInstruction().contains("mergi înainte pentru a găsi B"));
+        assertTrue(p1.getAudioInstruction().contains("întoarce-te pentru a găsi C"));
+    }
 }
