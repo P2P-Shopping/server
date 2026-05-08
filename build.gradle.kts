@@ -51,7 +51,7 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
     runtimeOnly("org.postgresql:postgresql")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-test-autoconfigure")
@@ -62,6 +62,8 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
+
+    implementation("com.google.firebase:firebase-admin:9.4.3")
 
     testRuntimeOnly("org.junit.platform:junit-platform-suite-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
