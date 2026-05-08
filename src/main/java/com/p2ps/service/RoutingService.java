@@ -170,13 +170,31 @@ public class RoutingService {
     private List<ProductLocation> queryInventoryMap(List<String> productIds, String storeId, List<String> warnings) {
         String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
-        String sql = "SELECT sim.item_id::text AS item_id, i.name AS name, " +
-                "ST_Y(sim.estimated_loc_point) AS lat, ST_X(sim.estimated_loc_point) AS lng, " +
-                "sim.confidence_score " +
-                "FROM store_inventory_map sim " +
-                "JOIN items i ON sim.item_id = i.id " +
-                "WHERE sim.item_id::text IN (" + placeholders + ") " +
-                "AND sim.store_id::text = ?";
+        String sql = """
+                WITH requested_items AS (
+                    SELECT id, name, external_item_id
+                    FROM items
+                    WHERE id::text IN (%s)
+                )
+                SELECT DISTINCT ON (ri.id)
+                    ri.id::text AS item_id,
+                    ri.name AS name,
+                    ST_Y(sim.estimated_loc_point) AS lat,
+                    ST_X(sim.estimated_loc_point) AS lng,
+                    sim.confidence_score
+                FROM requested_items ri
+                JOIN items located_item
+                  ON located_item.id = ri.id
+                  OR (
+                      ri.external_item_id IS NOT NULL
+                      AND located_item.external_item_id = ri.external_item_id
+                  )
+                JOIN store_inventory_map sim ON sim.item_id = located_item.id
+                WHERE sim.store_id::text = ?
+                ORDER BY ri.id,
+                         CASE WHEN located_item.id = ri.id THEN 0 ELSE 1 END,
+                         sim.confidence_score DESC
+                """.formatted(placeholders);
 
         List<Object> params = new ArrayList<>(productIds);
         params.add(storeId);
@@ -217,15 +235,30 @@ public class RoutingService {
 
         String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
-        String sql = "SELECT rup.item_id::text AS item_id, i.name AS name, " +
-                "AVG(ST_Y(rup.location_point)) AS lat, AVG(ST_X(rup.location_point)) AS lng, " +
-                "0.0 AS confidence_score " +
-                "FROM raw_user_pings rup " +
-                "JOIN items i ON rup.item_id = i.id " +
-                "WHERE rup.item_id::text IN (" + placeholders + ") " +
-                "AND rup.store_id::text = ? " +
-                "AND rup.accuracy_m < 12.0 " +
-                "GROUP BY rup.item_id, i.name";
+        String sql = """
+                WITH requested_items AS (
+                    SELECT id, name, external_item_id
+                    FROM items
+                    WHERE id::text IN (%s)
+                )
+                SELECT
+                    ri.id::text AS item_id,
+                    ri.name AS name,
+                    AVG(ST_Y(rup.location_point)) AS lat,
+                    AVG(ST_X(rup.location_point)) AS lng,
+                    0.0 AS confidence_score
+                FROM requested_items ri
+                JOIN items located_item
+                  ON located_item.id = ri.id
+                  OR (
+                      ri.external_item_id IS NOT NULL
+                      AND located_item.external_item_id = ri.external_item_id
+                  )
+                JOIN raw_user_pings rup ON rup.item_id = located_item.id
+                WHERE rup.store_id::text = ?
+                  AND rup.accuracy_m < 12.0
+                GROUP BY ri.id, ri.name
+                """.formatted(placeholders);
 
         List<Object> params = new ArrayList<>(productIds);
         params.add(storeId);

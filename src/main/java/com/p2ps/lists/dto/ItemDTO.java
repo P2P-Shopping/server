@@ -27,4 +27,5 @@ public class ItemDTO {
     private boolean isRecurrent;
     private Long lastUpdatedTimestamp;
     private Long createdAt;
+    private String externalItemId;
 }
