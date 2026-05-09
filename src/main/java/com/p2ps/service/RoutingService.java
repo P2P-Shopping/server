@@ -84,6 +84,7 @@ public class RoutingService {
         // Eager path — same as before
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
+        addAudioInstructions(optimizedRoute); // BE 3.2
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
 
         RoutingResponse response = new RoutingResponse();
@@ -115,6 +116,7 @@ public class RoutingService {
 
         // Partial response: user point + first lazyN products
         List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+        addAudioInstructions(partial); // BE 3.2
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
@@ -170,13 +172,31 @@ public class RoutingService {
     private List<ProductLocation> queryInventoryMap(List<String> productIds, String storeId, List<String> warnings) {
         String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
-        String sql = "SELECT sim.item_id::text AS item_id, i.name AS name, " +
-                "ST_Y(sim.estimated_loc_point) AS lat, ST_X(sim.estimated_loc_point) AS lng, " +
-                "sim.confidence_score " +
-                "FROM store_inventory_map sim " +
-                "JOIN items i ON sim.item_id = i.id " +
-                "WHERE sim.item_id::text IN (" + placeholders + ") " +
-                "AND sim.store_id::text = ?";
+        String sql = """
+                WITH requested_items AS (
+                    SELECT id, name, external_item_id
+                    FROM items
+                    WHERE id::text IN (%s)
+                )
+                SELECT DISTINCT ON (ri.id)
+                    ri.id::text AS item_id,
+                    ri.name AS name,
+                    ST_Y(sim.estimated_loc_point) AS lat,
+                    ST_X(sim.estimated_loc_point) AS lng,
+                    sim.confidence_score
+                FROM requested_items ri
+                JOIN items located_item
+                  ON located_item.id = ri.id
+                  OR (
+                      ri.external_item_id IS NOT NULL
+                      AND located_item.external_item_id = ri.external_item_id
+                  )
+                JOIN store_inventory_map sim ON sim.item_id = located_item.id
+                WHERE sim.store_id::text = ?
+                ORDER BY ri.id,
+                         CASE WHEN located_item.id = ri.id THEN 0 ELSE 1 END,
+                         sim.confidence_score DESC
+                """.formatted(placeholders);
 
         List<Object> params = new ArrayList<>(productIds);
         params.add(storeId);
@@ -217,15 +237,30 @@ public class RoutingService {
 
         String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
-        String sql = "SELECT rup.item_id::text AS item_id, i.name AS name, " +
-                "AVG(ST_Y(rup.location_point)) AS lat, AVG(ST_X(rup.location_point)) AS lng, " +
-                "0.0 AS confidence_score " +
-                "FROM raw_user_pings rup " +
-                "JOIN items i ON rup.item_id = i.id " +
-                "WHERE rup.item_id::text IN (" + placeholders + ") " +
-                "AND rup.store_id::text = ? " +
-                "AND rup.accuracy_m < 12.0 " +
-                "GROUP BY rup.item_id, i.name";
+        String sql = """
+                WITH requested_items AS (
+                    SELECT id, name, external_item_id
+                    FROM items
+                    WHERE id::text IN (%s)
+                )
+                SELECT
+                    ri.id::text AS item_id,
+                    ri.name AS name,
+                    AVG(ST_Y(rup.location_point)) AS lat,
+                    AVG(ST_X(rup.location_point)) AS lng,
+                    0.0 AS confidence_score
+                FROM requested_items ri
+                JOIN items located_item
+                  ON located_item.id = ri.id
+                  OR (
+                      ri.external_item_id IS NOT NULL
+                      AND located_item.external_item_id = ri.external_item_id
+                  )
+                JOIN raw_user_pings rup ON rup.item_id = located_item.id
+                WHERE rup.store_id::text = ?
+                  AND rup.accuracy_m < 12.0
+                GROUP BY ri.id, ri.name
+                """.formatted(placeholders);
 
         List<Object> params = new ArrayList<>(productIds);
         params.add(storeId);
@@ -245,6 +280,73 @@ public class RoutingService {
         logger.info(">>> Query terminat, {} rezultate", result.size());
         return result;
     }
+
+    // -------------------------------------------------------------------------
+    // BE 3.2 — Audio Instruction Generation
+    // -------------------------------------------------------------------------
+
+    void addAudioInstructions(List<RoutePoint> route) {
+        if (route == null || route.size() < 2) {
+            if (route != null && !route.isEmpty()) {
+                route.getFirst().setAudioInstruction("Ai ajuns la destinație.");
+            }
+            return;
+        }
+
+        for (int i = 0; i < route.size() - 1; i++) {
+            RoutePoint pCurrent = route.get(i);
+            RoutePoint pNext = route.get(i + 1);
+            double distance = optimizer.haversine(pCurrent.getLat(), pCurrent.getLng(), pNext.getLat(), pNext.getLng());
+
+            String instruction;
+            if (i < route.size() - 2) {
+                RoutePoint pAfterNext = route.get(i + 2);
+                String turn = calculateTurn(pCurrent, pNext, pAfterNext);
+                instruction = String.format("În %d metri, %s pentru a găsi %s.",
+                        (int) distance, turn, pAfterNext.getName());
+            } else {
+                instruction = String.format("În %d metri, vei ajunge la %s.",
+                        (int) distance, pNext.getName());
+            }
+            pCurrent.setAudioInstruction(instruction);
+        }
+
+        route.getLast().setAudioInstruction("Ai ajuns la destinație.");
+    }
+
+    private String calculateTurn(RoutePoint p1, RoutePoint p2, RoutePoint p3) {
+        double bearing1 = bearing(p1, p2);
+        double bearing2 = bearing(p2, p3);
+        double turnAngle = bearing2 - bearing1;
+
+        // Normalize angle to [-180, 180]
+        if (turnAngle > 180) turnAngle -= 360;
+        if (turnAngle <= -180) turnAngle += 360;
+
+        if (turnAngle > -45 && turnAngle <= 45) {
+            return "mergi înainte";
+        } else if (turnAngle > 45 && turnAngle <= 135) {
+            return "ia-o la dreapta";
+        } else if (turnAngle < -45 && turnAngle >= -135) {
+            return "ia-o la stânga";
+        } else {
+            return "întoarce-te";
+        }
+    }
+
+    private double bearing(RoutePoint p1, RoutePoint p2) {
+        double lat1 = Math.toRadians(p1.getLat());
+        double lon1 = Math.toRadians(p1.getLng());
+        double lat2 = Math.toRadians(p2.getLat());
+        double lon2 = Math.toRadians(p2.getLng());
+
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
 
     // -------------------------------------------------------------------------
     // Helpers

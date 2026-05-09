@@ -1,5 +1,6 @@
 package com.p2ps.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -13,6 +14,9 @@ public class RoutePoint implements Serializable {
     private String name;
     private double lat;
     private double lng;
+    
+    @JsonProperty("audio_instruction")
+    private String audioInstruction;
 
     /**
      * UI hint for the frontend so it can render each stop differently.

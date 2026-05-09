@@ -45,8 +45,8 @@ public class ItemService {
 
     private final ItemService self;
 
-    public ItemService(ItemRepository itemRepository, 
-                       ShoppingListRepository shoppingListRepository, 
+    public ItemService(ItemRepository itemRepository,
+                       ShoppingListRepository shoppingListRepository,
                        UserProductHistoryRepository historyRepository,
                        ProductCatalogRepository catalogRepository,
                        CatalogService catalogService,
@@ -70,7 +70,7 @@ public class ItemService {
         String normalizedBrand = normalizeBrand(brand);
         List<Item> candidates = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, name);
         List<Item> exactMatches = new ArrayList<>();
-        
+
         for (Item item : candidates) {
             String itemBrand = normalizeBrand(item.getBrand());
             if (normalizedBrand.equals(itemBrand)) {
@@ -101,7 +101,7 @@ public class ItemService {
         if (catalogMatch != null) {
             existingItems = itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogMatch.getId());
         }
-        
+
         if (existingItems.isEmpty()) {
             existingItems = findExactListMatches(listId, normalizedItemName, request.getBrand());
         }
@@ -126,7 +126,8 @@ public class ItemService {
         primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         updateItemFields(primaryItem, request);
-        
+        attachRoutableExternalItemId(primaryItem); // Preluat din main
+
         if (catalogMatch != null) {
             primaryItem.setCatalogItem(catalogMatch);
         }
@@ -140,7 +141,7 @@ public class ItemService {
 
     private ItemDTO createAndSaveNewItem(UUID listId, ItemRequest request, String userEmail, ShoppingList list, String normalizedItemName, ProductCatalog catalogMatch) {
         Item item = new Item();
-        
+
         item.setName(normalizedItemName);
         item.setCatalogItem(catalogMatch);
         item.setShoppingList(list);
@@ -151,6 +152,7 @@ public class ItemService {
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
+        attachRoutableExternalItemId(item); // Preluat din main
 
         try {
             Item savedItem = itemRepository.save(item);
@@ -195,7 +197,7 @@ public class ItemService {
         List<Item> pendingItems = new ArrayList<>(batchMap.values());
         Map<UUID, Item> trackingMap = new HashMap<>();
         List<ItemDTO> dtosToValidate = new ArrayList<>();
-        
+
         for (Item item : pendingItems) {
             ItemDTO dto = mapToDTO(item);
             UUID trackingId = dto.getId();
@@ -245,7 +247,7 @@ public class ItemService {
 
         String normalizedItemName = request.getName().trim();
         ProductCatalog catalogMatch = resolveCatalogMatch(normalizedItemName, request.getBrand(), list.getUser());
-        
+
         String mapKey;
         if (catalogMatch != null) {
             mapKey = "cat_" + catalogMatch.getId().toString();
@@ -264,9 +266,9 @@ public class ItemService {
     private void mergeIntoBatch(Item existingInBatch, ItemRequest request, ProductCatalog catalogMatch) {
         existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
         existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
-        
+
         updateItemFields(existingInBatch, request);
-        
+
         if (catalogMatch != null && existingInBatch.getCatalogItem() == null) {
             existingInBatch.setCatalogItem(catalogMatch);
         }
@@ -277,7 +279,7 @@ public class ItemService {
         if (catalogMatch != null) {
             existingInDb = itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogMatch.getId());
         }
-        
+
         if (existingInDb.isEmpty()) {
             existingInDb = findExactListMatches(listId, normalizedItemName, request.getBrand());
         }
@@ -291,13 +293,14 @@ public class ItemService {
             }
             primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
             primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
-            
+
             updateItemFields(primaryItem, request);
-            
+            attachRoutableExternalItemId(primaryItem); // Preluat din main
+
             if (catalogMatch != null) {
                 primaryItem.setCatalogItem(catalogMatch);
             }
-            
+
             batchMap.put(mapKey, primaryItem);
         } else {
             batchMap.put(mapKey, createNewItemForBatch(list, request, normalizedItemName, catalogMatch));
@@ -306,7 +309,7 @@ public class ItemService {
 
     private Item createNewItemForBatch(ShoppingList list, ItemRequest request, String normalizedItemName, ProductCatalog catalogMatch) {
         Item newItem = new Item();
-        
+
         newItem.setName(normalizedItemName);
         newItem.setCatalogItem(catalogMatch);
         newItem.setShoppingList(list);
@@ -317,6 +320,7 @@ public class ItemService {
         newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
+        attachRoutableExternalItemId(newItem); // Preluat din main
         saveToHistory(newItem, list.getUser(), normalizedItemName);
         return newItem;
     }
@@ -362,7 +366,7 @@ public class ItemService {
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
-
+        attachRoutableExternalItemId(item); // Preluat din main
 
         return mapToDTO(itemRepository.save(item));
     }
@@ -460,7 +464,20 @@ public class ItemService {
         dto.setRecurrent(item.isRecurrent());
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         dto.setCreatedAt(item.getCreatedAt());
+        dto.setExternalItemId(item.getExternalItemId()); // Preluat din main
         return dto;
+    }
+
+    private void attachRoutableExternalItemId(Item item) { // Preluat din main
+        if (item.getExternalItemId() != null && !item.getExternalItemId().isBlank()) {
+            return;
+        }
+        if (item.getName() == null || item.getName().isBlank()) {
+            return;
+        }
+
+        itemRepository.findRoutableExternalItemIdByName(item.getName().trim())
+                .ifPresent(item::setExternalItemId);
     }
 
     private String sumStringQuantities(String oldQ, String newQ) {

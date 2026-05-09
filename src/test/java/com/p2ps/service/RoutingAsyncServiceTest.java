@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.controller.RoutePoint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -15,18 +16,24 @@ import static org.mockito.Mockito.*;
 
 class RoutingAsyncServiceTest {
 
-    private RouteOptimizer optimizer;
     private StringRedisTemplate redis;
     private ValueOperations<String, String> valueOps;
     private RoutingAsyncService service;
+    private RoutingService routingService;
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        optimizer = new RouteOptimizer(); // real — stateless math
+        RouteOptimizer optimizer = new RouteOptimizer(); // real — stateless math
         redis = mock(StringRedisTemplate.class);
         valueOps = mock(ValueOperations.class);
+        ApplicationContext applicationContext = mock(ApplicationContext.class);
+        routingService = mock(RoutingService.class);
+        
         when(redis.opsForValue()).thenReturn(valueOps);
-        service = new RoutingAsyncService(optimizer, redis, new ObjectMapper());
+        when(applicationContext.getBean(RoutingService.class)).thenReturn(routingService);
+        
+        service = new RoutingAsyncService(optimizer, redis, new ObjectMapper(), applicationContext);
     }
 
     @Test
@@ -40,6 +47,8 @@ class RoutingAsyncServiceTest {
 
         // completeRouteAsync is @Async but we call it directly in test — runs synchronously
         service.completeRouteAsync(routeId, route, List.of());
+
+        verify(routingService).addAudioInstructions(any());
 
         verify(valueOps).set(
                 eq(RoutingAsyncService.ROUTE_KEY_PREFIX + routeId),
@@ -58,6 +67,8 @@ class RoutingAsyncServiceTest {
         List<String> warnings = List.of("Locatia produsului X are grad de incredere scazut.");
 
         service.completeRouteAsync(routeId, route, warnings);
+
+        verify(routingService).addAudioInstructions(any());
 
         verify(valueOps).set(
                 eq(RoutingAsyncService.ROUTE_KEY_PREFIX + routeId),
@@ -89,6 +100,8 @@ class RoutingAsyncServiceTest {
         );
 
         service.completeRouteAsync(routeId, route, List.of());
+
+        verify(routingService).addAudioInstructions(any());
 
         verify(valueOps).set(
                 eq("route:" + routeId),
