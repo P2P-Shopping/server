@@ -84,6 +84,7 @@ public class RoutingService {
         // Eager path — same as before
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
+        addAudioInstructions(optimizedRoute); // BE 3.2
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
 
         RoutingResponse response = new RoutingResponse();
@@ -115,6 +116,7 @@ public class RoutingService {
 
         // Partial response: user point + first lazyN products
         List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+        addAudioInstructions(partial); // BE 3.2
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
@@ -278,6 +280,73 @@ public class RoutingService {
         logger.info(">>> Query terminat, {} rezultate", result.size());
         return result;
     }
+
+    // -------------------------------------------------------------------------
+    // BE 3.2 — Audio Instruction Generation
+    // -------------------------------------------------------------------------
+
+    void addAudioInstructions(List<RoutePoint> route) {
+        if (route == null || route.size() < 2) {
+            if (route != null && !route.isEmpty()) {
+                route.getFirst().setAudioInstruction("Ai ajuns la destinație.");
+            }
+            return;
+        }
+
+        for (int i = 0; i < route.size() - 1; i++) {
+            RoutePoint pCurrent = route.get(i);
+            RoutePoint pNext = route.get(i + 1);
+            double distance = optimizer.haversine(pCurrent.getLat(), pCurrent.getLng(), pNext.getLat(), pNext.getLng());
+
+            String instruction;
+            if (i < route.size() - 2) {
+                RoutePoint pAfterNext = route.get(i + 2);
+                String turn = calculateTurn(pCurrent, pNext, pAfterNext);
+                instruction = String.format("În %d metri, %s pentru a găsi %s.",
+                        (int) distance, turn, pAfterNext.getName());
+            } else {
+                instruction = String.format("În %d metri, vei ajunge la %s.",
+                        (int) distance, pNext.getName());
+            }
+            pCurrent.setAudioInstruction(instruction);
+        }
+
+        route.getLast().setAudioInstruction("Ai ajuns la destinație.");
+    }
+
+    private String calculateTurn(RoutePoint p1, RoutePoint p2, RoutePoint p3) {
+        double bearing1 = bearing(p1, p2);
+        double bearing2 = bearing(p2, p3);
+        double turnAngle = bearing2 - bearing1;
+
+        // Normalize angle to [-180, 180]
+        if (turnAngle > 180) turnAngle -= 360;
+        if (turnAngle <= -180) turnAngle += 360;
+
+        if (turnAngle > -45 && turnAngle <= 45) {
+            return "mergi înainte";
+        } else if (turnAngle > 45 && turnAngle <= 135) {
+            return "ia-o la dreapta";
+        } else if (turnAngle < -45 && turnAngle >= -135) {
+            return "ia-o la stânga";
+        } else {
+            return "întoarce-te";
+        }
+    }
+
+    private double bearing(RoutePoint p1, RoutePoint p2) {
+        double lat1 = Math.toRadians(p1.getLat());
+        double lon1 = Math.toRadians(p1.getLng());
+        double lat2 = Math.toRadians(p2.getLat());
+        double lon2 = Math.toRadians(p2.getLng());
+
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
 
     // -------------------------------------------------------------------------
     // Helpers
