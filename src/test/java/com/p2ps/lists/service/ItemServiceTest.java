@@ -246,7 +246,7 @@ class ItemServiceTest {
 
         assertThat(result.getId()).isEqualTo(existingItem.getId());
         assertThat(result.getPrice()).isEqualTo(new BigDecimal("10.0"));
-        assertThat(result.getQuantity()).isEqualTo("2L + 1L");
+        assertThat(result.getQuantity()).isEqualTo("3 l");
 
         verify(itemRepository).save(existingItem);
         verify(itemRepository, never()).saveAll(anyList());

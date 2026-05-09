@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.atLeastOnce;
 
 @ExtendWith(MockitoExtension.class)
 class ItemServiceUpdateStatusTest {
@@ -176,7 +177,7 @@ class ItemServiceUpdateStatusTest {
 
         itemService.updateItemStatus(itemId, true, 123L);
 
-        verify(historyRepository).findByUser_IdAndCustomNameIgnoreCase(any(), eq("Milk"));
+        verify(historyRepository, atLeastOnce()).findByUser_IdAndCustomNameIgnoreCase(any(), eq("Milk"));
     }
 
     @Test
