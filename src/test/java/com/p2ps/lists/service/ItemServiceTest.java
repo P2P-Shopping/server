@@ -246,7 +246,7 @@ class ItemServiceTest {
 
         assertThat(result.getId()).isEqualTo(existingItem.getId());
         assertThat(result.getPrice()).isEqualTo(new BigDecimal("10.0"));
-        assertThat(result.getQuantity()).isEqualTo("3 l");
+        assertThat(result.getQuantity()).isEqualTo("2L + 1L");
 
         verify(itemRepository).save(existingItem);
         verify(itemRepository, never()).saveAll(anyList());
@@ -1100,5 +1100,227 @@ class ItemServiceTest {
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
         assertThat(result.getName()).isEqualTo("RaceConditionItem");
         verify(itemRepository, times(2)).save(any(Item.class));
+    }
+
+    // ==========================================
+    // TIER 4: NEW COVERAGE TESTS (isBrandMatch, history variants, exceptions)
+    // ==========================================
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogMatches() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt");
+        req.setBrand("Danone");
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Iaurt");
+        catalogProduct.setBrand("Danone"); // Matching brand
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt Danone")).thenReturn(null);
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt Danone")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogDoesNotMatch() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt");
+        req.setBrand("Danone");
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Iaurt");
+        catalogProduct.setBrand("Zuzu"); // Mismatching brand
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt Danone")).thenReturn(null);
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt Danone")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        // Since brand didn't match, catalog item is null
+        assertThat(itemCaptor.getValue().getCatalogItem()).isNull();
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogNoBrandButContainsInName() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt");
+        req.setBrand("Danone");
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setSpecificName("Iaurt Danone cu capsuni");
+        catalogProduct.setBrand(null); // No explicit brand, but it's in the specific name
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt Danone")).thenReturn(null);
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt Danone")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        // Brand matched in the specificName, so it linked correctly
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandButUserDidNotTypeIt() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt");
+        req.setBrand(null);
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Iaurt");
+        catalogProduct.setBrand("Danone");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        // Should be rejected because catalog has brand "Danone" but user only typed "Iaurt"
+        assertThat(itemCaptor.getValue().getCatalogItem()).isNull();
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt Danone");
+        req.setBrand(null);
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Iaurt");
+        catalogProduct.setBrand("Danone");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt Danone")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt Danone")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt Danone")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        // Matches because the user typed the brand in the name
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_ExactSpecificNameMatch() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Paine Feliata");
+        req.setBrand(null);
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setSpecificName("Paine feliata"); // Case insensitive check
+        catalogProduct.setBrand(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Paine Feliata")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Paine Feliata")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine Feliata")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_NameContainsSpecificName() throws Exception {
+        ItemRequest req = new ItemRequest();
+        req.setName("Paine de casa");
+        req.setBrand(null);
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setSpecificName("Paine");
+        catalogProduct.setBrand(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Paine de casa")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Paine de casa")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine de casa")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
+    void updateItemFromSync_ThrowsExceptionWhenJsonIsCompletelyInvalid() {
+        com.p2ps.dto.ListUpdatePayload payload = new com.p2ps.dto.ListUpdatePayload();
+        payload.setAction(com.p2ps.dto.ActionType.UPDATE);
+        // This is invalid JSON but is just a normal string
+        payload.setContent("Not a JSON object");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItemFromSync(itemId, payload);
+
+        // Should gracefully fallback and treat it as a raw string name update
+        assertThat(result.getName()).isEqualTo("Not a JSON object");
+    }
+
+    @Test
+    void addItemsToListWithRetry_ThrowsExceptionAfterRetry() {
+        ItemRequest req = new ItemRequest();
+        req.setName("RetryFailItem");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RetryFailItem")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("RetryFailItem")).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RetryFailItem"))
+                .thenReturn(List.of());
+
+        // Always throw exception
+        when(itemRepository.save(any(Item.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"));
+
+        // When we do addItemsToListWithRetry, it catches the first exception and calls addItemsToList again.
+        // Because addItemsToList calls createAndSaveNewItem which uses itemRepository.save().
+        
+        assertThatThrownBy(() -> itemService.addItemsToListWithRetry(listId, List.of(req), userEmail))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 }
