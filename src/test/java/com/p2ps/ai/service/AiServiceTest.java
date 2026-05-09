@@ -4,6 +4,7 @@ import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
 import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.exception.AiProcessingException;
+import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.service.StoreMatchingEngine;
 import com.p2ps.service.StoreMatchingEngine.StoreMatchResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,7 +58,6 @@ class AiServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        // Updated constructor to include catalogService
         aiService = new AiService(aiClient, storeMatchingEngine);
 
         Field toolRegistryField = AiService.class.getDeclaredField("toolRegistry");
@@ -205,5 +206,141 @@ class AiServiceTest {
         String result = (String) method.invoke(service, invalid);
 
         assertThat(result).isNull();
+    }
+    
+    @Test
+    void extractIngredientsAsJson_multiItemPrompt_includesMultiItemRule() {
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("{\"listType\":\"CART\",\"items\":[]}"))));
+
+        aiService.extractIngredientsAsJson("sugar and bananas");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(aiClient, org.mockito.Mockito.atLeast(2)).generateResponse(captor.capture(), any());
+
+        @SuppressWarnings("unchecked")
+        List<AiMessage> firstCallMessages = (List<AiMessage>) captor.getAllValues().get(0);
+
+        String initialPrompt = firstCallMessages.get(0).parts().stream()
+                .filter(part -> part instanceof AiMessage.TextPart)
+                .map(part -> ((AiMessage.TextPart) part).text())
+                .findFirst()
+                .orElse("");
+
+        @SuppressWarnings("unchecked")
+        List<AiMessage> finalizerCallMessages =
+                (List<AiMessage>) captor.getAllValues().get(captor.getAllValues().size() - 1);
+
+        String finalizerPrompt = finalizerCallMessages.get(finalizerCallMessages.size() - 1).parts().stream()
+                .filter(part -> part instanceof AiMessage.TextPart)
+                .map(part -> ((AiMessage.TextPart) part).text())
+                .findFirst()
+                .orElse("");
+
+        assertThat(initialPrompt)
+                .contains("MULTI-ITEM RULE")
+                .contains("sugar and bananas")
+                .contains("one separate object inside items for EACH item");
+
+        assertThat(finalizerPrompt)
+                .contains("For multi-item requests, items MUST contain all requested items as separate objects")
+                .contains("Previous draft");
+    }
+
+    // ===============================================
+    // NEW POST-VALIDATION AI FILTRATION TESTS
+    // ===============================================
+
+    @Test
+    void postValidateAndFilterReceiptItems_HandlesEmptyList() {
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(Collections.emptyList());
+        assertThat(result).isEmpty();
+        verify(aiClient, org.mockito.Mockito.never()).generateResponse(any(), any());
+    }
+
+    @Test
+    void postValidateAndFilterReceiptItems_HandlesNullList() {
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(null);
+        assertThat(result).isNull();
+        verify(aiClient, org.mockito.Mockito.never()).generateResponse(any(), any());
+    }
+
+    @Test
+    void postValidateAndFilterReceiptItems_ReturnsFilteredList_WhenSuccessful()  {
+        ItemDTO originalDto = new ItemDTO();
+        originalDto.setId(UUID.randomUUID());
+        originalDto.setName("LAPTE 1000g");
+
+        ItemDTO junkDto = new ItemDTO();
+        junkDto.setId(UUID.randomUUID());
+        junkDto.setName("GARANTIE");
+
+        List<ItemDTO> input = List.of(originalDto, junkDto);
+
+        // MOCK AI to return refined JSON
+        String aiResponseJson = "[{\"id\":\"" + originalDto.getId() + "\",\"name\":\"Lapte\",\"quantity\":\"1kg\"}]";
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart(aiResponseJson))));
+
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(input);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(originalDto.getId());
+        assertThat(result.get(0).getName()).isEqualTo("Lapte");
+        assertThat(result.get(0).getQuantity()).isEqualTo("1kg");
+    }
+
+    @Test
+    void postValidateAndFilterReceiptItems_ExtractsJsonCorrectly_WhenWrappedInMarkdown()  {
+        ItemDTO originalDto = new ItemDTO();
+        originalDto.setId(UUID.randomUUID());
+        originalDto.setName("Paine");
+
+        List<ItemDTO> input = List.of(originalDto);
+
+        String markdownResponse = "```json\n" +
+                "[{\"id\":\"" + originalDto.getId() + "\",\"name\":\"Paine Feliata\"}]\n" +
+                "```";
+
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart(markdownResponse))));
+
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(input);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("Paine Feliata");
+    }
+
+    @Test
+    void postValidateAndFilterReceiptItems_HandlesAiFailureAndReturnsOriginalList() {
+        ItemDTO originalDto = new ItemDTO();
+        originalDto.setId(UUID.randomUUID());
+        originalDto.setName("lapte 1000g");
+        List<ItemDTO> input = List.of(originalDto);
+
+        // Throw an exception
+        when(aiClient.generateResponse(any(), any())).thenThrow(new RuntimeException("API limits reached"));
+
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(input);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("lapte 1000g"); // Returns untouched
+    }
+
+    @Test
+    void postValidateAndFilterReceiptItems_HandlesInvalidJsonAndReturnsOriginalList() {
+        ItemDTO originalDto = new ItemDTO();
+        originalDto.setId(UUID.randomUUID());
+        originalDto.setName("lapte 1000g");
+        List<ItemDTO> input = List.of(originalDto);
+
+        // Return corrupted JSON
+        when(aiClient.generateResponse(any(), any()))
+                .thenReturn(new AiMessage("model", List.of(new AiMessage.TextPart("[{ invalid_json ]"))));
+
+        List<ItemDTO> result = aiService.postValidateAndFilterReceiptItems(input);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("lapte 1000g"); // Returns untouched
     }
 }

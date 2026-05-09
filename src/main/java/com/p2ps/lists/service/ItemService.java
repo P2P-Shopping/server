@@ -1,8 +1,10 @@
 package com.p2ps.lists.service;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2ps.ai.service.AiService;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
-import com.p2ps.catalog.service.CatalogService; // Adaugat!
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -36,23 +38,42 @@ public class ItemService {
     private final ShoppingListRepository shoppingListRepository;
     private final UserProductHistoryRepository historyRepository;
     private final ProductCatalogRepository catalogRepository;
-    private final CatalogService catalogService;
+    private final AiService aiService;
     private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     private final ItemService self;
 
-    public ItemService(ItemRepository itemRepository, 
-                       ShoppingListRepository shoppingListRepository, 
+    public ItemService(ItemRepository itemRepository,
+                       ShoppingListRepository shoppingListRepository,
                        UserProductHistoryRepository historyRepository,
                        ProductCatalogRepository catalogRepository,
-                       CatalogService catalogService,
+                       AiService aiService,
                        @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.historyRepository = historyRepository;
         this.catalogRepository = catalogRepository;
-        this.catalogService = catalogService;
+        this.aiService = aiService;
         this.self = self;
+    }
+
+    private String normalizeBrand(String brand) {
+        if (brand == null || brand.isBlank()) return "";
+        return brand.trim().toLowerCase();
+    }
+
+    private List<Item> findExactListMatches(UUID listId, String name, String brand) {
+        String normalizedBrand = normalizeBrand(brand);
+        List<Item> candidates = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, name);
+        List<Item> exactMatches = new ArrayList<>();
+
+        for (Item item : candidates) {
+            String itemBrand = normalizeBrand(item.getBrand());
+            if (normalizedBrand.equals(itemBrand)) {
+                exactMatches.add(item);
+            }
+        }
+        return exactMatches;
     }
 
     @Transactional
@@ -70,16 +91,25 @@ public class ItemService {
         }
 
         String normalizedItemName = request.getName().trim();
-        List<Item> existingItems = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+        ProductCatalog catalogMatch = resolveCatalogMatch(normalizedItemName, request.getBrand(), list.getUser());
 
-        if (!existingItems.isEmpty()) {
-            return mergeAndSaveItem(listId, request, userEmail, existingItems);
+        List<Item> existingItems = new ArrayList<>();
+        if (catalogMatch != null) {
+            existingItems = itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogMatch.getId());
         }
 
-        return createAndSaveNewItem(listId, request, userEmail, list, normalizedItemName);
+        if (existingItems.isEmpty()) {
+            existingItems = findExactListMatches(listId, normalizedItemName, request.getBrand());
+        }
+
+        if (!existingItems.isEmpty()) {
+            return mergeAndSaveItem(listId, request, userEmail, existingItems, catalogMatch);
+        }
+
+        return createAndSaveNewItem(listId, request, userEmail, list, normalizedItemName, catalogMatch);
     }
 
-    private ItemDTO mergeAndSaveItem(UUID listId, ItemRequest request, String userEmail, List<Item> existingItems) {
+    private ItemDTO mergeAndSaveItem(UUID listId, ItemRequest request, String userEmail, List<Item> existingItems, ProductCatalog catalogMatch) {
         Item primaryItem = existingItems.get(0);
 
         for (int i = 1; i < existingItems.size(); i++) {
@@ -94,6 +124,10 @@ public class ItemService {
         updateItemFields(primaryItem, request);
         attachRoutableExternalItemId(primaryItem);
 
+        if (catalogMatch != null) {
+            primaryItem.setCatalogItem(catalogMatch);
+        }
+
         try {
             return mapToDTO(itemRepository.save(primaryItem));
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
@@ -101,9 +135,11 @@ public class ItemService {
         }
     }
 
-    private ItemDTO createAndSaveNewItem(UUID listId, ItemRequest request, String userEmail, ShoppingList list, String normalizedItemName) {
+    private ItemDTO createAndSaveNewItem(UUID listId, ItemRequest request, String userEmail, ShoppingList list, String normalizedItemName, ProductCatalog catalogMatch) {
         Item item = new Item();
+
         item.setName(normalizedItemName);
+        item.setCatalogItem(catalogMatch);
         item.setShoppingList(list);
         item.setBrand(request.getBrand());
         item.setQuantity(request.getQuantity());
@@ -115,15 +151,21 @@ public class ItemService {
         attachRoutableExternalItemId(item);
 
         try {
-            return mapToDTO(itemRepository.save(item));
+            Item savedItem = itemRepository.save(item);
+            saveToHistory(savedItem, list.getUser(), normalizedItemName);
+            return mapToDTO(savedItem);
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemToList(listId, request, userEmail);
         }
     }
 
     private void updateItemFields(Item item, ItemRequest request) {
-        if (request.getBrand() != null) item.setBrand(request.getBrand());
-        if (request.getPrice() != null) item.setPrice(request.getPrice());
+        if (request.getBrand() != null && (item.getBrand() == null || item.getBrand().isBlank())) {
+            item.setBrand(request.getBrand());
+        }
+        if (request.getPrice() != null && (item.getPrice() == null || item.getPrice().compareTo(BigDecimal.ZERO) == 0)) {
+            item.setPrice(request.getPrice());
+        }
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
     }
@@ -142,13 +184,77 @@ public class ItemService {
         }
 
         Map<String, Item> batchMap = new LinkedHashMap<>();
-
         for (ItemRequest request : requests) {
             processItemRequest(listId, list, request, batchMap);
         }
 
-        List<Item> saved = itemRepository.saveAll(new ArrayList<>(batchMap.values()));
+        List<Item> pendingItems = new ArrayList<>(batchMap.values());
+        Map<UUID, Item> trackingMap = new HashMap<>();
+        List<ItemDTO> dtosToValidate = prepareItemsForAiValidation(pendingItems, trackingMap);
+
+        List<ItemDTO> validatedDtos = performAiPostValidation(dtosToValidate);
+
+        List<Item> itemsToSave = applyAiValidationResults(validatedDtos, trackingMap);
+
+        List<Item> saved = itemRepository.saveAll(itemsToSave);
         return saved.stream().map(this::mapToDTO).toList();
+    }
+
+    private List<ItemDTO> prepareItemsForAiValidation(List<Item> pendingItems, Map<UUID, Item> trackingMap) {
+        List<ItemDTO> dtosToValidate = new ArrayList<>();
+        for (Item item : pendingItems) {
+            ItemDTO dto = mapToDTO(item);
+            UUID trackingId = dto.getId();
+
+            if (trackingId == null) {
+                trackingId = UUID.randomUUID();
+                dto.setId(trackingId);
+            }
+
+            trackingMap.put(trackingId, item);
+            dtosToValidate.add(dto);
+        }
+        return dtosToValidate;
+    }
+
+    private List<ItemDTO> performAiPostValidation(List<ItemDTO> dtosToValidate) {
+        try {
+            return aiService.postValidateAndFilterReceiptItems(dtosToValidate);
+        } catch (Exception e) {
+            logger.warn("AI post-validation failed, falling back to original list", e);
+            return dtosToValidate;
+        }
+    }
+    private List<Item> applyAiValidationResults(List<ItemDTO> validatedDtos, Map<UUID, Item> trackingMap) {
+        List<Item> itemsToSave = new ArrayList<>();
+
+        for (ItemDTO dto : validatedDtos) {
+            // 💡 FIX 1: Protecție împotriva halucinațiilor de ID
+            if (dto.getId() != null && !trackingMap.containsKey(dto.getId())) {
+                logger.error("AI hallucinated an unknown ID: {}. Triggering full fallback.", dto.getId());
+                return new ArrayList<>(trackingMap.values()); // Fallback total la lista originală!
+            }
+
+            Item originalItem = trackingMap.get(dto.getId());
+            if (originalItem != null) {
+                applyRefinedAiUpdates(originalItem, dto);
+                itemsToSave.add(originalItem);
+            }
+        }
+        return itemsToSave;
+    }
+
+    private void applyRefinedAiUpdates(Item originalItem, ItemDTO dto) {
+        if (dto.getName() != null && !dto.getName().isBlank()) {
+            originalItem.setName(dto.getName());
+        }
+
+        // 💡 FIX 2: Am șters blocul care actualiza brandul!
+        // Respectăm warning-ul CodeRabbit. Lăsăm brandul exact așa cum l-a mapped backend-ul.
+
+        if (dto.getQuantity() != null) {
+            originalItem.setQuantity(dto.getQuantity());
+        }
     }
 
     private void processItemRequest(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap) {
@@ -158,22 +264,43 @@ public class ItemService {
         validatePrice(request.getPrice());
 
         String normalizedItemName = request.getName().trim();
-        String mapKey = normalizedItemName.toLowerCase();
+        ProductCatalog catalogMatch = resolveCatalogMatch(normalizedItemName, request.getBrand(), list.getUser());
+
+        String mapKey;
+        if (catalogMatch != null) {
+            mapKey = "cat_" + catalogMatch.getId().toString();
+        } else {
+            String normBrand = normalizeBrand(request.getBrand());
+            mapKey = "name_" + normalizedItemName.toLowerCase() + "_brand_" + normBrand;
+        }
 
         if (batchMap.containsKey(mapKey)) {
-            mergeIntoBatch(batchMap.get(mapKey), request);
+            mergeIntoBatch(batchMap.get(mapKey), request, catalogMatch);
         } else {
-            resolveAndMergeFromDb(listId, list, request, batchMap, normalizedItemName, mapKey);
+            resolveAndMergeFromDb(listId, list, request, batchMap, normalizedItemName, mapKey, catalogMatch);
         }
     }
 
-    private void mergeIntoBatch(Item existingInBatch, ItemRequest request) {
+    private void mergeIntoBatch(Item existingInBatch, ItemRequest request, ProductCatalog catalogMatch) {
         existingInBatch.setQuantity(sumStringQuantities(existingInBatch.getQuantity(), request.getQuantity()));
         existingInBatch.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+        updateItemFields(existingInBatch, request);
+
+        if (catalogMatch != null && existingInBatch.getCatalogItem() == null) {
+            existingInBatch.setCatalogItem(catalogMatch);
+        }
     }
 
-    private void resolveAndMergeFromDb(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap, String normalizedItemName, String mapKey) {
-        List<Item> existingInDb = itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, normalizedItemName);
+    private void resolveAndMergeFromDb(UUID listId, ShoppingList list, ItemRequest request, Map<String, Item> batchMap, String normalizedItemName, String mapKey, ProductCatalog catalogMatch) {
+        List<Item> existingInDb = new ArrayList<>();
+        if (catalogMatch != null) {
+            existingInDb = itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogMatch.getId());
+        }
+
+        if (existingInDb.isEmpty()) {
+            existingInDb = findExactListMatches(listId, normalizedItemName, request.getBrand());
+        }
 
         if (!existingInDb.isEmpty()) {
             Item primaryItem = existingInDb.get(0);
@@ -184,17 +311,25 @@ public class ItemService {
             }
             primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
             primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
+
             updateItemFields(primaryItem, request);
             attachRoutableExternalItemId(primaryItem);
+
+            if (catalogMatch != null) {
+                primaryItem.setCatalogItem(catalogMatch);
+            }
+
             batchMap.put(mapKey, primaryItem);
         } else {
-            batchMap.put(mapKey, createNewItemForBatch(list, request, normalizedItemName));
+            batchMap.put(mapKey, createNewItemForBatch(list, request, normalizedItemName, catalogMatch));
         }
     }
 
-    private Item createNewItemForBatch(ShoppingList list, ItemRequest request, String normalizedItemName) {
+    private Item createNewItemForBatch(ShoppingList list, ItemRequest request, String normalizedItemName, ProductCatalog catalogMatch) {
         Item newItem = new Item();
+
         newItem.setName(normalizedItemName);
+        newItem.setCatalogItem(catalogMatch);
         newItem.setShoppingList(list);
         newItem.setBrand(request.getBrand());
         newItem.setQuantity(request.getQuantity());
@@ -204,7 +339,7 @@ public class ItemService {
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(newItem);
-        saveToHistory(newItem, list.getUser());
+        saveToHistory(newItem, list.getUser(), normalizedItemName);
         return newItem;
     }
 
@@ -213,8 +348,6 @@ public class ItemService {
         try {
             return self.addItemsToList(listId, requests, userEmail);
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
-            // If any item in the batch fails due to a concurrent addition, retry the whole batch
-            // The batch logic naturally handles existing DB items by merging.
             return self.addItemsToList(listId, requests, userEmail);
         }
     }
@@ -242,13 +375,16 @@ public class ItemService {
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
 
-        if (request.getIsChecked() != null && request.getIsChecked() != item.isChecked()) {
+        if (request.getIsChecked() != null) {
+            boolean wasChecked = item.isChecked();
             item.setChecked(request.getIsChecked());
+            if (item.isChecked() && !wasChecked) {
+                saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            }
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         attachRoutableExternalItemId(item);
-
 
         return mapToDTO(itemRepository.save(item));
     }
@@ -258,12 +394,13 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
+        boolean wasChecked = item.isChecked();
+
         item.setChecked(checked);
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
-        // SALVĂM ÎN ISTORIC/CATALOG DOAR DACĂ A FOST BIFAT (CUMPĂRAT)
-        if (checked) {
-            saveToHistory(item, item.getShoppingList().getUser());
+        if (checked && !wasChecked) {
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
         }
 
         return mapToDTO(itemRepository.save(item));
@@ -275,7 +412,11 @@ public class ItemService {
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
         if (payload.getChecked() != null) {
+            boolean wasChecked = item.isChecked();
             item.setChecked(payload.getChecked());
+            if (item.isChecked() && !wasChecked) {
+                saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            }
         }
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
@@ -288,7 +429,9 @@ public class ItemService {
 
     private void applySyncContent(Item item, String content) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
             ItemDTO dto = mapper.readValue(content, ItemDTO.class);
             if (dto.getName() != null) {
                 if (dto.getName().trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
@@ -406,62 +549,111 @@ public class ItemService {
         }
     }
 
-    private void saveToHistory(Item item, com.p2ps.auth.model.Users user) {
-        String itemName = item.getName();
-        UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
+    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName) {
+        String historyName = (rawName != null && !rawName.isBlank()) ? rawName : item.getName();
+        UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), historyName);
         if (history == null) {
             history = new UserProductHistory();
             history.setUser(user);
-            history.setCustomName(itemName);
+            history.setCustomName(historyName);
         }
 
         ProductCatalog catalogItem = item.getCatalogItem();
 
-        // 1. Cautam in catalogul global prin fuzzy search
         if (catalogItem == null) {
-            catalogItem = resolveCatalogByFuzzySearch(itemName);
+            catalogItem = resolveCatalogMatch(historyName, item.getBrand(), user);
         }
 
-        // 2. Daca tot nu l-am gasit, INSEAMNA CA E NOU! Il cream noi acum!
-        if (catalogItem == null) {
-            String categoryToSave = (item.getCategory() != null && !item.getCategory().isBlank())
-                    ? item.getCategory() : "Altele";
-
-            catalogItem = catalogService.recordPurchase(
-                    itemName,            // genericName
-                    itemName,            // specificName
-                    item.getBrand(),     // brand
-                    categoryToSave,      // category
-                    item.getPrice()      // price
-            );
-
-            // Atasam noul produs catalogat inapoi pe item
-            item.setCatalogItem(catalogItem);
-            logger.info("Created new global catalog entry for a purchased item.");
-        }
-
-        // 3. Salvam in history cu catalog_id-ul aferent
         if (catalogItem != null) {
             history.setCatalogItem(catalogItem);
+            item.setCatalogItem(catalogItem);
+        } else {
+            history.setCatalogItem(null);
         }
 
         history.setLastAddedTimestamp(System.currentTimeMillis());
         historyRepository.save(history);
     }
 
-    /**
-     * Performs a fuzzy search against the global product catalog (p2p_product_catalog)
-     * using pg_trgm similarity matching. Returns the best match or null if nothing found.
-     */
-    private ProductCatalog resolveCatalogByFuzzySearch(String itemName) {
-        List<ProductCatalog> matches = catalogRepository.searchByKeywordFuzzy(itemName);
-        if (matches != null && !matches.isEmpty()) {
-            ProductCatalog bestMatch = matches.get(0);
-            logger.debug("Fuzzy catalog match for '{}': {} (id={})",
-                    itemName, bestMatch.getSpecificName(), bestMatch.getId());
-            return bestMatch;
+    private ProductCatalog resolveCatalogMatch(String itemName, String itemBrand, com.p2ps.auth.model.Users user) {
+        String searchKeyword = itemName;
+        if (itemBrand != null && !itemBrand.isBlank()) {
+            searchKeyword = itemName + " " + itemBrand;
         }
-        logger.debug("No fuzzy catalog match found for '{}', leaving catalogId as null", itemName);
+
+        // 1. Try to find a match in the user's history
+        ProductCatalog historyMatch = findMatchInHistory(itemName, itemBrand, searchKeyword, user);
+        if (historyMatch != null) {
+            return historyMatch;
+        }
+
+        // 2. Fallback to strict global catalog search
+        return findMatchInGlobalCatalog(itemName, itemBrand, searchKeyword);
+    }
+
+    // --- Extracted helper methods to reduce Cognitive Complexity ---
+
+    private ProductCatalog findMatchInHistory(String itemName, String itemBrand, String searchKeyword, com.p2ps.auth.model.Users user) {
+        if (user == null || user.getId() == null) {
+            return null;
+        }
+
+        UserProductHistory exactHistory = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), searchKeyword);
+        if (exactHistory == null && itemBrand != null && !itemBrand.isBlank()) {
+            exactHistory = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), itemName);
+        }
+
+        if (exactHistory != null && exactHistory.getCatalogItem() != null) {
+            ProductCatalog catalog = exactHistory.getCatalogItem();
+            if (isBrandMatch(catalog, itemName, itemBrand)) {
+                logger.debug("History match for '{}' (brand '{}'): {} (id={})", itemName, itemBrand, catalog.getSpecificName(), catalog.getId());
+                return catalog;
+            }
+        }
+
         return null;
+    }
+
+    private ProductCatalog findMatchInGlobalCatalog(String itemName, String itemBrand, String searchKeyword) {
+        List<ProductCatalog> strictMatches = catalogRepository.searchByKeywordStrict(searchKeyword);
+
+        if (strictMatches == null || strictMatches.isEmpty()) {
+            logger.debug("No strict catalog match found for '{}' (brand '{}'), leaving catalogId as null", itemName, itemBrand);
+            return null;
+        }
+
+        for (ProductCatalog match : strictMatches) {
+            if (isBrandMatch(match, itemName, itemBrand)) {
+                logger.debug("Strict catalog match for '{}' (brand '{}'): {} (id={})", itemName, itemBrand, match.getSpecificName(), match.getId());
+                return match;
+            }
+        }
+
+        logger.debug("No strict catalog match found for '{}' (brand '{}') after filtering, leaving catalogId as null", itemName, itemBrand);
+        return null;
+    }
+
+    private boolean isBrandMatch(ProductCatalog catalog, String itemName, String requestedBrand) {
+        boolean catalogHasBrand = catalog.getBrand() != null && !catalog.getBrand().isBlank();
+        String specificNameLower = catalog.getSpecificName() != null ? catalog.getSpecificName().toLowerCase() : "";
+        String itemNameLower = itemName.toLowerCase();
+
+        // 1. Daca utilizatorul a specificat explicit un brand
+        if (requestedBrand != null && !requestedBrand.isBlank()) {
+            String reqBrandLower = requestedBrand.trim().toLowerCase();
+
+            if (catalogHasBrand) {
+                return catalog.getBrand().equalsIgnoreCase(reqBrandLower);
+            }
+            return specificNameLower.contains(reqBrandLower);
+        }
+
+        // 2. Daca utilizatorul NU a specificat un brand, dar catalogul are unul
+        if (catalogHasBrand) {
+            return itemNameLower.contains(catalog.getBrand().toLowerCase());
+        }
+
+        // 3. Daca niciunul nu are brand oficial
+        return specificNameLower.equals(itemNameLower) || itemNameLower.contains(specificNameLower);
     }
 }
