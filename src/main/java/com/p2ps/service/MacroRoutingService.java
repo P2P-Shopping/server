@@ -12,15 +12,15 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-
 /**
  * BE 3.2 — Macro-Routing (Walking vs Driving).
  *
- * Calculates the estimated distance and transit time from the user's current location
- * to the selected store's entrance. Returns separate estimates for foot and car.
+ * Calculates the estimated distance, transit time, and road geometry from the user's
+ * current location to the selected store's entrance.
+ * Returns separate estimates for foot and car, each including an Encoded Polyline
+ * for the frontend to draw the actual route on a map.
  *
  * Store entrance = ST_Centroid(boundary_polygon) from store_geofences.
- * No new DB column or Flyway migration needed.
  */
 @Service
 public class MacroRoutingService {
@@ -37,6 +37,7 @@ public class MacroRoutingService {
 
     /**
      * Returns walking and driving estimates from (userLat, userLng) to the store entrance.
+     * Each estimate includes distanceM, durationSeconds, and a polyline for map rendering.
      *
      * @param storeId UUID string — must match a store_geofences.store_id
      * @return MacroRoutingResponse with walking and driving fields (either can be null if OSRM fails)
@@ -50,9 +51,7 @@ public class MacroRoutingService {
 
         double storeLat = entrance[0];
         double storeLng = entrance[1];
-        if (logger.isInfoEnabled()) {
-            logger.info("Macro-routing: calculating estimates to store entrance for storeId={}", storeId.replaceAll("[\r\n]", ""));
-        }
+        logger.info("Macro-routing: calculating estimates to store entrance");
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
                 () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
@@ -61,20 +60,13 @@ public class MacroRoutingService {
 
         CompletableFuture.allOf(walkingFuture, drivingFuture).join();
 
-        OsrmClient.TransportEstimate walkingRaw = walkingFuture.join();
-        OsrmClient.TransportEstimate drivingRaw = drivingFuture.join();
-
-        MacroRoutingResponse.TransportEstimate walking = toDto(walkingRaw);
-        MacroRoutingResponse.TransportEstimate driving = toDto(drivingRaw);
+        MacroRoutingResponse.TransportEstimate walking = toDto(walkingFuture.join());
+        MacroRoutingResponse.TransportEstimate driving = toDto(drivingFuture.join());
 
         logger.info("Macro-routing result: walking={} driving={}", walking, driving);
         return new MacroRoutingResponse(walking, driving);
     }
 
-    /**
-     * Uses ST_Centroid of the store's boundary_polygon as the entrance point.
-     * Returns [lat, lng] or an empty array if the store doesn't exist.
-     */
     private double[] fetchStoreEntrance(String storeId) {
         String sql = "SELECT ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
                      "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
@@ -83,8 +75,8 @@ public class MacroRoutingService {
         UUID uuid;
         try {
             uuid = UUID.fromString(storeId);
-        } catch (IllegalArgumentException _) {
-            logger.warn("Invalid storeId UUID: {}", storeId.replaceAll("[\r\n]", ""));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid storeId format");
             return new double[0];
         }
 
@@ -95,17 +87,15 @@ public class MacroRoutingService {
         Object lngObj = rows.get(0).get("lng");
 
         if (!(latObj instanceof Number) || !(lngObj instanceof Number)) {
-            logger.warn("Centroid extraction returned null or non-number for storeId={}", uuid);
+            logger.warn("Centroid extraction returned null or non-number");
             return new double[0];
         }
 
-        double lat = ((Number) latObj).doubleValue();
-        double lng = ((Number) lngObj).doubleValue();
-        return new double[]{lat, lng};
+        return new double[]{((Number) latObj).doubleValue(), ((Number) lngObj).doubleValue()};
     }
 
     private MacroRoutingResponse.TransportEstimate toDto(OsrmClient.TransportEstimate raw) {
         if (raw == null) return null;
-        return new MacroRoutingResponse.TransportEstimate(raw.distanceM(), raw.durationSeconds());
+        return new MacroRoutingResponse.TransportEstimate(raw.distanceM(), raw.durationSeconds(), raw.polyline());
     }
 }
