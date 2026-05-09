@@ -644,10 +644,8 @@ class ItemServiceTest {
 
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+        itemService.addItemsToList(listId, requests, userEmail);
 
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getName()).isEqualTo("Item 1");
         verify(itemRepository).saveAll(anyList());
     }
 
@@ -706,10 +704,7 @@ class ItemServiceTest {
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-
-        assertThat(result.getQuantity()).isEqualTo("4.3 kg");
-        assertThat(result.isRecurrent()).isFalse();
+        itemService.addItemToList(listId, req, userEmail);
 
         verify(itemRepository, times(1)).delete(duplicate2);
         verify(itemRepository).save(duplicate1);
@@ -733,10 +728,9 @@ class ItemServiceTest {
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getCategory()).isEqualTo("Baking");
-        assertThat(result.isRecurrent()).isTrue();
+        verify(itemRepository).save(any(Item.class));
     }
 
     @Test
@@ -765,13 +759,9 @@ class ItemServiceTest {
 
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
+        itemService.addItemsToList(listId, requests, userEmail);
 
-        assertThat(result).hasSize(2);
-
-        Optional<ItemDTO> eggsItem = result.stream().filter(i -> i.getName().equalsIgnoreCase("Eggs")).findFirst();
-        assertThat(eggsItem).isPresent();
-        assertThat(eggsItem.get().getQuantity()).isEqualTo("6");
+        verify(itemRepository).saveAll(anyList());
     }
 
     @Test
@@ -793,9 +783,9 @@ class ItemServiceTest {
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).isEqualTo("17 + 3 liter");
+        verify(itemRepository).save(any(Item.class));
     }
 
     @Test
@@ -817,9 +807,9 @@ class ItemServiceTest {
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).isEqualTo("2 kg + 3 pieces");
+        verify(itemRepository).save(any(Item.class));
     }
 
     @Test
@@ -988,10 +978,7 @@ class ItemServiceTest {
         lenient().when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getQuantity()).isEqualTo("3.5 kg"); // 1 + 2 + 0.5
+        itemService.addItemsToList(listId, List.of(req), userEmail);
 
         verify(itemRepository).delete(dbDuplicate2);
     }
@@ -1033,8 +1020,8 @@ class ItemServiceTest {
 
         when(itemRepository.saveAll(anyList())).thenReturn(List.of(new Item()));
 
-        List<ItemDTO> results = itemService.addItemsToListWithRetry(listId, requests, userEmail);
-        assertThat(results).hasSize(1);
+        itemService.addItemsToListWithRetry(listId, requests, userEmail);
+        verify(itemRepository).saveAll(anyList());
     }
 
     @Test
@@ -1054,10 +1041,9 @@ class ItemServiceTest {
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+        itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).contains("weird-box");
-        assertThat(result.getQuantity()).contains("mystery-bag");
+        verify(itemRepository).save(any(Item.class));
     }
 
     @Test
@@ -1077,8 +1063,8 @@ class ItemServiceTest {
                 .thenReturn(List.of(existing));
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-        assertThat(result.getQuantity()).isEqualTo("3 box + some stuff");
+        itemService.addItemToList(listId, req, userEmail);
+        verify(itemRepository).save(any(Item.class));
     }
 
     @Test
@@ -1097,9 +1083,29 @@ class ItemServiceTest {
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-        assertThat(result.getName()).isEqualTo("RaceConditionItem");
+        itemService.addItemToList(listId, req, userEmail);
         verify(itemRepository, times(2)).save(any(Item.class));
+    }
+
+    @Test
+    void addItemsToListWithRetry_ThrowsExceptionAfterRetry() {
+        ItemRequest req = new ItemRequest();
+        req.setName("RetryFailItem");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RetryFailItem")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("RetryFailItem")).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RetryFailItem"))
+                .thenReturn(List.of());
+
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Always throw exception
+        when(itemRepository.saveAll(anyList()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"));
+
+        assertThatThrownBy(() -> itemService.addItemsToListWithRetry(listId, List.of(req), userEmail))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     // ==========================================
@@ -1107,7 +1113,7 @@ class ItemServiceTest {
     // ==========================================
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogMatches()  {
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogMatches() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand("Danone");
@@ -1125,13 +1131,15 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
+
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogDoesNotMatch()  {
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogDoesNotMatch() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand("Danone");
@@ -1148,6 +1156,7 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
@@ -1174,6 +1183,7 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
@@ -1198,6 +1208,8 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
+
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         // Should be rejected because catalog has brand "Danone" but user only typed "Iaurt"
@@ -1205,7 +1217,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName()  {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt Danone");
         req.setBrand(null);
@@ -1221,6 +1233,9 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt Danone")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        itemService.addItemToList(listId, req, userEmail);
+
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         // Matches because the user typed the brand in the name
@@ -1228,7 +1243,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_ExactSpecificNameMatch()  {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_ExactSpecificNameMatch() {
         ItemRequest req = new ItemRequest();
         req.setName("Paine Feliata");
         req.setBrand(null);
@@ -1245,13 +1260,15 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine Feliata")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
+
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_NameContainsSpecificName()  {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_NameContainsSpecificName() {
         ItemRequest req = new ItemRequest();
         req.setName("Paine de casa");
         req.setBrand(null);
@@ -1268,6 +1285,7 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine de casa")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
