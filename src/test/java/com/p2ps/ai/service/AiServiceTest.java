@@ -1,6 +1,5 @@
 package com.p2ps.ai.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.ai.core.AiClient;
 import com.p2ps.ai.core.AiMessage;
 import com.p2ps.catalog.service.CatalogService;
@@ -17,7 +16,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -268,7 +266,7 @@ class AiServiceTest {
     }
 
     @Test
-    void postValidateAndFilterReceiptItems_ReturnsFilteredList_WhenSuccessful() throws Exception {
+    void postValidateAndFilterReceiptItems_ReturnsFilteredList_WhenSuccessful()  {
         ItemDTO originalDto = new ItemDTO();
         originalDto.setId(UUID.randomUUID());
         originalDto.setName("LAPTE 1000g");
@@ -293,7 +291,7 @@ class AiServiceTest {
     }
 
     @Test
-    void postValidateAndFilterReceiptItems_ExtractsJsonCorrectly_WhenWrappedInMarkdown() throws Exception {
+    void postValidateAndFilterReceiptItems_ExtractsJsonCorrectly_WhenWrappedInMarkdown()  {
         ItemDTO originalDto = new ItemDTO();
         originalDto.setId(UUID.randomUUID());
         originalDto.setName("Paine");

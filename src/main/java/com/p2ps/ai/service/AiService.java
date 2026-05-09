@@ -33,23 +33,23 @@ public class AiService {
     private final ToolRegistry toolRegistry;
     private final StoreMatchingEngine storeMatchingEngine;
 
-    private static final String SYSTEM_PROMPT =
-            "You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list. " +
-                    "LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian. " +
-                    "MULTI-ITEM RULE (CRITICAL): If the user mentions multiple grocery items in one prompt, you MUST return one separate object inside items for EACH item. " +
-                    "Never merge multiple requested products into one item. For example, 'sugar and bananas' must produce two items: one for sugar and one for bananas. " +
-                    "VISUAL RULES (CRITICAL): " +
-                    "1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients. " +
-                    "2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked. " +
-                    "3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities. " +
-                    "EXTRACTION RULE (CRITICAL): Extract EXACTLY what the user said. DO NOT invent or hallucinate brands, specific names, or catalog IDs. Our backend will handle mapping to the database. Leave catalogId null. Leave brand null unless the user or receipt explicitly specifies a brand. " +
-                    "RULE 1 (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output. " +
-                    "RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop. " +
-                    "RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'. " +
-                    "RECIPE LOGIC: If the user describes a dish, dessert, meal, or recipe idea (e.g., negresa, clatite, ciorba, pasta, cake), classify it as 'RECIPE' even if the word 'recipe' is not used. " +
-                    "CRITICAL CATEGORY RULE: The 'category' field MUST be chosen EXACTLY from this strict list: [Fructe și Legume, Lactate și Ouă, Carne, Băcănie, Dulciuri, Curățenie, Altele]. DO NOT invent categories! " +
-                    "Format: {\"listType\": \"string\", \"suggestedStore\": \"string or null\", \"items\": [{\"genericName\": \"string\", \"specificName\": \"string or null\", \"brand\": \"string or null\", \"quantity\": number or null, \"unit\": \"string or null\", \"catalogId\": \"string or null\", \"category\": \"string\", \"price\": number or null}]}.";
-    
+    private static final String SYSTEM_PROMPT ="""
+        You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list.
+        LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian.
+        MULTI-ITEM RULE (CRITICAL): If the user mentions multiple grocery items in one prompt, you MUST return one separate object inside items for EACH item.
+        Never merge multiple requested products into one item. For example, 'sugar and bananas' must produce two items: one for sugar and one for bananas.
+        VISUAL RULES (CRITICAL):
+        1. If the user uploads a photo of a FINISHED DISH, deduce the recipe and output raw ingredients.
+        2. If the user uploads a photo of a FRIDGE/PANTRY, identify items and deduce missing ingredients if asked.
+        3. If the user uploads a PHOTO of a RECEIPT, extract all products, brands, and quantities.
+        EXTRACTION RULE (CRITICAL): Extract EXACTLY what the user said. DO NOT invent or hallucinate brands, specific names, or catalog IDs. Our backend will handle mapping to the database. Leave catalogId null. Leave brand null unless the user or receipt explicitly specifies a brand.
+        RULE 1 (RECEIPT PRICE): For receipt photos, also extract the product price when visible and include it in the output.
+        RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop.
+        RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'.
+        RECIPE LOGIC: If the user describes a dish, dessert, meal, or recipe idea (e.g., negresa, clatite, ciorba, pasta, cake), classify it as 'RECIPE' even if the word 'recipe' is not used.
+        CRITICAL CATEGORY RULE: The 'category' field MUST be chosen EXACTLY from this strict list: [Fructe și Legume, Lactate și Ouă, Carne, Băcănie, Dulciuri, Curățenie, Altele]. DO NOT invent categories!
+        Format: {"listType": "string", "suggestedStore": "string or null", "items": [{"genericName": "string", "specificName": "string or null", "brand": "string or null", "quantity": number or null, "unit": "string or null", "catalogId": "string or null", "category": "string", "price": number or null}]}.
+        """;
     private static final String FINAL_JSON_PROMPT =
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
                     "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
@@ -115,14 +115,31 @@ public class AiService {
 
         try {
             ObjectMapper mapper = new ObjectMapper();
-            String jsonInput = mapper.writeValueAsString(mappedItems);
+
+            // 💡 REZOLVAREA BOT-ULUI: Construim o proiecție doar cu câmpurile strict necesare
+            List<Map<String, Object>> trimmedItems = mappedItems.stream().map(item -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", item.getId()); // Păstrăm ID-ul pentru tracking în ItemService
+                map.put("name", item.getName());
+                map.put("brand", item.getBrand());
+                map.put("quantity", item.getQuantity());
+                map.put("price", item.getPrice());
+                map.put("category", item.getCategory());
+                return map;
+            }).toList();
+
+            // AI-ul primește acum un JSON mic, curat și fără metadata sensibile!
+            String jsonInput = mapper.writeValueAsString(trimmedItems);
 
             List<AiMessage> messages = new ArrayList<>();
             messages.add(new AiMessage("system", List.of(new AiMessage.TextPart(POST_VALIDATION_SYSTEM_PROMPT))));
             messages.add(new AiMessage("user", List.of(new AiMessage.TextPart(jsonInput))));
 
             AiMessage response = aiClient.generateResponse(messages, Collections.emptyList());
-            
+
+            // ... restul codului rămâne absolut identic (extragerea și maparea înapoi la ItemDTO)
+            // AI-ul va returna JSON-ul, iar Jackson va mapa înapoi DOAR câmpurile pe care i le-am trimis
+
             String rawResponse = response.parts().stream()
                     .filter(p -> p instanceof AiMessage.TextPart)
                     .map(p -> ((AiMessage.TextPart) p).text())
@@ -130,14 +147,14 @@ public class AiService {
 
             String jsonResult = extractJsonArray(rawResponse);
             List<ItemDTO> filteredItems = mapper.readValue(jsonResult, new TypeReference<List<ItemDTO>>() {});
-            
+
             if (filteredItems != null) {
                 return filteredItems;
             }
         } catch (Exception e) {
             logger.error("Failed to execute AI post-validation and filtering. Falling back to original items.", e);
         }
-        
+
         return mappedItems;
     }
 
@@ -239,6 +256,7 @@ public class AiService {
                 reader.dispose();
             }
         } catch (IOException _) {
+            // Ignore
         }
         return null;
     }

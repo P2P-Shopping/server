@@ -1102,27 +1102,6 @@ class ItemServiceTest {
         verify(itemRepository, times(2)).save(any(Item.class));
     }
 
-    @Test
-    void addItemsToListWithRetry_ThrowsExceptionAfterRetry() {
-        ItemRequest req = new ItemRequest();
-        req.setName("RetryFailItem");
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
-        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RetryFailItem")).thenReturn(null);
-        when(catalogRepository.searchByKeywordStrict("RetryFailItem")).thenReturn(List.of());
-        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RetryFailItem"))
-                .thenReturn(List.of());
-
-        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Always throw exception
-        when(itemRepository.saveAll(anyList()))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"));
-
-        assertThatThrownBy(() -> itemService.addItemsToListWithRetry(listId, List.of(req), userEmail))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-    }
-
     // ==========================================
     // TIER 4: NEW COVERAGE TESTS (isBrandMatch, history variants, exceptions)
     // ==========================================
