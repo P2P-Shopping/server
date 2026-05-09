@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -101,19 +103,20 @@ class OsrmClientTest {
     @Test
     void getEstimate_shouldUseFullOverviewInUrl() {
         String json = """
-            {
-              "code": "Ok",
-              "routes": [{ "distance": 100.0, "duration": 60.0, "geometry": "xyz" }]
-            }
-            """;
+        {
+          "code": "Ok",
+          "routes": [{ "distance": 100.0, "duration": 60.0, "geometry": "xyz" }]
+        }
+        """;
         when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
 
         client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
-       verify(restTemplate).getForObject(
-        argThat(url -> url.toString().contains("overview=full") && url.toString().contains("geometries=polyline")),
-        eq(String.class)
-);
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(restTemplate).getForObject(urlCaptor.capture(), eq(String.class));
+        String capturedUrl = urlCaptor.getValue();
+        assertTrue(capturedUrl.contains("overview=full"));
+        assertTrue(capturedUrl.contains("geometries=polyline"));
     }
 
     @Test
