@@ -1107,7 +1107,7 @@ class ItemServiceTest {
     // ==========================================
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogMatches() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogMatches()  {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand("Danone");
@@ -1125,15 +1125,13 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogDoesNotMatch() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogDoesNotMatch()  {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand("Danone");
@@ -1150,7 +1148,6 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
@@ -1159,7 +1156,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogNoBrandButContainsInName() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserProvided_CatalogNoBrandButContainsInName() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand("Danone");
@@ -1177,7 +1174,6 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
@@ -1186,7 +1182,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandButUserDidNotTypeIt() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandButUserDidNotTypeIt() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
         req.setBrand(null);
@@ -1202,8 +1198,6 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         // Should be rejected because catalog has brand "Danone" but user only typed "Iaurt"
@@ -1211,7 +1205,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName()  {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt Danone");
         req.setBrand(null);
@@ -1227,9 +1221,6 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt Danone")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         // Matches because the user typed the brand in the name
@@ -1237,7 +1228,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_ExactSpecificNameMatch() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_ExactSpecificNameMatch()  {
         ItemRequest req = new ItemRequest();
         req.setName("Paine Feliata");
         req.setBrand(null);
@@ -1254,15 +1245,13 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine Feliata")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
-
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
     }
 
     @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_NameContainsSpecificName() throws Exception {
+    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogNoBrand_NameContainsSpecificName()  {
         ItemRequest req = new ItemRequest();
         req.setName("Paine de casa");
         req.setBrand(null);
@@ -1279,7 +1268,6 @@ class ItemServiceTest {
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Paine de casa")).thenReturn(List.of());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
         ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
         verify(itemRepository).save(itemCaptor.capture());

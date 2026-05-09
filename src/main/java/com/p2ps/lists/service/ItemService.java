@@ -130,7 +130,7 @@ public class ItemService {
 
         try {
             return mapToDTO(itemRepository.save(primaryItem));
-        } catch (org.springframework.dao.DataIntegrityViolationException ignored) {
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemToList(listId, request, userEmail);
         }
     }
@@ -154,7 +154,7 @@ public class ItemService {
             Item savedItem = itemRepository.save(item);
             saveToHistory(savedItem, list.getUser(), normalizedItemName);
             return mapToDTO(savedItem);
-        } catch (org.springframework.dao.DataIntegrityViolationException ignored) {
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemToList(listId, request, userEmail);
         }
     }
@@ -347,7 +347,7 @@ public class ItemService {
     public List<ItemDTO> addItemsToListWithRetry(UUID listId, List<ItemRequest> requests, String userEmail) {
         try {
             return self.addItemsToList(listId, requests, userEmail);
-        } catch (org.springframework.dao.DataIntegrityViolationException ignored) {
+        } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemsToList(listId, requests, userEmail);
         }
     }
@@ -446,7 +446,7 @@ public class ItemService {
             if (dto.getCategory() != null) item.setCategory(dto.getCategory());
         } catch (ListValidationException e) {
             throw e;
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             if (content.trim().isEmpty()) throw new ListValidationException("Item name cannot be empty");
             item.setName(content);
         }
@@ -540,7 +540,7 @@ public class ItemService {
                     String unit = matcher.group(2).trim().toLowerCase();
                     BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
                     unitSums.put(unit, currentSum.add(val));
-                } catch (NumberFormatException ignored) {
+                } catch (NumberFormatException _) {
                     unparseableParts.add(cleanPart);
                 }
             } else {

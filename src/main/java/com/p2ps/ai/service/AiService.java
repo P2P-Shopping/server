@@ -35,7 +35,7 @@ public class AiService {
 
     private static final String SYSTEM_PROMPT ="""
         You are a strict multimodal culinary data parser. Your ONLY job is to analyze text and/or images to output a structured grocery list.
-        LANGUAGE RULE (CRITICAL): Preserve the user's language for genericName, category, and any non-brand text. If the user writes in Romanian, respond in Romanian.
+        LANGUAGE RULE (CRITICAL): If the user writes in Romanian, respond in Romanian.
         MULTI-ITEM RULE (CRITICAL): If the user mentions multiple grocery items in one prompt, you MUST return one separate object inside items for EACH item.
         Never merge multiple requested products into one item. For example, 'sugar and bananas' must produce two items: one for sugar and one for bananas.
         VISUAL RULES (CRITICAL):
@@ -54,17 +54,17 @@ public class AiService {
             "Return ONLY valid JSON matching exactly this schema and nothing else: " +
                     "{\"listType\":\"RECIPE|FREQUENT|CART\",\"suggestedStore\":\"string or null\",\"items\":[{\"genericName\":\"string\",\"specificName\":\"string or null\",\"brand\":\"string or null\",\"quantity\":number or null,\"unit\":\"string or null\",\"catalogId\":\"string or null\",\"category\":\"string\",\"price\":number or null}]}. " +
                     "For multi-item requests, items MUST contain all requested items as separate objects. " +
-                    "Preserve the user's language for genericName and category. Remember to use the STRICT category list. Do not add markdown, explanations, or prose.";
+                    " Remember to use the STRICT category list. Do not add markdown, explanations, or prose.";
     
-    private static final String POST_VALIDATION_SYSTEM_PROMPT =
-            "You are a strict data standardizer and receipt filter. You will receive a JSON array of grocery items. Your ONLY job is to filter out junk and standardize the remaining items.\n" +
-            "1. CRITICAL EXCLUSION RULE: Identify and REMOVE non-consumable/non-product items. Completely drop items such as: Warranties (Garanție, Extragaranție), Bottle deposits/Eco taxes (SGR, RetuRO, Taxă ambalaj), Shopping bags (Pungă, Sacoșă), Discounts/Vouchers, and Delivery fees.\n" +
-            "2. Standardize units of measurement (e.g., convert '1000g' to '1kg').\n" +
-            "3. Fix casing and formatting (e.g., Title Case for product names).\n" +
-            "4. Clean up weird POS abbreviations without changing the core product meaning.\n" +
-            "5. STRICT MAPPING RULE: For the items you keep, you MUST NEVER change the 'id', 'price', or 'catalogId'. Only refine the 'name', 'brand', and 'quantity' strings.\n" +
-            "6. Return ONLY the filtered and refined list of objects as a strict JSON array. No markdown, no explanations.";
-
+    private static final String POST_VALIDATION_SYSTEM_PROMPT = """
+            You are a strict data standardizer and receipt filter. You will receive a JSON array of grocery items. Your ONLY job is to filter out junk and standardize the remaining items.
+            1. CRITICAL EXCLUSION RULE: Identify and REMOVE non-consumable/non-product items. Completely drop items such as: Warranties (Garanție, Extragaranție), Bottle deposits/Eco taxes (SGR, RetuRO, Taxă ambalaj), Shopping bags (Pungă, Sacoșă), Discounts/Vouchers, and Delivery fees.
+            2. Standardize units of measurement (e.g., convert '1000g' to '1kg').
+            3. Fix casing and formatting (e.g., Title Case for product names).
+            4. Clean up weird POS abbreviations without changing the core product meaning.
+            5. STRICT MAPPING RULE: For the items you keep, you MUST NEVER change the 'id', 'price', or 'catalogId'. Only refine the 'name', 'brand', and 'quantity' strings.
+            6. Return ONLY the filtered and refined list of objects as a strict JSON array. No markdown, no explanations.
+            """;
     private static final String DESCRIPTION = "description";
     private static final String RADIUS_METERS = "radius_meters";
     private static final String ITEM_IDS = "item_ids";
