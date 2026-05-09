@@ -246,7 +246,7 @@ class ItemServiceTest {
 
         assertThat(result.getId()).isEqualTo(existingItem.getId());
         assertThat(result.getPrice()).isEqualTo(new BigDecimal("10.0"));
-        assertThat(result.getQuantity()).isEqualTo("2L + 1L");
+        assertThat(result.getQuantity()).isEqualTo("3 l");
 
         verify(itemRepository).save(existingItem);
         verify(itemRepository, never()).saveAll(anyList());
@@ -1102,6 +1102,27 @@ class ItemServiceTest {
         verify(itemRepository, times(2)).save(any(Item.class));
     }
 
+    @Test
+    void addItemsToListWithRetry_ThrowsExceptionAfterRetry() {
+        ItemRequest req = new ItemRequest();
+        req.setName("RetryFailItem");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RetryFailItem")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("RetryFailItem")).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RetryFailItem"))
+                .thenReturn(List.of());
+
+        when(aiService.postValidateAndFilterReceiptItems(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Always throw exception
+        when(itemRepository.saveAll(anyList()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"));
+
+        assertThatThrownBy(() -> itemService.addItemsToListWithRetry(listId, List.of(req), userEmail))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
     // ==========================================
     // TIER 4: NEW COVERAGE TESTS (isBrandMatch, history variants, exceptions)
     // ==========================================
@@ -1302,25 +1323,4 @@ class ItemServiceTest {
         assertThat(result.getName()).isEqualTo("Not a JSON object");
     }
 
-    @Test
-    void addItemsToListWithRetry_ThrowsExceptionAfterRetry() {
-        ItemRequest req = new ItemRequest();
-        req.setName("RetryFailItem");
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
-        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "RetryFailItem")).thenReturn(null);
-        when(catalogRepository.searchByKeywordStrict("RetryFailItem")).thenReturn(List.of());
-        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "RetryFailItem"))
-                .thenReturn(List.of());
-
-        // Always throw exception
-        when(itemRepository.save(any(Item.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate"));
-
-        // When we do addItemsToListWithRetry, it catches the first exception and calls addItemsToList again.
-        // Because addItemsToList calls createAndSaveNewItem which uses itemRepository.save().
-        
-        assertThatThrownBy(() -> itemService.addItemsToListWithRetry(listId, List.of(req), userEmail))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-    }
 }
