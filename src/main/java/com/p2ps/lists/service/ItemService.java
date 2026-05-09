@@ -92,6 +92,7 @@ public class ItemService {
         primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         updateItemFields(primaryItem, request);
+        attachRoutableExternalItemId(primaryItem);
 
         try {
             return mapToDTO(itemRepository.save(primaryItem));
@@ -111,6 +112,7 @@ public class ItemService {
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
+        attachRoutableExternalItemId(item);
 
         try {
             return mapToDTO(itemRepository.save(item));
@@ -183,6 +185,7 @@ public class ItemService {
             primaryItem.setQuantity(sumStringQuantities(primaryItem.getQuantity(), request.getQuantity()));
             primaryItem.setLastUpdatedTimestamp(System.currentTimeMillis());
             updateItemFields(primaryItem, request);
+            attachRoutableExternalItemId(primaryItem);
             batchMap.put(mapKey, primaryItem);
         } else {
             batchMap.put(mapKey, createNewItemForBatch(list, request, normalizedItemName));
@@ -200,6 +203,7 @@ public class ItemService {
         newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
+        attachRoutableExternalItemId(newItem);
         saveToHistory(newItem, list.getUser());
         return newItem;
     }
@@ -243,6 +247,7 @@ public class ItemService {
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        attachRoutableExternalItemId(item);
 
 
         return mapToDTO(itemRepository.save(item));
@@ -334,7 +339,20 @@ public class ItemService {
         dto.setRecurrent(item.isRecurrent());
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         dto.setCreatedAt(item.getCreatedAt());
+        dto.setExternalItemId(item.getExternalItemId());
         return dto;
+    }
+
+    private void attachRoutableExternalItemId(Item item) {
+        if (item.getExternalItemId() != null && !item.getExternalItemId().isBlank()) {
+            return;
+        }
+        if (item.getName() == null || item.getName().isBlank()) {
+            return;
+        }
+
+        itemRepository.findRoutableExternalItemIdByName(item.getName().trim())
+                .ifPresent(item::setExternalItemId);
     }
 
     private String sumStringQuantities(String oldQ, String newQ) {

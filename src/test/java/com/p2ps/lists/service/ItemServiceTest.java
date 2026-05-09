@@ -91,6 +91,7 @@ class ItemServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("Milk")).thenReturn(Optional.empty());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -99,6 +100,22 @@ class ItemServiceTest {
         assertThat(result.getPrice()).isEqualTo(BigDecimal.TEN);
         assertThat(result.isRecurrent()).isTrue();
         verify(itemRepository).save(any(Item.class));
+    }
+
+    @Test
+    void addItemToList_AttachesExternalItemId_WhenRoutableMatchExists() {
+        ItemRequest req = new ItemRequest();
+        req.setName("item_123");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "item_123")).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("item_123")).thenReturn(Optional.of("item_123"));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("item_123");
+        verify(itemRepository).save(argThat(item -> "item_123".equals(item.getExternalItemId())));
     }
 
     @Test
@@ -245,6 +262,7 @@ class ItemServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(eq(listId), anyString())).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName(anyString())).thenReturn(Optional.empty());
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ItemDTO> result = itemService.addItemsToList(listId, requests, userEmail);
@@ -357,6 +375,7 @@ class ItemServiceTest {
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(any(UUID.class), anyString()))
                 .thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName(anyString())).thenReturn(Optional.empty());
 
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -528,6 +547,7 @@ class ItemServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
         when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, req.getName())).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("Milk")).thenReturn(Optional.empty());
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
@@ -672,5 +692,180 @@ class ItemServiceTest {
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
         assertThat(result.getName()).isEqualTo("RaceConditionItem");
         verify(itemRepository, times(2)).save(any(Item.class));
+    }
+
+    @Test
+    void addItemToList_DoesNotOverwriteExistingExternalItemId() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Existing External Item");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Existing External Item");
+        existingItem.setExternalItemId("pre-existing-external-id");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Existing External Item"))
+                .thenReturn(List.of(existingItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("pre-existing-external-id");
+        verify(itemRepository, never()).findRoutableExternalItemIdByName(anyString());
+    }
+
+    @Test
+    void addItemToList_DoesNotAttachExternalItemId_WhenNameIsBlank() {
+        ItemRequest req = new ItemRequest();
+        req.setName("   ");
+
+        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("Item name cannot be empty");
+    }
+
+    @Test
+    void createAndSaveNewItem_AttachesExternalItemId_WhenRoutableMatchExists() {
+        ItemRequest req = new ItemRequest();
+        req.setName("routable-item");
+        req.setPrice(BigDecimal.ZERO);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "routable-item")).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("routable-item")).thenReturn(Optional.of("routable-external-id"));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("routable-external-id");
+        verify(itemRepository).save(argThat(item -> "routable-external-id".equals(item.getExternalItemId())));
+    }
+
+    @Test
+    void updateItem_AttachesExternalItemId_WhenRoutableMatchExists() {
+        ItemRequest req = new ItemRequest();
+        req.setName("update-routable-item");
+
+        Item itemToUpdate = new Item();
+        itemToUpdate.setId(itemId);
+        itemToUpdate.setName("Old Name");
+        itemToUpdate.setShoppingList(mockList);
+        itemToUpdate.setExternalItemId(null);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(itemToUpdate));
+        when(itemRepository.findRoutableExternalItemIdByName("update-routable-item")).thenReturn(Optional.of("update-external-id"));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("update-external-id");
+        verify(itemRepository).save(argThat(item -> "update-external-id".equals(item.getExternalItemId())));
+    }
+
+    @Test
+    void updateItem_DoesNotOverwriteExistingExternalItemId() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Updated Name");
+
+        Item itemToUpdate = new Item();
+        itemToUpdate.setId(itemId);
+        itemToUpdate.setName("Old Name");
+        itemToUpdate.setShoppingList(mockList);
+        itemToUpdate.setExternalItemId("existing-external-id");
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(itemToUpdate));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("existing-external-id");
+        verify(itemRepository, never()).findRoutableExternalItemIdByName(anyString());
+    }
+
+    @Test
+    void addItemsToList_AttachesExternalItemId_ToNewItems() {
+        ItemRequest req = new ItemRequest();
+        req.setName("batch-routable-item");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "batch-routable-item")).thenReturn(List.of());
+        when(itemRepository.findRoutableExternalItemIdByName("batch-routable-item")).thenReturn(Optional.of("batch-external-id"));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getExternalItemId()).isEqualTo("batch-external-id");
+    }
+
+    @Test
+    void addItemsToList_AttachesExternalItemId_ToMergedDbItems() {
+        ItemRequest req = new ItemRequest();
+        req.setName("merge-routable-item");
+        req.setQuantity("2");
+
+        Item dbItem = new Item();
+        dbItem.setId(UUID.randomUUID());
+        dbItem.setName("merge-routable-item");
+        dbItem.setQuantity("1");
+        dbItem.setExternalItemId(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "merge-routable-item")).thenReturn(List.of(dbItem));
+        when(itemRepository.findRoutableExternalItemIdByName("merge-routable-item")).thenReturn(Optional.of("merge-external-id"));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ItemDTO> result = itemService.addItemsToList(listId, List.of(req), userEmail);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getExternalItemId()).isEqualTo("merge-external-id");
+        assertThat(result.get(0).getQuantity()).isEqualTo("3");
+    }
+
+    @Test
+    void addItemToList_MergeFlow_AttachesExternalItemId() {
+        ItemRequest req = new ItemRequest();
+        req.setName("merge-item");
+        req.setQuantity("2");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("merge-item");
+        existingItem.setQuantity("1");
+        existingItem.setExternalItemId(null);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "merge-item"))
+                .thenReturn(List.of(existingItem));
+        when(itemRepository.findRoutableExternalItemIdByName("merge-item")).thenReturn(Optional.of("merge-flow-external-id"));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getExternalItemId()).isEqualTo("merge-flow-external-id");
+        assertThat(result.getQuantity()).isEqualTo("3");
+    }
+
+    @Test
+    void mapToDTO_IncludesExternalItemId() throws Exception {
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Test Item");
+        item.setChecked(true);
+        item.setBrand("Test Brand");
+        item.setQuantity("5");
+        item.setPrice(BigDecimal.TEN);
+        item.setCategory("Test Category");
+        item.setRecurrent(true);
+        item.setLastUpdatedTimestamp(12345L);
+        item.setCreatedAt(10000L);
+        item.setExternalItemId("map-to-dto-external-id");
+
+        java.lang.reflect.Method mapToDtoMethod = ItemService.class.getDeclaredMethod("mapToDTO", Item.class);
+        mapToDtoMethod.setAccessible(true);
+        ItemDTO result = (ItemDTO) mapToDtoMethod.invoke(itemService, item);
+
+        assertThat(result.getExternalItemId()).isEqualTo("map-to-dto-external-id");
     }
 }

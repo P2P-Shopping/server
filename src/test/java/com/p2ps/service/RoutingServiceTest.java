@@ -483,6 +483,42 @@ class RoutingServiceTest {
         assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
     }
 
+    @Test
+    void productLocation_shouldHoldAllFields() {
+        RoutingService.ProductLocation loc = new RoutingService.ProductLocation(
+                "item-1", "Test Item", 47.156, 27.587, 0.85);
+
+        assertEquals("item-1", loc.itemId());
+        assertEquals("Test Item", loc.name());
+        assertEquals(47.156, loc.lat(), 0.001);
+        assertEquals(27.587, loc.lng(), 0.001);
+        assertEquals(0.85, loc.confidenceScore(), 0.001);
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldHandleNullProductIdsGracefully() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, null, 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldReturnErrorWhenProductIdsIsEmptyList() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
     // -------------------------------------------------------------------------
     // Audio Instructions tests (BE 3.2)
     // -------------------------------------------------------------------------
