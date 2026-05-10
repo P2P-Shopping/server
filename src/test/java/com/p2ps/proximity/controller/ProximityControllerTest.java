@@ -1,8 +1,6 @@
 package com.p2ps.proximity.controller;
 
 import com.p2ps.proximity.service.ProximityMatchingService;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +15,7 @@ import org.springframework.web.context.WebApplicationContext;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,20 +48,20 @@ class ProximityControllerTest {
         mockMvc.perform(post("/api/v1/proximity/ping")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                                "deviceId": "device-001",
-                                "lat": 47.15,
-                                "lng": 27.59,
-                                "timestamp": 1234567890000,
-                                "fcmToken": "fcm-token-abc"
-                            }
-                            """))
+                                {
+                                    "deviceId": "device-001",
+                                    "lat": 47.15,
+                                    "lng": 27.59,
+                                    "timestamp": 1234567890000,
+                                    "fcmToken": "fcm-token-abc"
+                                }
+                                """))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("accepted"));
 
-        // Verify service was actually called
         verify(proximityMatchingService).processLocationPing(any());
     }
+
     @Test
     void shouldReturn400WhenDeviceIdIsMissing() throws Exception {
         mockMvc.perform(post("/api/v1/proximity/ping")

@@ -151,9 +151,9 @@ class ProximityMatchingServiceTest {
 
         String debounceKey1 = "proximity:notified:device-001:list-001";
         String debounceKey2 = "proximity:notified:device-001:list-002";
-        when(valueOperations.setIfAbsent(eq(debounceKey1), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+        when(valueOperations.setIfAbsent(debounceKey1, "1", 24L, TimeUnit.HOURS))
                 .thenReturn(false);
-        when(valueOperations.setIfAbsent(eq(debounceKey2), eq("1"), eq(24L), eq(TimeUnit.HOURS)))
+        when(valueOperations.setIfAbsent(debounceKey2, "1", 24L, TimeUnit.HOURS))
                 .thenReturn(true);
 
         proximityMatchingService.processLocationPing(ping);
