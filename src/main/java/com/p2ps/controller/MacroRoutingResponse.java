@@ -8,8 +8,8 @@ import lombok.NoArgsConstructor;
  * BE 3.2 — response for GET /api/routing/macro
  *
  * Both walking and driving can be null independently if OSRM fails for that profile.
- * The frontend checks for null before rendering — this is intentional: a null estimate
- * means "unavailable" (e.g. no walking path exists), not an error.
+ * The polyline field contains an Encoded Polyline string that the frontend decodes
+ * to draw the actual road route on a map (not a straight line).
  */
 @Data
 @NoArgsConstructor
@@ -26,9 +26,15 @@ public class MacroRoutingResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TransportEstimate {
-        /** Straight-road distance in metres. */
+        /** Road distance in metres. */
         private double distanceM;
         /** Estimated travel time in seconds. */
         private double durationSeconds;
+        /**
+         * Encoded Polyline string — represents all turns and curves of the route on real roads.
+         * Frontend decodes this using a polyline library (e.g. @mapbox/polyline) to draw the route.
+         * Null if OSRM did not return geometry.
+         */
+        private String polyline;
     }
 }
