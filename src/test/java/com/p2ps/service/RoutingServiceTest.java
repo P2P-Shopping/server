@@ -97,7 +97,7 @@ class RoutingServiceTest {
 
         List<RoutePoint> route = optimizer.nearestNeighborTSP(start, List.of(far, near));
 
-        assertEquals(ITEM_1, route.get(0).getItemId());
+        assertEquals(ITEM_1, route.getFirst().getItemId());
     }
 
     @Test
@@ -164,7 +164,7 @@ class RoutingServiceTest {
 
         // Run Nearest Neighbor
         List<RoutePoint> nnRoute = new ArrayList<>(optimizer.nearestNeighborTSP(start, points));
-        nnRoute.add(0, start); // start point at the beginning to measure full distance
+        nnRoute.addFirst(start); // start point at the beginning to measure full distance
         double nnDistance = optimizer.routeDistance(nnRoute);
 
         // Run 3-Opt Improvement
@@ -314,7 +314,7 @@ class RoutingServiceTest {
         assertFalse(response.getRoute().isEmpty());
 
         // Route must NOT end with a checkout node
-        RoutePoint last = response.getRoute().get(response.getRoute().size() - 1);
+        RoutePoint last = response.getRoute().getLast();
         assertNotEquals("checkout", last.getItemId());
     }
 
@@ -481,5 +481,92 @@ class RoutingServiceTest {
 
         assertEquals("error", response.getStatus());
         assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
+    @Test
+    void productLocation_shouldHoldAllFields() {
+        RoutingService.ProductLocation loc = new RoutingService.ProductLocation(
+                "item-1", "Test Item", 47.156, 27.587, 0.85);
+
+        assertEquals("item-1", loc.itemId());
+        assertEquals("Test Item", loc.name());
+        assertEquals(47.156, loc.lat(), 0.001);
+        assertEquals(27.587, loc.lng(), 0.001);
+        assertEquals(0.85, loc.confidenceScore(), 0.001);
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldHandleNullProductIdsGracefully() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, null, 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
+    @Test
+    void calculateOptimalRoute_shouldReturnErrorWhenProductIdsIsEmptyList() {
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
+                .thenReturn(List.of(STORE_ID));
+
+        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(), 0);
+        RoutingResponse response = service.calculateOptimalRoute(request);
+
+        assertEquals("error", response.getStatus());
+        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+    }
+
+    // -------------------------------------------------------------------------
+    // Audio Instructions tests (BE 3.2)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void addAudioInstructions_shouldSetDestinationForNullOrSmallList() {
+        // null list
+        assertDoesNotThrow(() -> service.addAudioInstructions(null));
+
+        // size 1 list
+        RoutePoint singlePoint = new RoutePoint("u", "Tu", 47.156, 27.587);
+        service.addAudioInstructions(List.of(singlePoint));
+        assertEquals("Ai ajuns la destinație.", singlePoint.getAudioInstruction());
+    }
+
+    @Test
+    void addAudioInstructions_shouldSetAudioInstructionsForRoute() {
+        RoutePoint user = new RoutePoint("u", "Tu", 47.156, 27.587);
+        RoutePoint p1 = new RoutePoint(ITEM_1, "Lapte", 47.157, 27.587); // move north
+        RoutePoint p2 = new RoutePoint(ITEM_2, "Paine", 47.157, 27.588); // move east -> turn right
+        RoutePoint p3 = new RoutePoint(ITEM_3, "Branza", 47.158, 27.588); // move north -> turn left
+
+        List<RoutePoint> route = List.of(user, p1, p2, p3);
+        service.addAudioInstructions(route);
+
+        assertNotNull(user.getAudioInstruction());
+        assertTrue(user.getAudioInstruction().contains("ia-o la dreapta pentru a găsi Paine"));
+
+        assertNotNull(p1.getAudioInstruction());
+        assertTrue(p1.getAudioInstruction().contains("ia-o la stânga pentru a găsi Branza"));
+
+        assertNotNull(p2.getAudioInstruction());
+        assertTrue(p2.getAudioInstruction().contains("vei ajunge la Branza"));
+
+        assertEquals("Ai ajuns la destinație.", p3.getAudioInstruction());
+    }
+
+    @Test
+    void addAudioInstructions_shouldDetectStraightAndTurnAround() {
+        RoutePoint user = new RoutePoint("u", "Tu", 47.156, 27.587);
+        RoutePoint p1 = new RoutePoint(ITEM_1, "A", 47.157, 27.587); // move north
+        RoutePoint p2 = new RoutePoint(ITEM_2, "B", 47.158, 27.587); // move north -> straight
+        RoutePoint p3 = new RoutePoint(ITEM_3, "C", 47.157, 27.587); // move south -> turn around
+
+        List<RoutePoint> route = List.of(user, p1, p2, p3);
+        service.addAudioInstructions(route);
+
+        assertTrue(user.getAudioInstruction().contains("mergi înainte pentru a găsi B"));
+        assertTrue(p1.getAudioInstruction().contains("întoarce-te pentru a găsi C"));
     }
 }

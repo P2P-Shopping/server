@@ -5,6 +5,7 @@ import com.p2ps.controller.RoutePoint;
 import com.p2ps.controller.RoutingResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -35,13 +36,16 @@ public class RoutingAsyncService {
     private final RouteOptimizer optimizer;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
+    private final ApplicationContext applicationContext;
 
     public RoutingAsyncService(RouteOptimizer optimizer,
                                StringRedisTemplate redis,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               ApplicationContext applicationContext) {
         this.optimizer = optimizer;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        this.applicationContext = applicationContext;
     }
 
     /**
@@ -58,6 +62,10 @@ public class RoutingAsyncService {
         logger.info("Background optimization started: routeId={} nodes={}", routeId, fullNnRoute.size());
         try {
             List<RoutePoint> optimized = optimizer.threeOptImprove(fullNnRoute);
+
+            // BE 3.2 Add audio instructions
+            RoutingService routingService = applicationContext.getBean(RoutingService.class);
+            routingService.addAudioInstructions(optimized);
 
             // Updated instantiation to use constructor and setters
             RoutingResponse fullResponse = new RoutingResponse();
