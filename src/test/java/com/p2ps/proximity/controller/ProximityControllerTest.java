@@ -3,6 +3,9 @@ package com.p2ps.proximity.controller;
 import com.p2ps.proximity.service.ProximityMatchingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -11,6 +14,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import java.util.stream.Stream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
@@ -62,51 +67,42 @@ class ProximityControllerTest {
         verify(proximityMatchingService).processLocationPing(any());
     }
 
-    @Test
-    void shouldReturn400WhenDeviceIdIsMissing() throws Exception {
-        mockMvc.perform(post("/api/v1/proximity/ping")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                    "lat": 47.15,
-                                    "lng": 27.59,
-                                    "timestamp": 1234567890000,
-                                    "fcmToken": "fcm-token-abc"
-                                }
-                                """))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(proximityMatchingService);
+    static Stream<Arguments> invalidPingPayloads() {
+        return Stream.of(
+                Arguments.of("missing deviceId", """
+                        {
+                            "lat": 47.15,
+                            "lng": 27.59,
+                            "timestamp": 1234567890000,
+                            "fcmToken": "fcm-token-abc"
+                        }
+                        """),
+                Arguments.of("missing fcmToken", """
+                        {
+                            "deviceId": "device-001",
+                            "lat": 47.15,
+                            "lng": 27.59,
+                            "timestamp": 1234567890000
+                        }
+                        """),
+                Arguments.of("latitude out of range", """
+                        {
+                            "deviceId": "device-001",
+                            "lat": 999.0,
+                            "lng": 27.59,
+                            "timestamp": 1234567890000,
+                            "fcmToken": "fcm-token-abc"
+                        }
+                        """)
+        );
     }
 
-    @Test
-    void shouldReturn400WhenFcmTokenIsMissing() throws Exception {
+    @ParameterizedTest(name = "should return 400 when {0}")
+    @MethodSource("invalidPingPayloads")
+    void shouldReturn400ForInvalidPayloads(String description, String payload) throws Exception {
         mockMvc.perform(post("/api/v1/proximity/ping")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                    "deviceId": "device-001",
-                                    "lat": 47.15,
-                                    "lng": 27.59,
-                                    "timestamp": 1234567890000
-                                }
-                                """))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(proximityMatchingService);
-    }
-
-    @Test
-    void shouldReturn400WhenLatitudeIsOutOfRange() throws Exception {
-        mockMvc.perform(post("/api/v1/proximity/ping")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                    "deviceId": "device-001",
-                                    "lat": 999.0,
-                                    "lng": 27.59,
-                                    "timestamp": 1234567890000,
-                                    "fcmToken": "fcm-token-abc"
-                                }
-                                """))
+                        .content(payload))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(proximityMatchingService);
     }
