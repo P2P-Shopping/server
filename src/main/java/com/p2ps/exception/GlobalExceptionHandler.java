@@ -1,5 +1,6 @@
 package com.p2ps.exception;
 
+import com.p2ps.lists.exception.InvitationNotFoundException;
 import com.p2ps.lists.exception.ItemNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
@@ -67,7 +68,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class})
+    @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class, InvitationNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFoundExceptions(RuntimeException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
                 "Resource Not Found",

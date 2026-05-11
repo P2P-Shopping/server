@@ -11,8 +11,11 @@ import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
+import com.p2ps.lists.model.InvitationStatus;
+import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.catalog.model.ProductCatalog;
@@ -52,6 +55,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private ItemRepository itemRepository;
+
+    @Mock
+    private ListInvitationRepository invitationRepository;
 
     @InjectMocks
     private ShoppingListService shoppingListService;
@@ -419,7 +425,7 @@ class ShoppingListServiceTest {
         assertEquals(new BigDecimal("1.5"), result.getItems().get(0).getPrice());
     }
     @Test
-    void shareListShouldAddCollaboratorWhenCalledByOwner() {
+    void shareListShouldCreatePendingInvitationWhenCalledByOwner() {
         String ownerEmail = "owner@example.com";
         String collabEmail = "collab@example.com";
         UUID listId = UUID.randomUUID();
@@ -435,11 +441,148 @@ class ShoppingListServiceTest {
         
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.empty());
         
         shoppingListService.shareList(listId, collabEmail, ownerEmail);
         
-        assertTrue(list.getCollaborators().contains(collaborator));
-        verify(shoppingListRepository).save(list);
+        assertFalse(list.getCollaborators().contains(collaborator));
+        verify(invitationRepository).save(any(ListInvitation.class));
+        verify(shoppingListRepository, never()).save(list);
+    }
+
+    @Test
+    void shareListShouldReinviteWhenPreviousInvitationDeclined() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListInvitation declinedInvitation = new ListInvitation();
+        declinedInvitation.setShoppingList(list);
+        declinedInvitation.setInviter(owner);
+        declinedInvitation.setInvitee(collaborator);
+        declinedInvitation.setStatus(InvitationStatus.DECLINED);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.of(declinedInvitation));
+
+        shoppingListService.shareList(listId, collabEmail, ownerEmail);
+
+        assertEquals(InvitationStatus.PENDING, declinedInvitation.getStatus());
+        verify(invitationRepository).save(declinedInvitation);
+        verify(shoppingListRepository, never()).save(list);
+    }
+
+    @Test
+    void shareListShouldThrowWhenExistingInvitationIsAccepted() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListInvitation acceptedInvitation = new ListInvitation();
+        acceptedInvitation.setShoppingList(list);
+        acceptedInvitation.setInviter(owner);
+        acceptedInvitation.setInvitee(collaborator);
+        acceptedInvitation.setStatus(InvitationStatus.ACCEPTED);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.of(acceptedInvitation));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+
+        assertEquals("User has already accepted an invitation for this list", ex.getMessage());
+        verify(invitationRepository, never()).save(any(ListInvitation.class));
+    }
+
+    @Test
+    void shareListShouldThrowWhenExistingInvitationIsPending() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListInvitation pendingInvitation = new ListInvitation();
+        pendingInvitation.setShoppingList(list);
+        pendingInvitation.setInviter(owner);
+        pendingInvitation.setInvitee(collaborator);
+        pendingInvitation.setStatus(InvitationStatus.PENDING);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.of(pendingInvitation));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+
+        assertEquals("Invitation already pending for this user", ex.getMessage());
+        verify(invitationRepository, never()).save(any(ListInvitation.class));
+    }
+
+    @Test
+    void shareListShouldThrowWhenListNotFound() {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        assertThrows(ShoppingListNotFoundException.class,
+                () -> shoppingListService.shareList(listId, "collab@example.com", "owner@example.com"));
+    }
+
+    @Test
+    void shareListShouldThrowWhenUserIsAlreadyCollaborator() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+        list.getCollaborators().add(collaborator);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+
+        assertEquals("User is already a collaborator on this list", ex.getMessage());
+        verify(invitationRepository, never()).save(any(ListInvitation.class));
     }
 
     @Test

@@ -11,16 +11,20 @@ import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
+import com.p2ps.lists.model.InvitationStatus;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
+import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -28,13 +32,15 @@ public class ShoppingListService {
 
     private final ShoppingListRepository shoppingListRepository;
     private final UserRepository userRepository;
+    private final ListInvitationRepository invitationRepository;
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
     private final ItemRepository itemRepository;
 
-    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository) {
+    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository) {
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
+        this.invitationRepository = invitationRepository;
     }
 
     @Transactional
@@ -279,8 +285,33 @@ public class ShoppingListService {
         Users collaborator = userRepository.findByEmail(collaboratorEmail)
                 .orElseThrow(() -> new ListUserNotFoundException("Collaborator user not found"));
 
-        list.getCollaborators().add(collaborator);
-        shoppingListRepository.save(list);
+        if (list.getCollaborators().stream().anyMatch(c -> c.getId().equals(collaborator.getId()))) {
+            throw new IllegalArgumentException("User is already a collaborator on this list");
+        }
+
+        Optional<ListInvitation> existingInvitation = invitationRepository.findByShoppingListIdAndInviteeId(
+                listId, collaborator.getId());
+
+        if (existingInvitation.isPresent()) {
+            ListInvitation existing = existingInvitation.get();
+            if (existing.getStatus() == InvitationStatus.PENDING) {
+                throw new IllegalArgumentException("Invitation already pending for this user");
+            }
+            if (existing.getStatus() == InvitationStatus.ACCEPTED) {
+                throw new IllegalArgumentException("User has already accepted an invitation for this list");
+            }
+            existing.setInviter(list.getUser());
+            existing.setStatus(InvitationStatus.PENDING);
+            invitationRepository.save(existing);
+            return;
+        }
+
+        ListInvitation invitation = new ListInvitation();
+        invitation.setShoppingList(list);
+        invitation.setInviter(list.getUser());
+        invitation.setInvitee(collaborator);
+        invitation.setStatus(InvitationStatus.PENDING);
+        invitationRepository.save(invitation);
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {
