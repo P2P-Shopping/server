@@ -1308,4 +1308,67 @@ class ItemServiceTest {
         assertThat(result.getName()).isEqualTo("Not a JSON object");
     }
 
+    // ==========================================
+    // deleteCompletedItems tests
+    // ==========================================
+
+    @Test
+    void deleteCompletedItems_DeletesCheckedItemsAndReturnsIds() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+
+        Item checked1 = new Item();
+        checked1.setId(id1);
+        checked1.setChecked(true);
+        checked1.setShoppingList(mockList);
+
+        Item checked2 = new Item();
+        checked2.setId(id2);
+        checked2.setChecked(true);
+        checked2.setShoppingList(mockList);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndIsCheckedTrue(listId)).thenReturn(List.of(checked1, checked2));
+
+        List<UUID> result = itemService.deleteCompletedItems(listId, userEmail);
+
+        assertThat(result).containsExactlyInAnyOrder(id1, id2);
+        verify(itemRepository).deleteAll(List.of(checked1, checked2));
+    }
+
+    @Test
+    void deleteCompletedItems_ReturnsEmptyListWhenNoCheckedItems() {
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        when(itemRepository.findByShoppingListIdAndIsCheckedTrue(listId)).thenReturn(List.of());
+
+        List<UUID> result = itemService.deleteCompletedItems(listId, userEmail);
+
+        assertThat(result).isEmpty();
+        verify(itemRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void deleteCompletedItems_ThrowsWhenListNotFound() {
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.deleteCompletedItems(listId, userEmail))
+                .isInstanceOf(ShoppingListNotFoundException.class);
+    }
+
+    @Test
+    void deleteCompletedItems_ThrowsWhenUserHasNoPermission() {
+        Users otherUser = new Users();
+        otherUser.setId(999);
+        otherUser.setEmail("other@example.com");
+
+        ShoppingList restrictedList = new ShoppingList();
+        restrictedList.setId(listId);
+        restrictedList.setUser(otherUser);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(restrictedList));
+
+        assertThatThrownBy(() -> itemService.deleteCompletedItems(listId, userEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+    }
+
 }
