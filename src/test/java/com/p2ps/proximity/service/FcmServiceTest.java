@@ -10,6 +10,7 @@ import org.mockito.MockedStatic;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -22,14 +23,13 @@ class FcmServiceTest {
         try (MockedStatic<FirebaseApp> mockedFirebaseApp = mockStatic(FirebaseApp.class)) {
             mockedFirebaseApp.when(FirebaseApp::getApps).thenReturn(Collections.emptyList());
 
-            fcmService.sendProximityAlert(
-                    "fcm-token-abc",
-                    "Item nearby!",
-                    "body",
-                    "http://localhost/list/1"
-            );
-
-            // No exception should be thrown
+            assertDoesNotThrow(() ->
+                    fcmService.sendProximityAlert(
+                            "fcm-token-abc",
+                            "Item nearby!",
+                            "body",
+                            "http://localhost/list/1"
+                    ));
         }
     }
 
@@ -45,12 +45,13 @@ class FcmServiceTest {
             mockedFirebaseApp.when(FirebaseApp::getApps).thenReturn(List.of(mockApp));
             mockedMessaging.when(FirebaseMessaging::getInstance).thenReturn(mockMessaging);
 
-            fcmService.sendProximityAlert(
-                    "fcm-token-abc",
-                    "Item nearby!",
-                    "body",
-                    "http://localhost/list/1"
-            );
+            assertDoesNotThrow(() ->
+                    fcmService.sendProximityAlert(
+                            "fcm-token-abc",
+                            "Item nearby!",
+                            "body",
+                            "http://localhost/list/1"
+                    ));
 
             verify(mockMessaging).send(any(Message.class));
         }
@@ -69,13 +70,13 @@ class FcmServiceTest {
             mockedFirebaseApp.when(FirebaseApp::getApps).thenReturn(List.of(mockApp));
             mockedMessaging.when(FirebaseMessaging::getInstance).thenReturn(mockMessaging);
 
-            // Should not throw - exception is caught and logged
-            fcmService.sendProximityAlert(
-                    "fcm-token-abc",
-                    "Item nearby!",
-                    "body",
-                    "http://localhost/list/1"
-            );
+            assertDoesNotThrow(() ->
+                    fcmService.sendProximityAlert(
+                            "fcm-token-abc",
+                            "Item nearby!",
+                            "body",
+                            "http://localhost/list/1"
+                    ));
 
             verify(mockMessaging).send(any(Message.class));
         }
