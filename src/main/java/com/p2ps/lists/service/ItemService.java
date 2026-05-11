@@ -33,6 +33,7 @@ public class ItemService {
 
     private static final Logger logger = LoggerFactory.getLogger(ItemService.class);
     private static final String ITEM_NOT_FOUND = "Item not found";
+    private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
 
     private final ItemRepository itemRepository;
     private final ShoppingListRepository shoppingListRepository;
@@ -84,7 +85,7 @@ public class ItemService {
         validatePrice(request.getPrice());
 
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         if (!list.canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
@@ -177,7 +178,7 @@ public class ItemService {
         }
 
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         if (!list.canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to add items to this list");
@@ -467,7 +468,7 @@ public class ItemService {
     @Transactional
     public List<UUID> deleteCompletedItems(UUID listId, String userEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
-                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
         if (!list.canBeModifiedBy(userEmail)) {
             throw new ListAccessDeniedException("You do not have permission to delete items from this list");
