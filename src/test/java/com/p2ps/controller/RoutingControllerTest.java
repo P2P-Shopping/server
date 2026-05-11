@@ -203,8 +203,9 @@ class RoutingControllerTest {
     @Test
     void getMacroEstimates_shouldReturn200WithEstimates() {
         MacroRoutingResponse macroResponse = new MacroRoutingResponse(
-                new MacroRoutingResponse.TransportEstimate(850.0, 612.0),
-                new MacroRoutingResponse.TransportEstimate(1200.0, 145.0)
+                new MacroRoutingResponse.TransportEstimate(850.0, 612.0, null),
+                new MacroRoutingResponse.TransportEstimate(1200.0, 145.0, null)
+
         );
         when(macroRoutingService.getEstimates(47.15, 27.58, "store-uuid")).thenReturn(macroResponse);
 

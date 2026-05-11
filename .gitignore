@@ -44,7 +44,7 @@ pgdata/
 node_modules/
 dist/
 
+### Misc ###
 .local
-
-
 **/firebase-service-account.json
+AGENTS.md
