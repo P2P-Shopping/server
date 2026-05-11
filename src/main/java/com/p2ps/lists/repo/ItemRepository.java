@@ -11,6 +11,7 @@ import java.util.UUID;
 public interface ItemRepository extends JpaRepository<Item, UUID> {
     List<Item> findByShoppingListIdAndNameIgnoreCase(UUID shoppingListId, String name);
     List<Item> findByShoppingListIdAndCatalogItem_Id(UUID shoppingListId, UUID catalogId);
+    List<Item> findByShoppingListIdAndIsCheckedTrue(UUID shoppingListId);
 
     @Query(value = """
         SELECT i.external_item_id

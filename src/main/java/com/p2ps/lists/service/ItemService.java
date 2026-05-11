@@ -464,6 +464,27 @@ public class ItemService {
         itemRepository.delete(item);
     }
 
+    @Transactional
+    public List<UUID> deleteCompletedItems(UUID listId, String userEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException("Shopping list not found"));
+
+        if (!list.canBeModifiedBy(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to delete items from this list");
+        }
+
+        List<Item> checkedItems = itemRepository.findByShoppingListIdAndIsCheckedTrue(listId);
+
+        if (checkedItems.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> deletedIds = checkedItems.stream().map(Item::getId).toList();
+        itemRepository.deleteAll(checkedItems);
+
+        return deletedIds;
+    }
+
     private void validatePrice(BigDecimal price) {
         if (price != null && price.compareTo(BigDecimal.ZERO) < 0) {
             throw new ListValidationException("Price must be zero or positive");

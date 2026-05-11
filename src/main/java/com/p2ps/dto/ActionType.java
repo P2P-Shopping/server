@@ -10,6 +10,7 @@ public enum ActionType {
     ADD("ADD"),
     UPDATE("UPDATE"),
     DELETE("DELETE"),
+    BULK_DELETE("BULK_DELETE"),
     CHECK_OFF("CHECK_OFF"),
     TYPING("TYPING"),
     UNKNOWN("UNKNOWN");
