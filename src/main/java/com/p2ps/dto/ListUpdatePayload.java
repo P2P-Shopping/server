@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 
+import java.util.List;
+
 /**
  * Data Transfer Object representing a real-time modification to a shopping list.
  * Defines the standard structure for messages broadcasted to list-specific WebSocket rooms.
@@ -15,6 +17,7 @@ public class ListUpdatePayload {
 
     private ActionType action = ActionType.UNKNOWN;
     private String itemId;
+    private List<String> itemIds;
     private String content;
     private Boolean checked;
     private Long timestamp;
@@ -51,6 +54,18 @@ public class ListUpdatePayload {
 
     public void setItemId(String itemId) {
         this.itemId = itemId;
+    }
+
+    /**
+     * Gets the list of item IDs for bulk operations.
+     * @return the list of item IDs
+     */
+    public List<String> getItemIds() {
+        return itemIds;
+    }
+
+    public void setItemIds(List<String> itemIds) {
+        this.itemIds = itemIds;
     }
 
     /**

@@ -64,9 +64,15 @@ public class ListSyncRouterService {
             return payload;
         }
 
+        if (action == ActionType.BULK_DELETE) {
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+            return payload;
+        }
+
         return switch (action) {
             case ADD, UPDATE, DELETE, CHECK_OFF -> listSyncStore.apply(listId, payload);
             case TYPING, UNKNOWN -> payload;
+            case BULK_DELETE -> payload;
         };
     }
 
