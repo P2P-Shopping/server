@@ -159,17 +159,17 @@ public class TelemetryRawPingImportJob {
 
         int inserted = 0;
         int skipped = 0;
-        for (TelemetryRecord record : records) {
-            if (!isImportable(record)) {
+        for (TelemetryRecord telemetryRecord : records) {
+            if (!isImportable(telemetryRecord)) {
                 skipped++;
                 continue;
             }
 
             if (autoProvisionDimensions) {
-                ensureDimensions(record);
+                ensureDimensions(telemetryRecord);
             }
 
-            if (insertRawPing(record)) {
+            if (insertRawPing(telemetryRecord)) {
                 inserted++;
             } else {
                 skipped++;
@@ -209,13 +209,13 @@ public class TelemetryRawPingImportJob {
         """, SYSTEM_LIST_ID, SYSTEM_USER_EMAIL);
     }
 
-    private void ensureDimensions(TelemetryRecord record) {
-        ensureStore(record);
-        ensureItem(record);
+    private void ensureDimensions(TelemetryRecord telemetryRecord) {
+        ensureStore(telemetryRecord);
+        ensureItem(telemetryRecord);
     }
 
-    private void ensureStore(TelemetryRecord record) {
-        String internalStoreId = toInternalUuid("store", record.getStoreId());
+    private void ensureStore(TelemetryRecord telemetryRecord) {
+        String internalStoreId = toInternalUuid("store", telemetryRecord.getStoreId());
 
         jdbcTemplate.update("""
             INSERT INTO store_geofences (
@@ -239,20 +239,20 @@ public class TelemetryRawPingImportJob {
             ON CONFLICT (store_id) DO NOTHING
         """,
                 internalStoreId,
-                record.getStoreId(),
-                "Imported Store " + record.getStoreId(),
-                record.getLng(),
-                record.getLat(),
-                record.getLng(),
-                record.getLat(),
-                record.getLng(),
-                record.getLat());
+                telemetryRecord.getStoreId(),
+                "Imported Store " + telemetryRecord.getStoreId(),
+                telemetryRecord.getLng(),
+                telemetryRecord.getLat(),
+                telemetryRecord.getLng(),
+                telemetryRecord.getLat(),
+                telemetryRecord.getLng(),
+                telemetryRecord.getLat());
     }
 
-    private void ensureItem(TelemetryRecord record) {
-        String internalItemId = toInternalUuid("item", record.getItemId());
-        long itemTimestamp = record.getTimestamp() != null
-                ? record.getTimestamp()
+    private void ensureItem(TelemetryRecord telemetryRecord) {
+        String internalItemId = toInternalUuid("item", telemetryRecord.getItemId());
+        long itemTimestamp = telemetryRecord.getTimestamp() != null
+                ? telemetryRecord.getTimestamp()
                 : System.currentTimeMillis();
 
         jdbcTemplate.update("""
@@ -285,25 +285,25 @@ public class TelemetryRawPingImportJob {
             ON CONFLICT (id) DO NOTHING
         """,
                 internalItemId,
-                record.getItemId(),
-                "Imported Item " + record.getItemId(),
+                telemetryRecord.getItemId(),
+                "Imported Item " + telemetryRecord.getItemId(),
                 itemTimestamp,
                 itemTimestamp,
                 SYSTEM_LIST_ID);
     }
 
-    private boolean isImportable(TelemetryRecord record) {
-        return record.getId() != null
-                && record.getStatus() == PingStatus.ACCEPTED
-                && record.getLat() != null
-                && record.getLng() != null
-                && hasText(record.getStoreId())
-                && hasText(record.getItemId());
+    private boolean isImportable(TelemetryRecord telemetryRecord) {
+        return telemetryRecord.getId() != null
+                && telemetryRecord.getStatus() == PingStatus.ACCEPTED
+                && telemetryRecord.getLat() != null
+                && telemetryRecord.getLng() != null
+                && hasText(telemetryRecord.getStoreId())
+                && hasText(telemetryRecord.getItemId());
     }
 
-    private boolean insertRawPing(TelemetryRecord record) {
-        String internalStoreId = toInternalUuid("store", record.getStoreId());
-        String internalItemId = toInternalUuid("item", record.getItemId());
+    private boolean insertRawPing(TelemetryRecord telemetryRecord) {
+        String internalStoreId = toInternalUuid("store", telemetryRecord.getStoreId());
+        String internalItemId = toInternalUuid("item", telemetryRecord.getItemId());
 
         try {
             int rows = jdbcTemplate.update("""
@@ -321,30 +321,30 @@ public class TelemetryRawPingImportJob {
                 VALUES (?, ?::uuid, ?::uuid, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326), ?, ?, ?)
                 ON CONFLICT (source_telemetry_id) DO NOTHING
             """,
-                    record.getId(),
+                    telemetryRecord.getId(),
                     internalStoreId,
                     internalItemId,
-                    record.getStoreId(),
-                    record.getItemId(),
-                    record.getLng(),
-                    record.getLat(),
-                    record.getAccuracyMeters(),
+                    telemetryRecord.getStoreId(),
+                    telemetryRecord.getItemId(),
+                    telemetryRecord.getLng(),
+                    telemetryRecord.getLat(),
+                    telemetryRecord.getAccuracyMeters(),
                     DEFAULT_LOC_PROVIDER,
-                    toMarkedAt(record));
+                    toMarkedAt(telemetryRecord));
             return rows > 0;
         } catch (Exception e) {
             log.warn("[TELEMETRY_IMPORT] Skipping telemetry record {} because raw ping insert failed.",
-                    record.getId(), e);
+                    telemetryRecord.getId(), e);
             return false;
         }
     }
 
-    private Timestamp toMarkedAt(TelemetryRecord record) {
-        if (record.getTimestamp() != null) {
-            return Timestamp.from(Instant.ofEpochMilli(record.getTimestamp()));
+    private Timestamp toMarkedAt(TelemetryRecord telemetryRecord) {
+        if (telemetryRecord.getTimestamp() != null) {
+            return Timestamp.from(Instant.ofEpochMilli(telemetryRecord.getTimestamp()));
         }
-        if (record.getServerReceivedTimestamp() != null) {
-            return Timestamp.from(record.getServerReceivedTimestamp());
+        if (telemetryRecord.getServerReceivedTimestamp() != null) {
+            return Timestamp.from(telemetryRecord.getServerReceivedTimestamp());
         }
         return Timestamp.from(Instant.now());
     }
