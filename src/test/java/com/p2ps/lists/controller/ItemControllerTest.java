@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.verify;
@@ -153,6 +154,39 @@ class ItemControllerTest {
 
         ItemDTO deserialized = objectMapper.readValue(json, ItemDTO.class);
         assertTrue(deserialized.isChecked(), "Deserialized object should have isChecked=true");
+    }
+
+    @Test
+    void deleteCompletedItemsShouldReturnDeletedIds() throws Exception {
+        UUID listId = UUID.randomUUID();
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+
+        when(itemService.deleteCompletedItems(listId, "ana@example.com"))
+                .thenReturn(List.of(id1, id2));
+
+        mockMvc.perform(delete("/api/lists/{listId}/items/completed", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedItemIds[0]").value(id1.toString()))
+                .andExpect(jsonPath("$.deletedItemIds[1]").value(id2.toString()));
+
+        verify(itemService).deleteCompletedItems(listId, "ana@example.com");
+    }
+
+    @Test
+    void deleteCompletedItemsShouldReturnEmptyListWhenNoCheckedItems() throws Exception {
+        UUID listId = UUID.randomUUID();
+
+        when(itemService.deleteCompletedItems(listId, "ana@example.com"))
+                .thenReturn(List.of());
+
+        mockMvc.perform(delete("/api/lists/{listId}/items/completed", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deletedItemIds").isEmpty());
+
+        verify(itemService).deleteCompletedItems(listId, "ana@example.com");
     }
 
 

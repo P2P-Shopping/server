@@ -68,7 +68,7 @@ class SecurityConfigTest {
 
         assertNotNull(corsConfig);
         assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
-        assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"), corsConfig.getAllowedMethods());
+        assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"), corsConfig.getAllowedMethods());
         assertEquals(List.of("Authorization", "Content-Type", "Accept", "X-Return-Token"), corsConfig.getAllowedHeaders());
         assertTrue(corsConfig.getAllowCredentials());
     }

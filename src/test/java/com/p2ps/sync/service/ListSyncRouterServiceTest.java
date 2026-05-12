@@ -289,4 +289,22 @@ class ListSyncRouterServiceTest {
         
         assertEquals(ListUpdatePayload.STATUS_SUCCESS, p2.getStatus());
     }
+
+    @Test
+    void routeBulkDeleteMarksSuccessWithoutDelegating() {
+        AtomicInteger calls = new AtomicInteger();
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            calls.incrementAndGet();
+            return payload;
+        });
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.BULK_DELETE);
+        payload.setItemIds(java.util.List.of("id1", "id2", "id3"));
+
+        ListUpdatePayload result = service.route("list-1", payload);
+
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
+        assertEquals(0, calls.get());
+    }
 }

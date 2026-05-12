@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -62,5 +63,15 @@ public class ItemController {
 
         itemService.deleteItem(itemId, authentication.getName());
         return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/lists/{listId}/items/completed")
+    public ResponseEntity<Map<String, List<String>>> deleteCompletedItems(
+            @PathVariable UUID listId,
+            Authentication authentication) {
+
+        List<UUID> deletedIds = itemService.deleteCompletedItems(listId, authentication.getName());
+        List<String> deletedIdStrings = deletedIds.stream().map(UUID::toString).toList();
+        return ResponseEntity.ok(Map.of("deletedItemIds", deletedIdStrings));
     }
 }
