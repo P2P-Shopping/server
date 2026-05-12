@@ -20,5 +20,6 @@ public class ItemRequest {
     private BigDecimal price;
     private String category;
     private Boolean isRecurrent;
+    private Double positionIndex;
     private Long timestamp;
 }

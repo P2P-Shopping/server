@@ -147,6 +147,7 @@ public class ItemService {
         item.setPrice(request.getPrice());
         item.setCategory(request.getCategory());
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+        item.setPositionIndex(request.getPositionIndex() != null ? request.getPositionIndex() : (double) System.currentTimeMillis());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(item);
@@ -169,6 +170,7 @@ public class ItemService {
         }
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
+        if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
     }
 
     @Transactional
@@ -337,6 +339,7 @@ public class ItemService {
         newItem.setPrice(request.getPrice());
         newItem.setCategory(request.getCategory());
         newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
+        newItem.setPositionIndex(request.getPositionIndex() != null ? request.getPositionIndex() : (double) System.currentTimeMillis());
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(newItem);
@@ -375,6 +378,7 @@ public class ItemService {
         if (request.getPrice() != null) item.setPrice(request.getPrice());
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
+        if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
 
         if (request.getIsChecked() != null) {
             boolean wasChecked = item.isChecked();
@@ -445,6 +449,7 @@ public class ItemService {
                 item.setPrice(dto.getPrice());
             }
             if (dto.getCategory() != null) item.setCategory(dto.getCategory());
+            if (dto.getPositionIndex() != null) item.setPositionIndex(dto.getPositionIndex());
         } catch (ListValidationException e) {
             throw e;
         } catch (Exception _) {
@@ -502,6 +507,7 @@ public class ItemService {
         dto.setPrice(item.getPrice());
         dto.setCategory(item.getCategory());
         dto.setRecurrent(item.isRecurrent());
+        dto.setPositionIndex(item.getPositionIndex());
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         dto.setCreatedAt(item.getCreatedAt());
         dto.setExternalItemId(item.getExternalItemId());

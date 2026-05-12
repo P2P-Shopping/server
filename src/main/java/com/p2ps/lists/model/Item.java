@@ -51,6 +51,8 @@ public class Item {
     @Column(name = "is_recurrent")
     private boolean isRecurrent = false;
 
+    @Column(name = "position_index")
+    private Double positionIndex;
 
     @Column(name = "last_updated_timestamp")
     private Long lastUpdatedTimestamp;
