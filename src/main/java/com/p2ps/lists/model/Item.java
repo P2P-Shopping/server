@@ -8,12 +8,15 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Entity
 @Table(name = "items")
 @Getter
 @Setter
 public class Item {
+
+    private static final AtomicLong POSITION_SEQUENCE = new AtomicLong(System.currentTimeMillis());
 
     @PrePersist
     protected void onCreate() {
@@ -22,6 +25,9 @@ public class Item {
         }
         if (lastUpdatedTimestamp == null) {
             lastUpdatedTimestamp = System.currentTimeMillis();
+        }
+        if (positionIndex == null) {
+            positionIndex = (double) POSITION_SEQUENCE.getAndIncrement();
         }
     }
 
