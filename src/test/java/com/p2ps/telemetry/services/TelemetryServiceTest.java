@@ -49,14 +49,16 @@ class TelemetryServiceTest {
         verify(telemetryRepository).save(captor.capture());
 
         TelemetryRecord saved = captor.getValue();
-        assertEquals("device-1", ReflectionTestUtils.getField(saved, "deviceId"));
-        assertEquals("store-7", ReflectionTestUtils.getField(saved, "storeId"));
-        assertEquals("item-101", ReflectionTestUtils.getField(saved, "itemId"));
-        assertEquals(47.151726, ReflectionTestUtils.getField(saved, "lat"));
-        assertEquals(27.587914, ReflectionTestUtils.getField(saved, "lng"));
-        assertEquals(3.5, ReflectionTestUtils.getField(saved, "accuracyMeters"));
-        assertEquals(1711888658000L, ReflectionTestUtils.getField(saved, "timestamp"));
-        assertNotNull(ReflectionTestUtils.getField(saved, "serverReceivedTimestamp"));
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertEquals("device-1", ReflectionTestUtils.getField(saved, "deviceId")),
+                () -> assertEquals("store-7", ReflectionTestUtils.getField(saved, "storeId")),
+                () -> assertEquals("item-101", ReflectionTestUtils.getField(saved, "itemId")),
+                () -> assertEquals(47.151726, ReflectionTestUtils.getField(saved, "lat")),
+                () -> assertEquals(27.587914, ReflectionTestUtils.getField(saved, "lng")),
+                () -> assertEquals(3.5, ReflectionTestUtils.getField(saved, "accuracyMeters")),
+                () -> assertEquals(1711888658000L, ReflectionTestUtils.getField(saved, "timestamp")),
+                () -> assertNotNull(ReflectionTestUtils.getField(saved, "serverReceivedTimestamp"))
+        );
     }
 
     @Test
@@ -101,11 +103,13 @@ class TelemetryServiceTest {
         verify(telemetryRepository).insert(captor.capture());
 
         java.util.List<TelemetryRecord> records = captor.getValue();
-        assertEquals(2, records.size());
-        assertEquals("device-1", ReflectionTestUtils.getField(records.get(0), "deviceId"));
-        assertEquals("item-101", ReflectionTestUtils.getField(records.get(1), "itemId"));
-        assertNotNull(ReflectionTestUtils.getField(records.get(0), "serverReceivedTimestamp"));
-        assertNotNull(ReflectionTestUtils.getField(records.get(1), "serverReceivedTimestamp"));
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertEquals(2, records.size()),
+                () -> assertEquals("device-1", ReflectionTestUtils.getField(records.get(0), "deviceId")),
+                () -> assertEquals("item-101", ReflectionTestUtils.getField(records.get(1), "itemId")),
+                () -> assertNotNull(ReflectionTestUtils.getField(records.get(0), "serverReceivedTimestamp")),
+                () -> assertNotNull(ReflectionTestUtils.getField(records.get(1), "serverReceivedTimestamp"))
+        );
     }
 
     @Test
