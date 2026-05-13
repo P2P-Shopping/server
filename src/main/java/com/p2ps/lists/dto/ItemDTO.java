@@ -25,6 +25,7 @@ public class ItemDTO {
     private BigDecimal price;
     private String category;
     private boolean isRecurrent;
+    private Double positionIndex;
     private Long lastUpdatedTimestamp;
     private Long createdAt;
     private String externalItemId;
