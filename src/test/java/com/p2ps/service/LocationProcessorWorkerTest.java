@@ -121,7 +121,7 @@ class LocationProcessorWorkerTest {
     @DisplayName("Trebuie să returneze false dacă DataSource este null")
     void isPostgreSQL_NullDataSource() {
         LocationProcessorWorker workerNull = new LocationProcessorWorker(jdbcTemplate, null);
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> workerNull.processAndCalculateCenters());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(workerNull::processAndCalculateCenters);
         verify(jdbcTemplate, never()).update(anyString());
         verify(jdbcTemplate, never()).execute(anyString());
     }
@@ -135,7 +135,7 @@ class LocationProcessorWorkerTest {
         LocationProcessorWorker customWorker = new LocationProcessorWorker(jdbcTemplate, dataSource);
         
         // Should catch the exception and disable postgres features
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> customWorker.initialize());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(customWorker::initialize);
         
         // This should short-circuit and not execute SQL
         customWorker.processAndCalculateCenters();
@@ -150,7 +150,7 @@ class LocationProcessorWorkerTest {
         
         // Nu chemam initialize, vrem sa vedem cum se comporta isPostgreSQL cand prinde exceptia prima oara la un call de runtime
         when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> customWorker.processAndCalculateCenters());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(customWorker::processAndCalculateCenters);
         verify(jdbcTemplate, never()).update(anyString());
     }
 
