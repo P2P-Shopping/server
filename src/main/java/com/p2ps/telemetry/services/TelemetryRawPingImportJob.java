@@ -386,7 +386,7 @@ public class TelemetryRawPingImportJob {
         try {
             UUID.fromString(value);
             return true;
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }

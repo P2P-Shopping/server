@@ -52,8 +52,7 @@ class LocationProcessorWorkerTest {
 
         when(jdbcTemplate.update(anyString())).thenReturn(5);
 
-        worker.processAndCalculateCenters();
-
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.processAndCalculateCenters());
         verify(jdbcTemplate, times(2)).update(anyString());
     }
 
@@ -122,7 +121,7 @@ class LocationProcessorWorkerTest {
     @DisplayName("Trebuie să returneze false dacă DataSource este null")
     void isPostgreSQL_NullDataSource() {
         LocationProcessorWorker workerNull = new LocationProcessorWorker(jdbcTemplate, null);
-        workerNull.processAndCalculateCenters();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> workerNull.processAndCalculateCenters());
         verify(jdbcTemplate, never()).update(anyString());
         verify(jdbcTemplate, never()).execute(anyString());
     }
@@ -136,7 +135,7 @@ class LocationProcessorWorkerTest {
         LocationProcessorWorker customWorker = new LocationProcessorWorker(jdbcTemplate, dataSource);
         
         // Should catch the exception and disable postgres features
-        customWorker.initialize();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> customWorker.initialize());
         
         // This should short-circuit and not execute SQL
         customWorker.processAndCalculateCenters();
@@ -151,7 +150,7 @@ class LocationProcessorWorkerTest {
         
         // Nu chemam initialize, vrem sa vedem cum se comporta isPostgreSQL cand prinde exceptia prima oara la un call de runtime
         when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
-        customWorker.processAndCalculateCenters();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> customWorker.processAndCalculateCenters());
         verify(jdbcTemplate, never()).update(anyString());
     }
 
@@ -162,7 +161,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("H2");
 
-        worker.processAndCalculateCenters();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.processAndCalculateCenters());
         verify(jdbcTemplate, never()).update(anyString());
     }
 
@@ -173,7 +172,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
-        worker.initialize();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.initialize());
 
         verify(jdbcTemplate, atLeastOnce()).execute(anyString());
     }
@@ -203,7 +202,7 @@ class LocationProcessorWorkerTest {
         // Initialize the worker to detect database type
         worker.initialize();
 
-        worker.recalculateSingleItem(storeId, itemId).join();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.recalculateSingleItem(storeId, itemId).join());
 
         verify(jdbcTemplate, times(1)).update(anyString(), eq(storeId), eq(itemId), eq(storeId), eq(itemId));
     }
@@ -262,7 +261,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
-        worker.initialize();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.initialize());
         
         assertTrue(worker.isLowConfidence(0.1d, 1)); // Just a dummy call to isLowConfidence to show worker is active
         // Verify database type was detected correctly
@@ -276,7 +275,7 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn(null);
 
-        worker.processAndCalculateCenters();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.processAndCalculateCenters());
         verify(jdbcTemplate, never()).update(anyString());
     }
 }

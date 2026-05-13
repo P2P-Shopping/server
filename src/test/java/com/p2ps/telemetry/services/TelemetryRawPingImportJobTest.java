@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -122,7 +124,7 @@ class TelemetryRawPingImportJobTest {
 
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "requiredTelemetrySchemaPresent");
 
-        assert result != null && result;
+        assertTrue(result != null && result);
         verify(jdbcTemplate, times(4)).queryForObject(anyString(), eq(Boolean.class), anyString());
     }
 
@@ -134,7 +136,7 @@ class TelemetryRawPingImportJobTest {
 
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "requiredTelemetrySchemaPresent");
 
-        assert result != null && !result;
+        assertTrue(result != null && !result);
     }
 
     @Test
@@ -144,7 +146,7 @@ class TelemetryRawPingImportJobTest {
 
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "some_table");
 
-        assert result != null && !result;
+        assertTrue(result != null && !result);
     }
 
     @Test
@@ -153,7 +155,7 @@ class TelemetryRawPingImportJobTest {
 
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "items");
 
-        assert result != null && result;
+        assertTrue(result != null && result);
     }
 
     @Test
@@ -162,7 +164,7 @@ class TelemetryRawPingImportJobTest {
 
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "tableExists", "nonexistent");
 
-        assert result != null && !result;
+        assertTrue(result != null && !result);
     }
 
     @Test
@@ -210,95 +212,95 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void isImportable_shouldReturnTrueForValidRecord() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isTrue();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullId() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setId(null);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setId(null);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForDegradedStatus() {
-        TelemetryRecord record = record(PingStatus.DEGRADED);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.DEGRADED);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullLat() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setLat(null);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setLat(null);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullLng() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setLng(null);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setLng(null);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullStoreId() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setStoreId(null);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setStoreId(null);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForBlankStoreId() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setStoreId("   ");
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setStoreId("   ");
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullItemId() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setItemId(null);
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", record);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setItemId(null);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
     void toMarkedAt_shouldUseRecordTimestamp() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
         long timestamp = System.currentTimeMillis();
-        record.setTimestamp(timestamp);
-        record.setServerReceivedTimestamp(null);
+        telemetryRecord.setTimestamp(timestamp);
+        telemetryRecord.setServerReceivedTimestamp(null);
 
-        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", record);
+        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", telemetryRecord);
         assertThat(result.getTime()).isEqualTo(timestamp);
     }
 
     @Test
     void toMarkedAt_shouldFallbackToServerReceivedTimestamp() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setTimestamp(null);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setTimestamp(null);
         java.time.Instant serverTime = java.time.Instant.now();
-        record.setServerReceivedTimestamp(serverTime);
+        telemetryRecord.setServerReceivedTimestamp(serverTime);
 
-        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", record);
+        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", telemetryRecord);
         assertThat(result.toInstant()).isEqualTo(serverTime);
     }
 
     @Test
     void toMarkedAt_shouldFallbackToNow() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
-        record.setTimestamp(null);
-        record.setServerReceivedTimestamp(null);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        telemetryRecord.setTimestamp(null);
+        telemetryRecord.setServerReceivedTimestamp(null);
 
-        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", record);
+        java.sql.Timestamp result = (java.sql.Timestamp) ReflectionTestUtils.invokeMethod(importJob, "toMarkedAt", telemetryRecord);
         assertThat(result).isNotNull();
     }
 
@@ -333,11 +335,11 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void insertRawPing_shouldReturnFalseOnException() {
-        TelemetryRecord record = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
         when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("DB error"));
 
-        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "insertRawPing", record);
+        Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "insertRawPing", telemetryRecord);
         assertThat(result).isFalse();
     }
 
@@ -351,16 +353,16 @@ class TelemetryRawPingImportJobTest {
     }
 
     private TelemetryRecord record(PingStatus status) {
-        TelemetryRecord record = new TelemetryRecord();
-        record.setId(new ObjectId().toHexString());
-        record.setDeviceId("device-1");
-        record.setStoreId(UUID.randomUUID().toString());
-        record.setItemId(UUID.randomUUID().toString());
-        record.setLat(44.4268);
-        record.setLng(26.1025);
-        record.setAccuracyMeters(4.5);
-        record.setTimestamp(System.currentTimeMillis());
-        record.setStatus(status);
-        return record;
+        TelemetryRecord telemetryRecord = new TelemetryRecord();
+        telemetryRecord.setId(new ObjectId().toHexString());
+        telemetryRecord.setDeviceId("device-1");
+        telemetryRecord.setStoreId(UUID.randomUUID().toString());
+        telemetryRecord.setItemId(UUID.randomUUID().toString());
+        telemetryRecord.setLat(44.4268);
+        telemetryRecord.setLng(26.1025);
+        telemetryRecord.setAccuracyMeters(4.5);
+        telemetryRecord.setTimestamp(System.currentTimeMillis());
+        telemetryRecord.setStatus(status);
+        return telemetryRecord;
     }
 }
