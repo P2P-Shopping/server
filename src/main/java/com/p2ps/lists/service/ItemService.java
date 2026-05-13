@@ -46,7 +46,7 @@ public class ItemService {
 
     public ItemService(ItemRepository itemRepository,
                        ShoppingListRepository shoppingListRepository,
-                       UserProductHistoryRepository historyRepository,
+                       UserProductHistoryRepository historyRepository, 
                        ProductCatalogRepository catalogRepository,
                        AiService aiService,
                        @Lazy ItemService self) {
