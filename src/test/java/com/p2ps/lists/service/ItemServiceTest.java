@@ -937,8 +937,7 @@ class ItemServiceTest {
     void addItemToList_ReturnsNewQuantity_WhenOldQuantityIsBlank() {
         ItemRequest req = new ItemRequest();
         req.setName("Apa");
-        req.setQuantity("2 sticle");
-
+        req.setQuantity("2 buc");
         Item existingItem = new Item();
         existingItem.setId(UUID.randomUUID());
         existingItem.setName("Apa");
@@ -953,7 +952,7 @@ class ItemServiceTest {
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).isEqualTo("2 sticle");
+        assertThat(result.getQuantity()).isEqualTo("2 buc");
     }
 
     @Test
