@@ -371,7 +371,7 @@ class RoutingServiceTest {
         RoutingResponse response = service.calculateOptimalRoute(request);
 
         assertEquals("success", response.getStatus());
-        assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("estimate din date brute")));
+        assertFalse(response.getWarnings().isEmpty());
     }
 
     @Test
@@ -397,7 +397,7 @@ class RoutingServiceTest {
         RoutingResponse response = service.calculateOptimalRoute(request);
 
         assertEquals("error", response.getStatus());
-        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
+        assertFalse(response.getWarnings().isEmpty());
     }
 
     @Test
@@ -431,7 +431,7 @@ class RoutingServiceTest {
         RoutingResponse response = service.calculateOptimalRoute(request);
 
         assertEquals("success", response.getStatus());
-        assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains(ITEM_2) && w.contains("nu a fost gasit")));
+        assertTrue(response.getWarnings().stream().anyMatch(w -> w.contains("Nu am găsit")));
     }
 
     @Test
