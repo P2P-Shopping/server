@@ -62,10 +62,10 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     }
 
     private boolean isSubscribeToTopic(StompHeaderAccessor accessor, String destination) {
-        return accessor != null &&
-               StompCommand.SUBSCRIBE.equals(accessor.getCommand()) &&
-               destination != null &&
-               destination.startsWith("/topic/list/");
+        if (accessor == null || !StompCommand.SUBSCRIBE.equals(accessor.getCommand()) || destination == null) {
+            return false;
+        }
+        return destination.startsWith("/topic/list/") || destination.startsWith("/topic/invitations/");
     }
 
     private boolean handleSubscription(StompHeaderAccessor accessor, String destination) {
@@ -75,6 +75,10 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
             return false;
         }
 
+        if (destination.startsWith("/topic/invitations/")) {
+            return handleInvitationSubscription(accessor, destination, auth);
+        }
+
         String extractedId = extractListId(destination);
         if (!VALID_LIST_ID.matcher(extractedId).matches()) {
             logger.warn("Security Alert: Blocked malformed room subscription attempt");
@@ -82,6 +86,19 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
         }
 
         return validateUserAccess(extractedId, auth.getName());
+    }
+
+    private boolean handleInvitationSubscription(StompHeaderAccessor accessor, String destination, Authentication auth) {
+        String requestedEmail = destination.substring("/topic/invitations/".length());
+        if (requestedEmail.isEmpty()) {
+            logger.warn("Security Alert: Blocked invitation subscription with empty email");
+            return false;
+        }
+        if (!requestedEmail.equals(auth.getName())) {
+            logger.warn("Security Alert: User {} attempted to subscribe to invitation topic of {}", auth.getName(), requestedEmail);
+            return false;
+        }
+        return true;
     }
 
     private Authentication getAuthenticatedUser(StompHeaderAccessor accessor) {

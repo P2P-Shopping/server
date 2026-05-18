@@ -7,6 +7,7 @@ import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ItemDTO;
+import com.p2ps.lists.dto.ListInvitationDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
@@ -19,9 +20,13 @@ import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -35,12 +40,14 @@ public class ShoppingListService {
     private final ListInvitationRepository invitationRepository;
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
     private final ItemRepository itemRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository) {
+    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository, SimpMessagingTemplate messagingTemplate) {
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
         this.invitationRepository = invitationRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Transactional
@@ -303,6 +310,7 @@ public class ShoppingListService {
             existing.setInviter(list.getUser());
             existing.setStatus(InvitationStatus.PENDING);
             invitationRepository.save(existing);
+            notifyInvitee(existing);
             return;
         }
 
@@ -312,6 +320,45 @@ public class ShoppingListService {
         invitation.setInvitee(collaborator);
         invitation.setStatus(InvitationStatus.PENDING);
         invitationRepository.save(invitation);
+        notifyInvitee(invitation);
+    }
+
+    private void notifyInvitee(ListInvitation invitation) {
+        String inviteeEmail = invitation.getInvitee().getEmail();
+        UUID id = invitation.getId();
+        UUID listId = invitation.getShoppingList().getId();
+        String listTitle = invitation.getShoppingList().getTitle();
+        String inviterName = (invitation.getInviter().getFirstName() + " " + invitation.getInviter().getLastName()).trim();
+        String maskedEmail = invitation.getInviter().getEmail().replaceAll("(^.)[^@]*(@.*$)", "$1***$2");
+        InvitationStatus status = invitation.getStatus();
+        LocalDateTime createdAt = invitation.getCreatedAt();
+
+        Runnable sendNotification = () -> {
+            try {
+                ListInvitationDTO dto = new ListInvitationDTO();
+                dto.setId(id);
+                dto.setListId(listId);
+                dto.setListTitle(listTitle);
+                dto.setInviterName(inviterName);
+                dto.setInviterEmail(maskedEmail);
+                dto.setStatus(status);
+                dto.setCreatedAt(createdAt);
+                messagingTemplate.convertAndSend("/topic/invitations/" + inviteeEmail, dto);
+            } catch (Exception e) {
+                // Notification failure should not break the share flow
+            }
+        };
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendNotification.run();
+                }
+            });
+        } else {
+            sendNotification.run();
+        }
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list) {
