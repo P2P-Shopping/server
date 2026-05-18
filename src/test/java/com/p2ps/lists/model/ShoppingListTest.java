@@ -86,4 +86,90 @@ class ShoppingListTest {
         assertThat(list.getTitle()).isEqualTo("Party");
         assertThat(list.getUser()).isEqualTo(user);
     }
+
+    @Test
+    void getCollaboratorByUserEmail_shouldReturnCollaboratorWhenFound() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+        Users collaborator = new Users();
+        collaborator.setEmail("collab@test.com");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        assertThat(list.getCollaboratorByUserEmail("collab@test.com")).isPresent();
+        assertThat(list.getCollaboratorByUserEmail("collab@test.com").get().getRole()).isEqualTo(ListRole.EDITOR);
+    }
+
+    @Test
+    void getCollaboratorByUserEmail_shouldReturnEmptyWhenNotFound() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+
+        assertThat(list.getCollaboratorByUserEmail("unknown@test.com")).isEmpty();
+    }
+
+    @Test
+    void hasCollaborator_shouldReturnTrueWhenCollaboratorExists() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+        Users collaborator = new Users();
+        collaborator.setEmail("collab@test.com");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        assertThat(list.hasCollaborator(2)).isTrue();
+    }
+
+    @Test
+    void hasCollaborator_shouldReturnFalseWhenCollaboratorDoesNotExist() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+
+        assertThat(list.hasCollaborator(99)).isFalse();
+    }
+
+    @Test
+    void removeCollaboratorByUserId_shouldReturnTrueWhenRemoved() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+        Users collaborator = new Users();
+        collaborator.setEmail("collab@test.com");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        assertThat(list.removeCollaboratorByUserId(2)).isTrue();
+        assertThat(list.getCollaborators()).isEmpty();
+    }
+
+    @Test
+    void removeCollaboratorByUserId_shouldReturnFalseWhenNotRemoved() {
+        Users owner = new Users();
+        owner.setEmail("owner@test.com");
+        owner.setId(1);
+
+        ShoppingList list = new ShoppingList();
+        list.setUser(owner);
+
+        assertThat(list.removeCollaboratorByUserId(99)).isFalse();
+    }
 }

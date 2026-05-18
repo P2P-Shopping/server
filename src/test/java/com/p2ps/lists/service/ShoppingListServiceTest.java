@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1076,5 +1077,328 @@ class ShoppingListServiceTest {
 
         ShoppingListDTO collabResult = shoppingListService.getListById(list.getId(), collabEmail);
         assertEquals("EDITOR", collabResult.getCurrentUserRole());
+    }
+
+    @Test
+    void leaveList_shouldRemoveCollaboratorAndDeleteInvitation() {
+        String userEmail = "collab@example.com";
+        Users user = new Users(userEmail, "pass", "Collab", "User");
+        user.setId(2);
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListInvitation invitation = new ListInvitation();
+        invitation.setId(UUID.randomUUID());
+        invitation.setShoppingList(list);
+        invitation.setInviter(owner);
+        invitation.setInvitee(user);
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, 2)).thenReturn(true);
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.of(invitation));
+
+        shoppingListService.leaveList(listId, userEmail);
+
+        verify(listCollaboratorRepository).deleteByListIdAndUserId(listId, 2);
+        verify(invitationRepository).delete(invitation);
+    }
+
+    @Test
+    void leaveList_shouldThrowWhenOwnerTriesToLeave() {
+        String userEmail = "owner@example.com";
+        Users user = new Users(userEmail, "pass", "Owner", "User");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> shoppingListService.leaveList(listId, userEmail));
+    }
+
+    @Test
+    void leaveList_shouldThrowWhenUserIsNotMember() {
+        String userEmail = "collab@example.com";
+        Users user = new Users(userEmail, "pass", "Collab", "User");
+        user.setId(2);
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, 2)).thenReturn(false);
+
+        assertThrows(ListUserNotFoundException.class,
+                () -> shoppingListService.leaveList(listId, userEmail));
+    }
+
+    @Test
+    void leaveList_shouldThrowWhenListNotFound() {
+        String userEmail = "collab@example.com";
+        Users user = new Users(userEmail, "pass", "Collab", "User");
+        user.setId(2);
+        UUID listId = UUID.randomUUID();
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        assertThrows(ShoppingListNotFoundException.class,
+                () -> shoppingListService.leaveList(listId, userEmail));
+    }
+
+    @Test
+    void leaveList_shouldThrowWhenUserNotFound() {
+        String userEmail = "missing@example.com";
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.empty());
+
+        assertThrows(ListUserNotFoundException.class,
+                () -> shoppingListService.leaveList(UUID.randomUUID(), userEmail));
+    }
+
+    @Test
+    void leaveList_shouldNotDeleteInvitationWhenNoneExists() {
+        String userEmail = "collab@example.com";
+        Users user = new Users(userEmail, "pass", "Collab", "User");
+        user.setId(2);
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, 2)).thenReturn(true);
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.empty());
+
+        shoppingListService.leaveList(listId, userEmail);
+
+        verify(listCollaboratorRepository).deleteByListIdAndUserId(listId, 2);
+        verify(invitationRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeCollaborator_shouldDeleteInvitationIfExists() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users("collab@example.com", "pass", "Collab", "User");
+        collaborator.setId(2);
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListInvitation invitation = new ListInvitation();
+        invitation.setId(UUID.randomUUID());
+        invitation.setShoppingList(list);
+        invitation.setInviter(owner);
+        invitation.setInvitee(collaborator);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, userId)).thenReturn(true);
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, userId))
+                .thenReturn(Optional.of(invitation));
+
+        shoppingListService.removeCollaborator(listId, userId, "owner@example.com");
+
+        verify(listCollaboratorRepository).deleteByListIdAndUserId(listId, userId);
+        verify(invitationRepository).delete(invitation);
+    }
+
+    @Test
+    void removeCollaborator_shouldNotDeleteInvitationWhenNoneExists() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, userId)).thenReturn(true);
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, userId))
+                .thenReturn(Optional.empty());
+
+        shoppingListService.removeCollaborator(listId, userId, "owner@example.com");
+
+        verify(listCollaboratorRepository).deleteByListIdAndUserId(listId, userId);
+        verify(invitationRepository, never()).delete(any());
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldNotOverwriteExistingBrand() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setBrand("ExistingBrand");
+        item.setCategory("Dairy");
+        item.setChecked(false);
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+        receiptItem.setBrand("ExistingBrand");
+        receiptItem.setCategory("NewCategory");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertEquals("ExistingBrand", item.getBrand());
+        assertEquals("Dairy", item.getCategory());
+        assertTrue(item.isChecked());
+    }
+
+    @Test
+    void mapToDTO_shouldSetUserIdToNullWhenIdIsNull() throws Exception {
+        Users user = new Users();
+        user.setId(null);
+        user.setEmail("test@test.com");
+        user.setFirstName("Test");
+        user.setLastName("User");
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Test");
+        list.setUser(user);
+
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("mapToDTO", ShoppingList.class, String.class);
+        method.setAccessible(true);
+        ShoppingListDTO result = (ShoppingListDTO) method.invoke(shoppingListService, list, "test@test.com");
+
+        assertNull(result.getUserId());
+        assertEquals("ADMIN", result.getCurrentUserRole());
+    }
+
+    @Test
+    void mapToDTO_shouldMaskCollaboratorEmail() throws Exception {
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users("collab@example.com", "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Test");
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("mapToDTO", ShoppingList.class, String.class);
+        method.setAccessible(true);
+        ShoppingListDTO result = (ShoppingListDTO) method.invoke(shoppingListService, list, "owner@example.com");
+
+        assertEquals(2, result.getCollaborators().size());
+        String maskedEmail = result.getCollaborators().get(0).getEmail();
+        assertTrue(maskedEmail.contains("***"));
+    }
+
+    @Test
+    void shareList_shouldBroadcastInvitationNotification() {
+        String ownerEmail = "owner@example.com";
+        String collabEmail = "collab@example.com";
+        UUID listId = UUID.randomUUID();
+
+        Users owner = new Users(ownerEmail, "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setTitle("Shared List");
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
+        when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
+                .thenReturn(Optional.empty());
+        when(invitationRepository.save(any(ListInvitation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        shoppingListService.shareList(listId, collabEmail, ownerEmail);
+
+        verify(invitationRepository).save(any(ListInvitation.class));
+    }
+
+    @Test
+    void importItems_shouldImportAllItemsWhenItemIdsIsEmptyList() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+
+        UUID currentListId = UUID.randomUUID();
+        ShoppingList currentList = new ShoppingList();
+        currentList.setId(currentListId);
+        currentList.setUser(user);
+
+        UUID sourceListId = UUID.randomUUID();
+        ShoppingList sourceList = new ShoppingList();
+        sourceList.setId(sourceListId);
+        sourceList.setUser(user);
+
+        Item item1 = new Item();
+        item1.setId(UUID.randomUUID());
+        item1.setName("Item 1");
+        sourceList.getItems().add(item1);
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sourceListId);
+        request.setItemIds(List.of());
+
+        when(shoppingListRepository.findById(currentListId)).thenReturn(Optional.of(currentList));
+        when(shoppingListRepository.findById(sourceListId)).thenReturn(Optional.of(sourceList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
+
+        verify(itemRepository, times(1)).save(any(Item.class));
+        assertEquals(1, result.getItems().size());
+    }
+
+    @Test
+    void createList_shouldSetCategoryWhenProvided() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        ShoppingList savedList = new ShoppingList();
+        UUID listId = UUID.randomUUID();
+        savedList.setId(listId);
+        savedList.setTitle("Party");
+        savedList.setUser(user);
+        savedList.setCategory(ListCategory.FREQUENT);
+
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(user));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenReturn(savedList);
+
+        ShoppingListDTO result = shoppingListService.createList("Party", userEmail, ListCategory.FREQUENT, "Drinks");
+
+        assertEquals(listId, result.getId());
+        assertEquals(ListCategory.FREQUENT, result.getCategory());
     }
 }
