@@ -17,6 +17,7 @@ import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
+import com.p2ps.util.QuantityParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -40,7 +41,6 @@ public class ItemService {
     private final UserProductHistoryRepository historyRepository;
     private final ProductCatalogRepository catalogRepository;
     private final AiService aiService;
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     private final ItemService self;
 
@@ -83,6 +83,7 @@ public class ItemService {
             throw new ListValidationException("Item name cannot be empty");
         }
         validatePrice(request.getPrice());
+        QuantityParser.parse(request.getQuantity());
 
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
@@ -265,6 +266,7 @@ public class ItemService {
             throw new ListValidationException("Item name cannot be empty");
         }
         validatePrice(request.getPrice());
+        QuantityParser.parse(request.getQuantity());
 
         String normalizedItemName = request.getName().trim();
         ProductCatalog catalogMatch = resolveCatalogMatch(normalizedItemName, request.getBrand(), list.getUser());
@@ -373,7 +375,10 @@ public class ItemService {
         }
 
         if (request.getBrand() != null) item.setBrand(request.getBrand());
-        if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
+        if (request.getQuantity() != null) {
+            QuantityParser.parse(request.getQuantity());
+            item.setQuantity(request.getQuantity());
+        }
         validatePrice(request.getPrice());
         if (request.getPrice() != null) item.setPrice(request.getPrice());
         if (request.getCategory() != null) item.setCategory(request.getCategory());
@@ -530,51 +535,7 @@ public class ItemService {
         if (oldQ == null || oldQ.trim().isEmpty()) return newQ;
         if (newQ == null || newQ.trim().isEmpty()) return oldQ;
 
-        Map<String, BigDecimal> unitSums = new LinkedHashMap<>();
-        List<String> unparseableParts = new ArrayList<>();
-
-        parseAndAccumulate(oldQ, unitSums, unparseableParts);
-        parseAndAccumulate(newQ, unitSums, unparseableParts);
-
-        List<String> finalParts = new ArrayList<>();
-
-        for (Map.Entry<String, BigDecimal> entry : unitSums.entrySet()) {
-            String valStr = entry.getValue().stripTrailingZeros().toPlainString();
-            String unit = entry.getKey();
-
-            if (unit.isEmpty()) {
-                finalParts.add(valStr);
-            } else {
-                finalParts.add(valStr + " " + unit);
-            }
-        }
-
-        finalParts.addAll(unparseableParts);
-
-        return String.join(" + ", finalParts);
-    }
-
-    private void parseAndAccumulate(String quantityStr, Map<String, BigDecimal> unitSums, List<String> unparseableParts) {
-        String[] parts = quantityStr.split("\\+");
-
-        for (String part : parts) {
-            String cleanPart = part.trim();
-            if (cleanPart.isEmpty()) continue;
-
-            Matcher matcher = QUANTITY_PATTERN.matcher(cleanPart);
-            if (matcher.matches()) {
-                try {
-                    BigDecimal val = new BigDecimal(matcher.group(1).replace(",", "."));
-                    String unit = matcher.group(2).trim().toLowerCase();
-                    BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
-                    unitSums.put(unit, currentSum.add(val));
-                } catch (NumberFormatException _) {
-                    unparseableParts.add(cleanPart);
-                }
-            } else {
-                unparseableParts.add(cleanPart);
-            }
-        }
+        return com.p2ps.util.QuantityParser.addQuantities(oldQ, newQ);
     }
 
     void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName) {
