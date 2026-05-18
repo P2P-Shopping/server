@@ -79,4 +79,10 @@ public class Item {
 
     @Column(name = "external_item_id", length = 255)
     private String externalItemId;
+
+    @Column(name = "claimed_by", length = 255)
+    private String claimedBy;
+
+    @Column(name = "claimed_at")
+    private Long claimedAt;
 }

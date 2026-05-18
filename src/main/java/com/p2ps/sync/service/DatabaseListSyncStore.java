@@ -1,5 +1,6 @@
 package com.p2ps.sync.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 import com.p2ps.lists.dto.ItemDTO;
@@ -16,6 +17,7 @@ import java.util.UUID;
 public class DatabaseListSyncStore implements ListSyncStore {
 
     private static final Logger logger = LoggerFactory.getLogger(DatabaseListSyncStore.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final ItemService itemService;
 
@@ -53,6 +55,25 @@ public class DatabaseListSyncStore implements ListSyncStore {
         if (action == ActionType.ADD || action == ActionType.DELETE) {
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
+        }
+
+        // For CLAIM_ITEM and UNCLAIM_ITEM, persist the claim state via ItemService.
+        if (action == ActionType.CLAIM_ITEM || action == ActionType.UNCLAIM_ITEM) {
+            try {
+                String claimedByEmail = action == ActionType.CLAIM_ITEM ? payload.getClaimedBy() : null;
+                ItemDTO updatedItem = itemService.claimItem(uuid, claimedByEmail);
+                payload.setClaimedBy(updatedItem.getClaimedBy());
+                payload.setContent(objectMapper.writeValueAsString(updatedItem));
+                payload.setTimestamp(updatedItem.getLastUpdatedTimestamp());
+                payload.setChecked(updatedItem.isChecked());
+                payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+                return payload;
+            } catch (Exception ex) {
+                logger.error("Claim update failed for listId={}, itemId={}, action={}",
+                    listId, itemId, action, ex);
+                payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+                return payload;
+            }
         }
 
         // For CHECK_OFF and UPDATE, we perform a persistence check/update via ItemService.
