@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -60,6 +62,7 @@ public class WebSocketEventListener {
                 String listId = sessionEvent.getListId();
                 String username = sessionEvent.getUsername();
                 Set<String> roster = presenceStateService.getRoomRosters().get(listId);
+                Map<String, String> names = presenceStateService.getRoomDisplayNames().get(listId);
                 
                 if (roster != null) {
                     roster.remove(username);
@@ -68,6 +71,7 @@ public class WebSocketEventListener {
                     rosterUpdate.setEventType(PresenceEvent.EventType.ROSTER_UPDATE);
                     rosterUpdate.setListId(listId);
                     rosterUpdate.setActiveUsers(new java.util.HashSet<>(roster));
+                    rosterUpdate.setDisplayNames(new HashMap<>(names != null ? names : new java.util.HashMap<>()));
                     
                     logger.debug("Broadcasting ROSTER_UPDATE on disconnect for list {}", listId);
                     messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", rosterUpdate);
