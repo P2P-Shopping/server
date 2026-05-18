@@ -190,14 +190,14 @@ class ListCollaboratorTest {
         ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list1, user1);
         ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list2, user2);
 
-        assertThat(id1.hashCode()).isEqualTo(id2.hashCode());
+        assertThat(id1).hasSameHashCodeAs(id2);
     }
 
     @Test
     void listCollaboratorId_hashCode_nullFields() {
         ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId();
         ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId();
-        assertThat(id1.hashCode()).isEqualTo(id2.hashCode());
+        assertThat(id1).hasSameHashCodeAs(id2);
     }
 
     @Test

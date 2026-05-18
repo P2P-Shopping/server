@@ -43,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1163,11 +1162,12 @@ class ShoppingListServiceTest {
     @Test
     void leaveList_shouldThrowWhenUserNotFound() {
         String userEmail = "missing@example.com";
+        UUID listId = UUID.randomUUID();
 
         when(userRepository.findByEmail(userEmail)).thenReturn(Optional.empty());
 
         assertThrows(ListUserNotFoundException.class,
-                () -> shoppingListService.leaveList(UUID.randomUUID(), userEmail));
+                () -> shoppingListService.leaveList(listId, userEmail));
     }
 
     @Test

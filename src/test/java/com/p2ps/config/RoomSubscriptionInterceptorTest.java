@@ -128,11 +128,12 @@ class RoomSubscriptionInterceptorTest {
         assertSame(message, result);
     }
 
-    @Test
-    void preSend_InvalidSubscriptionId_ReturnsNull() {
+    @ParameterizedTest(name = "destination={0}")
+    @MethodSource("rejectedSubscriptionDestinations")
+    void preSend_RejectedSubscriptions_ReturnNull(String destination) {
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
-                "/topic/list/invalid_ID!",
+                destination,
                 new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);
@@ -140,6 +141,13 @@ class RoomSubscriptionInterceptorTest {
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNull(result);
+    }
+
+    static Stream<String> rejectedSubscriptionDestinations() {
+        return Stream.of(
+                "/topic/list/invalid_ID!",
+                "/topic/list/not-a-uuid"
+        );
     }
 
     @Test
@@ -213,20 +221,6 @@ class RoomSubscriptionInterceptorTest {
         Message<?> result = interceptor.preSend(message, channel);
 
         assertSame(message, result);
-    }
-
-    @Test
-    void preSend_InvalidUuidFormat_ReturnsNull() {
-        Message<?> message = createMessage(
-                StompCommand.SUBSCRIBE,
-                "/topic/list/not-a-uuid",
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
-        );
-        MessageChannel channel = mock(MessageChannel.class);
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNull(result);
     }
 
     @Test

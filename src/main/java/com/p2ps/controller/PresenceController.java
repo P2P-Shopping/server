@@ -11,7 +11,6 @@ import org.springframework.stereotype.Controller;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Controller
 public class PresenceController {
@@ -30,41 +29,53 @@ public class PresenceController {
         payload.setListId(listId);
         if (listId == null) return;
 
-        ConcurrentMap<String, Set<String>> roomRosters = presenceStateService.getRoomRosters();
-        ConcurrentMap<String, Map<String, String>> roomDisplayNames = presenceStateService.getRoomDisplayNames();
-        ConcurrentMap<String, PresenceEvent> sessionTracker = presenceStateService.getSessionTracker();
         String sessionId = accessor.getSessionId();
 
-        if (payload.getEventType() == PresenceEvent.EventType.JOIN) {
-            roomRosters.computeIfAbsent(listId, k -> ConcurrentHashMap.newKeySet()).add(payload.getUsername());
-            if (payload.getDisplayName() != null) {
-                roomDisplayNames.computeIfAbsent(listId, k -> new ConcurrentHashMap<>()).put(payload.getUsername(), payload.getDisplayName());
-            }
-            if (sessionId != null) {
-                sessionTracker.put(sessionId, payload);
-            }
-            broadcastRoster(listId);
-        } 
-        else if (payload.getEventType() == PresenceEvent.EventType.LEAVE) {
-            Set<String> roster = roomRosters.get(listId);
-            Map<String, String> names = roomDisplayNames.get(listId);
-            if (names != null) {
-                names.remove(payload.getUsername());
-            }
-            if (roster != null) {
-                roster.remove(payload.getUsername());
-                broadcastRoster(listId);
-            }
-            if (sessionId != null) {
-                sessionTracker.remove(sessionId);
-            }
-        } 
-        else if (payload.getEventType() == PresenceEvent.EventType.TYPING) {
-            if (payload.getDisplayName() != null) {
-                roomDisplayNames.computeIfAbsent(listId, k -> new ConcurrentHashMap<>()).put(payload.getUsername(), payload.getDisplayName());
-            }
-            messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
+        switch (payload.getEventType()) {
+            case JOIN -> handleJoin(listId, payload, sessionId);
+            case LEAVE -> handleLeave(listId, payload, sessionId);
+            case TYPING -> handleTyping(listId, payload);
+            default -> { }
         }
+    }
+
+    private void handleJoin(String listId, PresenceEvent payload, String sessionId) {
+        presenceStateService.getRoomRosters()
+                .computeIfAbsent(listId, k -> ConcurrentHashMap.newKeySet())
+                .add(payload.getUsername());
+        if (payload.getDisplayName() != null) {
+            presenceStateService.getRoomDisplayNames()
+                    .computeIfAbsent(listId, k -> new ConcurrentHashMap<>())
+                    .put(payload.getUsername(), payload.getDisplayName());
+        }
+        if (sessionId != null) {
+            presenceStateService.getSessionTracker().put(sessionId, payload);
+        }
+        broadcastRoster(listId);
+    }
+
+    private void handleLeave(String listId, PresenceEvent payload, String sessionId) {
+        Map<String, String> names = presenceStateService.getRoomDisplayNames().get(listId);
+        if (names != null) {
+            names.remove(payload.getUsername());
+        }
+        Set<String> roster = presenceStateService.getRoomRosters().get(listId);
+        if (roster != null) {
+            roster.remove(payload.getUsername());
+            broadcastRoster(listId);
+        }
+        if (sessionId != null) {
+            presenceStateService.getSessionTracker().remove(sessionId);
+        }
+    }
+
+    private void handleTyping(String listId, PresenceEvent payload) {
+        if (payload.getDisplayName() != null) {
+            presenceStateService.getRoomDisplayNames()
+                    .computeIfAbsent(listId, k -> new ConcurrentHashMap<>())
+                    .put(payload.getUsername(), payload.getDisplayName());
+        }
+        messagingTemplate.convertAndSend("/topic/list/" + listId + "/presence", payload);
     }
 
     private void broadcastRoster(String listId) {

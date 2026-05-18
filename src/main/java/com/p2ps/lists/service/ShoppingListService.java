@@ -44,6 +44,8 @@ public class ShoppingListService {
     private final ListInvitationRepository invitationRepository;
     private final ListCollaboratorRepository listCollaboratorRepository;
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
+    private static final String EMAIL_MASK_REGEX = "(^.)[^@]*(@.*$)";
+    private static final String EMAIL_MASK_REPLACEMENT = "$1***$2";
     private final ItemRepository itemRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -380,7 +382,7 @@ public class ShoppingListService {
         UUID listId = invitation.getShoppingList().getId();
         String listTitle = invitation.getShoppingList().getTitle();
         String inviterName = (invitation.getInviter().getFirstName() + " " + invitation.getInviter().getLastName()).trim();
-        String maskedEmail = invitation.getInviter().getEmail().replaceAll("(^.)[^@]*(@.*$)", "$1***$2");
+        String maskedEmail = invitation.getInviter().getEmail().replaceAll(EMAIL_MASK_REGEX, EMAIL_MASK_REPLACEMENT);
         InvitationStatus status = invitation.getStatus();
         LocalDateTime createdAt = invitation.getCreatedAt();
 
@@ -395,7 +397,7 @@ public class ShoppingListService {
                 dto.setStatus(status);
                 dto.setCreatedAt(createdAt);
                 messagingTemplate.convertAndSend("/topic/invitations/" + inviteeEmail, dto);
-            } catch (Exception e) {
+            } catch (Exception _) {
                 // Notification failure should not break the share flow
             }
         };
@@ -410,10 +412,6 @@ public class ShoppingListService {
         } else {
             sendNotification.run();
         }
-    }
-
-    private ShoppingListDTO mapToDTO(ShoppingList list) {
-        return mapToDTO(list, null);
     }
 
     private ShoppingListDTO mapToDTO(ShoppingList list, String currentUserEmail) {
@@ -459,7 +457,7 @@ public class ShoppingListService {
             ownerDto.setUserId(list.getUser().getId());
             ownerDto.setName((list.getUser().getFirstName() + " " + list.getUser().getLastName()).trim());
             String ownerEmail = list.getUser().getEmail();
-            ownerDto.setEmail(ownerEmail != null ? ownerEmail.replaceAll("(^.)[^@]*(@.*$)", "$1***$2") : null);
+            ownerDto.setEmail(ownerEmail != null ? ownerEmail.replaceAll(EMAIL_MASK_REGEX, EMAIL_MASK_REPLACEMENT) : null);
             ownerDto.setRole(ListRole.ADMIN.name());
             collaboratorDTOs.add(ownerDto);
         }
@@ -470,7 +468,7 @@ public class ShoppingListService {
                     cdto.setUserId(lc.getUser().getId());
                     cdto.setName((lc.getUser().getFirstName() + " " + lc.getUser().getLastName()).trim());
                     String email = lc.getUser().getEmail();
-                    cdto.setEmail(email != null ? email.replaceAll("(^.)[^@]*(@.*$)", "$1***$2") : null);
+                    cdto.setEmail(email != null ? email.replaceAll(EMAIL_MASK_REGEX, EMAIL_MASK_REPLACEMENT) : null);
                     cdto.setRole(lc.getRole().name());
                     return cdto;
                 })

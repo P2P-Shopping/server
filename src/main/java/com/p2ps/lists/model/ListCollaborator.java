@@ -47,8 +47,8 @@ public class ListCollaborator {
     }
 
     public static class ListCollaboratorId implements Serializable {
-        private ShoppingList shoppingList;
-        private Users user;
+        private transient ShoppingList shoppingList;
+        private transient Users user;
 
         public ListCollaboratorId() {}
 

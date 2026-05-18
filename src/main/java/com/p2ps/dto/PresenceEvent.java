@@ -35,7 +35,9 @@ public class PresenceEvent {
     @com.fasterxml.jackson.annotation.JsonProperty("displayNames")
     private java.util.Map<String, String> displayNames;
 
-    public PresenceEvent() {}
+    public PresenceEvent() {
+        // Required for Jackson deserialization
+    }
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
