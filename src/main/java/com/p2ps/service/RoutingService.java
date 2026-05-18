@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -63,7 +66,9 @@ public class RoutingService {
         if (locations.isEmpty()) {
             RoutingResponse errorResponse = new RoutingResponse();
             errorResponse.setStatus("error");
-            errorResponse.setWarnings(List.of("Niciunul din produsele cerute nu a fost gasit in magazin."));
+            errorResponse.setWarnings(warnings.isEmpty()
+                    ? List.of("Niciunul din produsele cerute nu a fost gasit in magazin.")
+                    : warnings);
             return errorResponse;
         }
 
@@ -162,7 +167,6 @@ public class RoutingService {
 
         if (locations.isEmpty()) {
             logger.info("store_inventory_map goala - fallback la raw_user_pings");
-            warnings.add("Locatiile produselor sunt estimate din date brute.");
             locations = queryRawPingsCentroid(productIds, storeId);
         }
 
@@ -222,10 +226,32 @@ public class RoutingService {
             }
         }
 
-        for (String requestedId : productIds) {
-            boolean found = results.stream().anyMatch(l -> l.itemId().equals(requestedId));
-            if (!found) {
-                warnings.add("Produsul cu ID '" + requestedId + "' nu a fost gasit in magazin.");
+        // Resolve names for products that were NOT found, so warnings are human-readable.
+        // We do a single IN-query on `items` instead of N round-trips.
+        Set<String> foundIds = results.stream()
+                .map(ProductLocation::itemId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<String> missingIds = productIds.stream()
+                .filter(id -> !foundIds.contains(id))
+                .toList();
+
+        if (!missingIds.isEmpty()) {
+            String missingPlaceholders = String.join(", ",
+                    Collections.nCopies(missingIds.size(), "?"));
+            String namesSql = String.format(
+                    "SELECT id::text, name FROM items WHERE id::text IN (%s)",
+                    missingPlaceholders);
+
+            Map<String, String> idToName = new HashMap<>();
+            jdbcTemplate.queryForList(namesSql, missingIds.toArray())
+                    .forEach(row -> idToName.put(
+                            (String) row.get("id"),
+                            (String) row.get("name")));
+
+            for (String missingId : missingIds) {
+                String itemName = idToName.getOrDefault(missingId, missingId);
+                warnings.add("Nu am găsit '" + itemName + "' în acest magazin.");
             }
         }
 
