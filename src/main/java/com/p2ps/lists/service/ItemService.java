@@ -252,11 +252,8 @@ public class ItemService {
         if (dto.getName() != null && !dto.getName().isBlank()) {
             originalItem.setName(dto.getName());
         }
-
-        // 💡 FIX 2: Am șters blocul care actualiza brandul!
-        // Respectăm warning-ul CodeRabbit. Lăsăm brandul exact așa cum l-a mapped backend-ul.
-
         if (dto.getQuantity() != null) {
+            QuantityParser.parse(dto.getQuantity());
             originalItem.setQuantity(dto.getQuantity());
         }
     }
@@ -448,8 +445,10 @@ public class ItemService {
                 item.setName(dto.getName());
             }
             if (dto.getBrand() != null) item.setBrand(dto.getBrand());
-            if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
-            if (dto.getPrice() != null) {
+            if (dto.getQuantity() != null) {
+                QuantityParser.parse(dto.getQuantity());
+                item.setQuantity(dto.getQuantity());
+            }if (dto.getPrice() != null) {
                 validatePrice(dto.getPrice());
                 item.setPrice(dto.getPrice());
             }

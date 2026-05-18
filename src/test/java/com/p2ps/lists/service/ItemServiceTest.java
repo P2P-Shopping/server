@@ -247,10 +247,6 @@ class ItemServiceTest {
         assertThat(result.getId()).isEqualTo(existingItem.getId());
         assertThat(result.getPrice()).isEqualTo(new BigDecimal("10.0"));
 
-        // This relies on your Smart Summation util being integrated.
-        // Assuming your QuantityParser successfully added 2L and 1L
-        // The assert below might need adjustment if your parser returns exactly "3L" vs "3 l"
-
         verify(itemRepository).save(existingItem);
         verify(itemRepository, never()).saveAll(anyList());
     }
@@ -1019,7 +1015,9 @@ class ItemServiceTest {
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
-    // SMART QUANTITY PARSING TESTS
+    // ==========================================
+    // SMART QUANTITY PARSING TESTS (Noul Comportament)
+    // ==========================================
 
     @Test
     void addItemToList_SumsCompatibleQuantitiesCorrectly() {
@@ -1042,6 +1040,7 @@ class ItemServiceTest {
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
+        // Smart summation: 1.2 kg + 500 g = 1.7 kg
         assertThat(result.getQuantity()).isEqualTo("1.7 kg");
         verify(itemRepository).save(any(Item.class));
     }
@@ -1078,7 +1077,7 @@ class ItemServiceTest {
 
         assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("pozitiv");
+                .hasMessageContaining("positive number");
 
         verify(itemRepository, never()).save(any(Item.class));
     }
@@ -1091,7 +1090,7 @@ class ItemServiceTest {
 
         assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("depășit limita");
+                .hasMessageContaining("maximum accepted limit");
 
         verify(itemRepository, never()).save(any(Item.class));
     }
@@ -1104,7 +1103,7 @@ class ItemServiceTest {
 
         assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("Formatul cantității este invalid");
+                .hasMessageContaining("Quantity format is NOT valid");
 
         verify(itemRepository, never()).save(any(Item.class));
     }

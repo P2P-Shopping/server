@@ -33,21 +33,21 @@ class QuantityParserTest {
     void parse_ThrowsException_WhenFormatIsInvalid() {
         assertThatThrownBy(() -> QuantityParser.parse("mult lapte"))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("Formatul cantității este invalid");
+                .hasMessageContaining("Quantity format is NOT valid");
     }
 
     @Test
     void parse_ThrowsException_WhenQuantityIsNegative() {
         assertThatThrownBy(() -> QuantityParser.parse("-5 kg"))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("pozitiv");
+                .hasMessageContaining("positive number");
     }
 
     @Test
     void parse_ThrowsException_WhenQuantityExceedsLimit() {
         assertThatThrownBy(() -> QuantityParser.parse("100000 kg"))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("depășit limita maximă");
+                .hasMessageContaining("maximum accepted limit");
     }
 
     @Test
@@ -57,6 +57,7 @@ class QuantityParserTest {
         assertThat(QuantityParser.addQuantities("1.2 kg", "300 g")).isEqualTo("1.5 kg");
 
         assertThat(QuantityParser.addQuantities("500 ml", "1.5 l")).isEqualTo("2 l");
+
 
         assertThat(QuantityParser.addQuantities("3 buc", "5 pcs")).isEqualTo("8 buc");
     }
@@ -71,6 +72,6 @@ class QuantityParserTest {
     void addQuantities_ThrowsException_OnMassiveOverflow() {
         assertThatThrownBy(() -> QuantityParser.addQuantities("9000 kg", "2000 kg"))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("prea mare pentru a fi procesată");
+                .hasMessageContaining("too big to be processed");
     }
 }

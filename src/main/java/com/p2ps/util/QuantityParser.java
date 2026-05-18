@@ -8,8 +8,7 @@ import java.util.regex.Pattern;
 public class QuantityParser {
 
     // Extract the numeric part
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^\\s*([0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z]+)?\\s*$");
-
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z]+)?\\s*$");
     private static final double MAX_ALLOWED_VALUE = 9999.0;
 
 
@@ -38,7 +37,7 @@ public class QuantityParser {
                 case "ml", "mililitri" -> ML;
                 case "l", "litri", "litru" -> L;
                 case "buc", "bucati", "pcs", "piece" -> PCS;
-                default -> PCS;
+                default -> throw new ListValidationException("Unsupported unit of measurement: " + str);
             };
         }
     }
@@ -80,6 +79,8 @@ public class QuantityParser {
 
         double totalBaseValue = (parsed1.value() * parsed1.unit().baseMultiplier) +
                 (parsed2.value() * parsed2.unit().baseMultiplier);
+
+        double limit = parsed1.unit().family.equals("pieces") ? MAX_ALLOWED_VALUE : MAX_ALLOWED_VALUE * 1000;
 
         if (totalBaseValue > MAX_ALLOWED_VALUE * 1000) {
             throw new ListValidationException("Total sum of quantity is too big to be processed.");
