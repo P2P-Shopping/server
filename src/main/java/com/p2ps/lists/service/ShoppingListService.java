@@ -142,6 +142,8 @@ public class ShoppingListService {
             newItem.setPrice(item.getPrice());
             newItem.setCategory(item.getCategory());
             newItem.setRecurrent(item.isRecurrent());
+            newItem.setCatalogItem(item.getCatalogItem());
+            newItem.setExternalItemId(item.getExternalItemId());
             newItem.setShoppingList(currentList);
             newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
 
@@ -343,6 +345,11 @@ public class ShoppingListService {
                         itemDto.setRecurrent(item.isRecurrent());
                         itemDto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
                         itemDto.setCreatedAt(item.getCreatedAt());
+                        // expose catalogId and externalItemId so frontend can send catalog-based matching
+                        if (item.getCatalogItem() != null) {
+                            itemDto.setCatalogId(item.getCatalogItem().getId());
+                        }
+                        itemDto.setExternalItemId(item.getExternalItemId());
                         return itemDto;
                     })
                     .toList());

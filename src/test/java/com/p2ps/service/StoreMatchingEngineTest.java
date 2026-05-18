@@ -90,7 +90,10 @@ class StoreMatchingEngineTest {
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(namedJdbcTemplate).query(sqlCaptor.capture(), any(SqlParameterSource.class), any(RowMapper.class));
-        assertTrue(sqlCaptor.getValue().contains("HAVING COUNT(sim.item_id) > 0"));
+        assertTrue(sqlCaptor.getValue().contains("WITH requested_items AS"));
+        assertTrue(sqlCaptor.getValue().contains("located_item.catalog_id = ri.catalog_id"));
+        assertTrue(sqlCaptor.getValue().contains("located_item.external_item_id = ri.external_item_id"));
+        assertTrue(sqlCaptor.getValue().contains("HAVING COUNT(DISTINCT mi.requested_item_id) > 0"));
         assertTrue(sqlCaptor.getValue().contains("LIMIT 3"));
     }
 

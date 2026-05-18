@@ -119,14 +119,16 @@ class RoutingControllerTest {
                 new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0),
                 new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0)
         );
-        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(matches);
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
+                .thenReturn(matches);
 
-        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
-        assertEquals("Store A", response.getBody().getFirst().storeName());
+        assertEquals(matches.getFirst().storeId(), response.getBody().getFirst().storeId());
+        assertEquals(100, response.getBody().getFirst().matchPercentage());
     }
 
     @Test
@@ -137,9 +139,10 @@ class RoutingControllerTest {
         request.setRadiusInMeters(5000);
         request.setItemIds(List.of(UUID.randomUUID()));
 
-        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(List.of());
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
+                .thenReturn(List.of());
 
-        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -241,7 +244,7 @@ class RoutingControllerTest {
         when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
         map.setEstimatedLocPoint(estimatedPoint);
 
-        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(inventoryMapRepository.findRoutableByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
         when(locationProcessorWorker.isLowConfidence(0.2d, 2)).thenReturn(true);
         when(locationProcessorWorker.recalculateSingleItem(storeId, itemId)).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -267,7 +270,7 @@ class RoutingControllerTest {
         when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
         map.setEstimatedLocPoint(estimatedPoint);
 
-        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(inventoryMapRepository.findRoutableByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
         when(locationProcessorWorker.isLowConfidence(0.1d, 1)).thenReturn(true);
         when(locationProcessorWorker.recalculateSingleItem(storeId, itemId)).thenReturn(CompletableFuture.completedFuture(null));
 
