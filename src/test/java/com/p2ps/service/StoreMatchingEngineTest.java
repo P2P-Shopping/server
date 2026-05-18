@@ -139,6 +139,54 @@ class StoreMatchingEngineTest {
         assertEquals(items, capturedParams.getValue("itemIds"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void findOptimalStores_WithItemNames_ShouldResolveAndSearch() {
+        // Arrange
+        List<UUID> itemIds = List.of(UUID.randomUUID());
+        List<String> itemNames = List.of("Lapte", "Paine");
+
+        // Mock resolution of names to IDs
+        UUID resolvedId1 = UUID.randomUUID();
+        UUID resolvedId2 = UUID.randomUUID();
+
+        when(namedJdbcTemplate.queryForList(anyString(), any(SqlParameterSource.class), eq(UUID.class)))
+            .thenReturn(List.of(resolvedId1))
+            .thenReturn(List.of(resolvedId2));
+
+        when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
+                .thenReturn(Collections.emptyList());
+
+        // Act
+        storeMatchingEngine.findOptimalStores(44.43, 26.10, 5000, itemIds, itemNames);
+
+        // Assert
+        // Should resolve names twice
+        verify(namedJdbcTemplate, times(2)).queryForList(anyString(), any(SqlParameterSource.class), eq(UUID.class));
+
+        // Final search should include both original itemIds and resolved IDs
+        ArgumentCaptor<SqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        verify(namedJdbcTemplate).query(anyString(), paramsCaptor.capture(), any(RowMapper.class));
+
+        List<UUID> capturedIds = (List<UUID>) paramsCaptor.getValue().getValue("itemIds");
+        assertTrue(capturedIds.containsAll(itemIds));
+        assertTrue(capturedIds.contains(resolvedId1));
+        assertTrue(capturedIds.contains(resolvedId2));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void findOptimalStores_WithNullOrBlankItemNames_ShouldSkipResolution() {
+        List<String> itemNames = Arrays.asList(null, "", "  ");
+
+        when(namedJdbcTemplate.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class)))
+                .thenReturn(Collections.emptyList());
+
+        storeMatchingEngine.findOptimalStores(44.43, 26.10, 5000, List.of(UUID.randomUUID()), itemNames);
+
+        verify(namedJdbcTemplate, never()).queryForList(anyString(), any(SqlParameterSource.class), eq(UUID.class));
+    }
+
     private ResultSet mockResultSet(String storeId, String storeName, int matchedItems, double distanceMeters) throws Exception {
         ResultSet rs = mock(ResultSet.class);
         when(rs.getString("store_id")).thenReturn(storeId);
