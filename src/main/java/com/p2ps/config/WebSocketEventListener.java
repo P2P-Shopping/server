@@ -66,7 +66,10 @@ public class WebSocketEventListener {
                 
                 if (roster != null) {
                     roster.remove(username);
-                    
+                    if (names != null) {
+                        names.remove(username);
+                    }
+
                     PresenceEvent rosterUpdate = new PresenceEvent();
                     rosterUpdate.setEventType(PresenceEvent.EventType.ROSTER_UPDATE);
                     rosterUpdate.setListId(listId);

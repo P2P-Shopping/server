@@ -45,6 +45,7 @@ class PresenceControllerTest {
 
     private PresenceEvent samplePayload;
     private ConcurrentHashMap<String, Set<String>> roomRosters;
+    private ConcurrentHashMap<String, java.util.Map<String, String>> roomDisplayNames;
     private ConcurrentHashMap<String, PresenceEvent> sessionTracker;
 
     @BeforeEach
@@ -55,9 +56,11 @@ class PresenceControllerTest {
         samplePayload.setListId("1234-abcd");
 
         roomRosters = new ConcurrentHashMap<>();
+        roomDisplayNames = new ConcurrentHashMap<>();
         sessionTracker = new ConcurrentHashMap<>();
 
         lenient().when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
+        lenient().when(presenceStateService.getRoomDisplayNames()).thenReturn(roomDisplayNames);
         lenient().when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
     }
 

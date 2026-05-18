@@ -43,15 +43,18 @@ class WebSocketEventListenerTest {
 
     private ConcurrentHashMap<String, PresenceEvent> sessionTracker;
     private ConcurrentHashMap<String, Set<String>> roomRosters;
+    private ConcurrentHashMap<String, java.util.Map<String, String>> roomDisplayNames;
 
     @BeforeEach
     void setUp() {
         sessionTracker = new ConcurrentHashMap<>();
         roomRosters = new ConcurrentHashMap<>();
+        roomDisplayNames = new ConcurrentHashMap<>();
 
         listener = new WebSocketEventListener(presenceStateService, messagingTemplate);
         lenient().when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
         lenient().when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
+        lenient().when(presenceStateService.getRoomDisplayNames()).thenReturn(roomDisplayNames);
     }
 
     @Test

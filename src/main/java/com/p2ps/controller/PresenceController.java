@@ -47,13 +47,13 @@ public class PresenceController {
         } 
         else if (payload.getEventType() == PresenceEvent.EventType.LEAVE) {
             Set<String> roster = roomRosters.get(listId);
-            if (roster != null) {
-                roster.remove(payload.getUsername());
-                broadcastRoster(listId);
-            }
             Map<String, String> names = roomDisplayNames.get(listId);
             if (names != null) {
                 names.remove(payload.getUsername());
+            }
+            if (roster != null) {
+                roster.remove(payload.getUsername());
+                broadcastRoster(listId);
             }
             if (sessionId != null) {
                 sessionTracker.remove(sessionId);
