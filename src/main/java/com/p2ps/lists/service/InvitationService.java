@@ -4,12 +4,14 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.lists.dto.ListInvitationDTO;
 import com.p2ps.lists.exception.InvitationNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
-import com.p2ps.lists.exception.ListUserNotFoundException;
 import com.p2ps.lists.model.InvitationStatus;
+import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListInvitation;
+import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +23,14 @@ public class InvitationService {
 
     private final ListInvitationRepository invitationRepository;
     private final ShoppingListRepository shoppingListRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public InvitationService(ListInvitationRepository invitationRepository,
-                             ShoppingListRepository shoppingListRepository) {
+                             ShoppingListRepository shoppingListRepository,
+                             SimpMessagingTemplate messagingTemplate) {
         this.invitationRepository = invitationRepository;
         this.shoppingListRepository = shoppingListRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Transactional(readOnly = true)
@@ -50,11 +55,13 @@ public class InvitationService {
         }
 
         ShoppingList list = invitation.getShoppingList();
-        list.getCollaborators().add(invitation.getInvitee());
+        ListCollaborator collaborator = new ListCollaborator(list, invitation.getInvitee(), ListRole.EDITOR);
+        list.getCollaborators().add(collaborator);
         shoppingListRepository.save(list);
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitationRepository.save(invitation);
+        messagingTemplate.convertAndSend("/topic/lists/" + list.getId() + "/members", "changed");
     }
 
     @Transactional

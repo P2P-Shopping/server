@@ -61,12 +61,14 @@ class ShoppingListTest {
     void canBeModifiedBy_whenCollaboratorMatches_returnsTrue() {
         Users owner = new Users();
         owner.setEmail("owner@test.com");
+        owner.setId(1);
         Users collaborator = new Users();
         collaborator.setEmail("collab@test.com");
+        collaborator.setId(2);
         
         ShoppingList list = new ShoppingList();
         list.setUser(owner);
-        list.getCollaborators().add(collaborator);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
         
         assertThat(list.canBeModifiedBy("collab@test.com")).isTrue();
     }

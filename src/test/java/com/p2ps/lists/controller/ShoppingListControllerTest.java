@@ -293,4 +293,44 @@ class ShoppingListControllerTest {
 
         verify(shoppingListService, never()).importItems(any(), any(), any());
     }
+
+    @Test
+    void removeCollaboratorShouldReturnNoContent() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("owner@example.com", null)))
+                .andExpect(status().isNoContent());
+
+        verify(shoppingListService).removeCollaborator(listId, userId, "owner@example.com");
+    }
+
+    @Test
+    void removeCollaboratorShouldReturnForbiddenWhenNotOwner() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        doThrow(new ListAccessDeniedException("Only the owner can remove collaborators"))
+                .when(shoppingListService)
+                .removeCollaborator(listId, userId, "other@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("other@example.com", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Forbidden"));
+    }
+
+    @Test
+    void removeCollaboratorShouldReturnNotFoundWhenCollaboratorMissing() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 99;
+        doThrow(new ListUserNotFoundException("Collaborator not found on this list"))
+                .when(shoppingListService)
+                .removeCollaborator(listId, userId, "owner@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("owner@example.com", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.details").value("Collaborator not found on this list"));
+    }
 }

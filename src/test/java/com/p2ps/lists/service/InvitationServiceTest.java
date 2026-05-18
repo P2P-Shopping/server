@@ -5,6 +5,7 @@ import com.p2ps.lists.dto.ListInvitationDTO;
 import com.p2ps.lists.exception.InvitationNotFoundException;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.model.InvitationStatus;
+import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ListInvitationRepository;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +37,9 @@ class InvitationServiceTest {
 
     @Mock
     private ShoppingListRepository shoppingListRepository;
+
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
 
     @InjectMocks
     private InvitationService invitationService;
@@ -137,7 +142,9 @@ class InvitationServiceTest {
 
         invitationService.acceptInvitation(invId, "invitee@example.com");
 
-        assertTrue(list.getCollaborators().contains(invitee));
+        assertEquals(1, list.getCollaborators().size());
+        ListCollaborator added = list.getCollaborators().iterator().next();
+        assertEquals(invitee.getId(), added.getUserId());
         assertEquals(InvitationStatus.ACCEPTED, invitation.getStatus());
         verify(shoppingListRepository).save(list);
         verify(invitationRepository).save(invitation);

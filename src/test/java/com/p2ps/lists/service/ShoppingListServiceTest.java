@@ -12,9 +12,12 @@ import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.InvitationStatus;
+import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListInvitation;
+import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
+import com.p2ps.lists.repo.ListCollaboratorRepository;
 import com.p2ps.lists.repo.ListInvitationRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.ai.dto.ParsedItemResponse;
@@ -59,6 +62,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private ListInvitationRepository invitationRepository;
+
+    @Mock
+    private ListCollaboratorRepository listCollaboratorRepository;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -450,7 +456,7 @@ class ShoppingListServiceTest {
         
         shoppingListService.shareList(listId, collabEmail, ownerEmail);
         
-        assertFalse(list.getCollaborators().contains(collaborator));
+        assertTrue(list.getCollaborators().isEmpty());
         verify(invitationRepository).save(any(ListInvitation.class));
         verify(shoppingListRepository, never()).save(list);
     }
@@ -577,7 +583,7 @@ class ShoppingListServiceTest {
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        list.getCollaborators().add(collaborator);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
@@ -655,13 +661,14 @@ class ShoppingListServiceTest {
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        list.getCollaborators().add(collaborator);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
         
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         
         ShoppingListDTO result = shoppingListService.getListById(listId, collabEmail);
         
         assertEquals(listId, result.getId());
+        assertEquals("EDITOR", result.getCurrentUserRole());
     }
 
     @Test
@@ -973,12 +980,101 @@ class ShoppingListServiceTest {
         list.setTitle("Test");
         list.setUser(null);
 
-        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("mapToDTO", ShoppingList.class);
+        java.lang.reflect.Method method = ShoppingListService.class.getDeclaredMethod("mapToDTO", ShoppingList.class, String.class);
         method.setAccessible(true);
-        ShoppingListDTO result = (ShoppingListDTO) method.invoke(shoppingListService, list);
+        ShoppingListDTO result = (ShoppingListDTO) method.invoke(shoppingListService, list, null);
 
         assertNull(result.getOwnerId());
         assertNull(result.getOwnerEmail());
         assertNull(result.getOwnerName());
+        assertTrue(result.getCollaborators().isEmpty());
+    }
+
+    @Test
+    void removeCollaboratorShouldDeleteWhenOwnerCalls() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, userId)).thenReturn(true);
+
+        shoppingListService.removeCollaborator(listId, userId, "owner@example.com");
+
+        verify(listCollaboratorRepository).deleteByListIdAndUserId(listId, userId);
+    }
+
+    @Test
+    void removeCollaboratorShouldThrowWhenNonOwnerCalls() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        assertThrows(ListAccessDeniedException.class,
+                () -> shoppingListService.removeCollaborator(listId, userId, "other@example.com"));
+
+        verify(listCollaboratorRepository, never()).deleteByListIdAndUserId(any(), any());
+    }
+
+    @Test
+    void removeCollaboratorShouldThrowWhenListNotFound() {
+        UUID listId = UUID.randomUUID();
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
+
+        assertThrows(ShoppingListNotFoundException.class,
+                () -> shoppingListService.removeCollaborator(listId, 2, "owner@example.com"));
+    }
+
+    @Test
+    void removeCollaboratorShouldThrowWhenCollaboratorNotFound() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 99;
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(listCollaboratorRepository.existsByListIdAndUserId(listId, userId)).thenReturn(false);
+
+        assertThrows(ListUserNotFoundException.class,
+                () -> shoppingListService.removeCollaborator(listId, userId, "owner@example.com"));
+
+        verify(listCollaboratorRepository, never()).deleteByListIdAndUserId(any(), any());
+    }
+
+    @Test
+    void mapToDTOShouldIncludeCurrentUserRole() {
+        String collabEmail = "collab@example.com";
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setTitle("Shared List");
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        when(shoppingListRepository.findById(list.getId())).thenReturn(Optional.of(list));
+
+        ShoppingListDTO ownerResult = shoppingListService.getListById(list.getId(), "owner@example.com");
+        assertEquals("ADMIN", ownerResult.getCurrentUserRole());
+        assertEquals(2, ownerResult.getCollaborators().size());
+
+        ShoppingListDTO collabResult = shoppingListService.getListById(list.getId(), collabEmail);
+        assertEquals("EDITOR", collabResult.getCurrentUserRole());
     }
 }
