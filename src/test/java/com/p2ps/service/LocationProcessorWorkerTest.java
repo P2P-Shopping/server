@@ -44,7 +44,7 @@ class LocationProcessorWorkerTest {
     private LocationProcessorWorker worker;
 
     @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
+    @DisplayName("Trebuie să execute cu succes INSERT pentru recalcularea centrelor")
     void processAndCalculateCenters_Success() throws Exception {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
@@ -53,7 +53,7 @@ class LocationProcessorWorkerTest {
         when(jdbcTemplate.update(anyString())).thenReturn(5);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.processAndCalculateCenters());
-        verify(jdbcTemplate, times(2)).update(anyString());
+        verify(jdbcTemplate, times(1)).update(anyString());
     }
 
     @Test
@@ -64,12 +64,11 @@ class LocationProcessorWorkerTest {
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
         when(jdbcTemplate.update(anyString()))
-                .thenReturn(10)
                 .thenThrow(new RuntimeException("Database error during insert"));
 
         assertThrows(RuntimeException.class, worker::processAndCalculateCenters);
 
-        verify(jdbcTemplate, times(2)).update(anyString());
+        verify(jdbcTemplate, times(1)).update(anyString());
     }
 
     @Test
