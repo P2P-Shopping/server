@@ -159,7 +159,7 @@ public class LocationProcessorWorker {
                 ClusteredData AS (
                     SELECT 
                         item_id, store_id, location_point, accuracy_m,
-                        ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 3) 
+                        ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1) 
                         OVER (PARTITION BY store_id, item_id) AS cluster_id
                     FROM FilteredPings
                 ),
@@ -183,7 +183,7 @@ public class LocationProcessorWorker {
                     ping_count
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC
-                ON CONFLICT (store_id, item_id) DO UPDATE SET 
+                ON CONFLICT (store_id, item_id) DO UPDATE SET
                     estimated_loc_point = EXCLUDED.estimated_loc_point,
                     confidence_score = EXCLUDED.confidence_score,
                     ping_count = EXCLUDED.ping_count,
@@ -220,7 +220,7 @@ public class LocationProcessorWorker {
                 ),
                 Clustered AS (
                     SELECT location_point, accuracy_m,
-                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 3)
+                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1)
                            OVER () AS cluster_id
                     FROM ItemPings
                 ),

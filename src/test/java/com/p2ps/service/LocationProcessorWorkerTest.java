@@ -85,7 +85,7 @@ class LocationProcessorWorkerTest {
     }
 
     @Test
-    @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
+    @DisplayName("Trebuie să arunce excepția IllegalStateException dacă interogarea SQL eșuează")
     void processAndCalculateCenters_ThrowsExceptionOnError() throws Exception {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
@@ -94,7 +94,7 @@ class LocationProcessorWorkerTest {
         when(jdbcTemplate.update(anyString()))
                 .thenThrow(new RuntimeException("Database error during insert"));
 
-        assertThrows(RuntimeException.class, worker::processAndCalculateCenters);
+        assertThrows(IllegalStateException.class, worker::processAndCalculateCenters);
 
         verify(jdbcTemplate, times(1)).update(anyString());
     }

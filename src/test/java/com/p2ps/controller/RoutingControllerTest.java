@@ -64,7 +64,7 @@ class RoutingControllerTest {
 
     @Test
     void shouldReturnSuccessStatusAndMockRouteWhenCalculateRouteIsCalled() {
-        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"), 0);
+        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of("item_101", "item_102"), null, 0);
 
         RoutingResponse mockResponse = new RoutingResponse();
         mockResponse.setStatus("success");
@@ -90,7 +90,7 @@ class RoutingControllerTest {
 
     @Test
     void shouldReturnMockRouteForEmptyItemList() {
-        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of(), 0);
+        RoutingRequest request = new RoutingRequest(47.151726, 27.587914, List.of(), null, 0);
 
         RoutingResponse mockResponse = new RoutingResponse();
         mockResponse.setStatus("success");
