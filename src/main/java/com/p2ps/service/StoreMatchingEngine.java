@@ -64,6 +64,7 @@ public class StoreMatchingEngine {
                 WHERE id IN (:itemIds)
             ),
             matched_inventory AS (
+                -- 1. Produse rafinate deja (din store_inventory_map)
                 SELECT
                     sim.store_id,
                     COALESCE(ri.id, sim.item_id) AS requested_item_id
@@ -93,11 +94,39 @@ public class StoreMatchingEngine {
                             OR f_unaccent(LOWER(catalog.specific_name)) LIKE f_unaccent(LOWER(CONCAT('%', ri.name, '%')))
                         )
                   )
-                WHERE sim.confidence_score > 0
+                WHERE sim.confidence_score >= 0
                   AND (
                       ri.id IS NOT NULL
                       OR located_item.catalog_id IN (:itemIds)
                       OR sim.item_id IN (:itemIds)
+                  )
+
+                UNION
+
+                -- 2. Produse care au doar telemetrie brută (raw_user_pings) - FALLBACK
+                SELECT
+                    rup.store_id,
+                    COALESCE(ri.id, rup.item_id) AS requested_item_id
+                FROM raw_user_pings rup
+                JOIN items located_item ON located_item.id = rup.item_id
+                LEFT JOIN requested_items ri
+                  ON located_item.id = ri.id
+                  OR (
+                      ri.catalog_id IS NOT NULL
+                      AND located_item.catalog_id = ri.catalog_id
+                  )
+                  OR (
+                      ri.external_item_id IS NOT NULL
+                      AND ri.external_item_id <> ''
+                      AND located_item.external_item_id = ri.external_item_id
+                  )
+                  OR f_unaccent(LOWER(located_item.name)) = f_unaccent(LOWER(ri.name))
+                  OR f_unaccent(LOWER(COALESCE(located_item.external_item_id, ''))) = f_unaccent(LOWER(ri.name))
+                WHERE rup.accuracy_m < 30.0
+                  AND (
+                      ri.id IS NOT NULL
+                      OR located_item.catalog_id IN (:itemIds)
+                      OR rup.item_id IN (:itemIds)
                   )
             )
             SELECT
