@@ -46,7 +46,7 @@ public class ItemService {
 
     public ItemService(ItemRepository itemRepository,
                        ShoppingListRepository shoppingListRepository,
-                       UserProductHistoryRepository historyRepository,
+                       UserProductHistoryRepository historyRepository, 
                        ProductCatalogRepository catalogRepository,
                        AiService aiService,
                        @Lazy ItemService self) {
@@ -147,7 +147,7 @@ public class ItemService {
         item.setPrice(request.getPrice());
         item.setCategory(request.getCategory());
         item.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-        if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
+        item.setPositionIndex(request.getPositionIndex() != null ? request.getPositionIndex() : (double) System.currentTimeMillis());
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
         item.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(item);
@@ -339,7 +339,7 @@ public class ItemService {
         newItem.setPrice(request.getPrice());
         newItem.setCategory(request.getCategory());
         newItem.setRecurrent(request.getIsRecurrent() != null && request.getIsRecurrent());
-        if (request.getPositionIndex() != null) newItem.setPositionIndex(request.getPositionIndex());
+        newItem.setPositionIndex(request.getPositionIndex() != null ? request.getPositionIndex() : (double) System.currentTimeMillis());
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(newItem);

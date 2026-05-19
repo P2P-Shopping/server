@@ -75,7 +75,7 @@ public class MacroRoutingService {
         UUID uuid;
         try {
             uuid = UUID.fromString(storeId);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             logger.warn("Invalid storeId format");
             return new double[0];
         }

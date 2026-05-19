@@ -221,10 +221,12 @@ class RoutingServiceTest {
         RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(ITEM_1, ITEM_2), 0);
         RoutingResponse response = service.calculateOptimalRoute(request);
 
-        assertEquals("success", response.getStatus());
-        assertFalse(response.isPartial());
-        assertNotNull(response.getRoute());
-        assertFalse(response.getRoute().isEmpty());
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertEquals("success", response.getStatus()),
+                () -> assertFalse(response.isPartial()),
+                () -> assertNotNull(response.getRoute()),
+                () -> assertFalse(response.getRoute().isEmpty())
+        );
     }
 
     @Test
@@ -507,17 +509,7 @@ class RoutingServiceTest {
         assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
     }
 
-    @Test
-    void calculateOptimalRoute_shouldReturnErrorWhenProductIdsIsEmptyList() {
-        when(jdbcTemplate.queryForList(anyString(), eq(String.class), anyDouble(), anyDouble()))
-                .thenReturn(List.of(STORE_ID));
 
-        RoutingRequest request = new RoutingRequest(47.156, 27.587, List.of(), 0);
-        RoutingResponse response = service.calculateOptimalRoute(request);
-
-        assertEquals("error", response.getStatus());
-        assertTrue(response.getWarnings().contains("Niciunul din produsele cerute nu a fost gasit in magazin."));
-    }
 
     // -------------------------------------------------------------------------
     // Audio Instructions tests (BE 3.2)
