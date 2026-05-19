@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public class QuantityParser {
 
     // Extract the numeric part
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z]+)?\\s*$");
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?[0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z]+)?$");
     private static final double MAX_ALLOWED_VALUE = 9999.0;
 
 
@@ -49,6 +49,12 @@ public class QuantityParser {
         if (quantityStr == null || quantityStr.trim().isEmpty()) {
             return new ParsedQuantity(1.0, Unit.PCS);
         }
+
+        if (quantityStr.length() > 50) {
+            throw new ListValidationException("Quantity string is abnormally long and was rejected for security reasons.");
+        }
+
+        String cleanQuantity = quantityStr.trim();
 
         Matcher matcher = QUANTITY_PATTERN.matcher(quantityStr);
         if (!matcher.matches()) {
