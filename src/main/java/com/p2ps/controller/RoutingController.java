@@ -162,6 +162,20 @@ public class RoutingController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * GET /api/routing/store/{storeId}/polygon
+     *
+     * Returns the store geofence boundary polygon as GeoJSON.
+     */
+    @GetMapping("/store/{storeId}/polygon")
+    public ResponseEntity<String> getStorePolygon(@PathVariable String storeId) {
+        String geojson = macroRoutingService.getStorePolygonGeoJson(storeId);
+        if (geojson == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(geojson);
+    }
+
     // -------------------------------------------------------------------------
     // Existing endpoint (unchanged)
     // -------------------------------------------------------------------------
