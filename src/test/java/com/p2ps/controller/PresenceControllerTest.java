@@ -45,6 +45,7 @@ class PresenceControllerTest {
 
     private PresenceEvent samplePayload;
     private ConcurrentHashMap<String, Set<String>> roomRosters;
+    private ConcurrentHashMap<String, java.util.Map<String, String>> roomDisplayNames;
     private ConcurrentHashMap<String, PresenceEvent> sessionTracker;
 
     @BeforeEach
@@ -55,9 +56,11 @@ class PresenceControllerTest {
         samplePayload.setListId("1234-abcd");
 
         roomRosters = new ConcurrentHashMap<>();
+        roomDisplayNames = new ConcurrentHashMap<>();
         sessionTracker = new ConcurrentHashMap<>();
 
         lenient().when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
+        lenient().when(presenceStateService.getRoomDisplayNames()).thenReturn(roomDisplayNames);
         lenient().when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
     }
 
@@ -213,5 +216,58 @@ class PresenceControllerTest {
         PresenceEvent sentEvent = eventCaptor.getValue();
         assertEquals(PresenceEvent.EventType.ROSTER_UPDATE, sentEvent.getEventType());
         assertTrue(sentEvent.getActiveUsers().contains("testUser"));
+    }
+
+    @Test
+    void handlePresenceEvent_NullListId_ShouldReturnEarly() {
+        samplePayload.setEventType(PresenceEvent.EventType.JOIN);
+
+        presenceController.handlePresenceEvent(null, samplePayload, headerAccessor);
+
+        verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void handlePresenceEvent_TypingEvent_WithDisplayName_ShouldStoreDisplayName() {
+        samplePayload.setEventType(PresenceEvent.EventType.TYPING);
+        samplePayload.setDisplayName("Test Display");
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        verify(messagingTemplate).convertAndSend("/topic/list/1234-abcd/presence", samplePayload);
+        assertEquals("Test Display", roomDisplayNames.get("1234-abcd").get("testUser"));
+    }
+
+    @Test
+    void handlePresenceEvent_LeaveEvent_WithDisplayName_ShouldRemoveDisplayName() {
+        samplePayload.setEventType(PresenceEvent.EventType.LEAVE);
+
+        roomRosters.computeIfAbsent("1234-abcd", k -> ConcurrentHashMap.newKeySet()).add("testUser");
+        roomDisplayNames.computeIfAbsent("1234-abcd", k -> new ConcurrentHashMap<>()).put("testUser", "Test Display");
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        assertFalse(roomDisplayNames.get("1234-abcd").containsKey("testUser"));
+    }
+
+    @Test
+    void handlePresenceEvent_JoinEvent_WithDisplayName_ShouldStoreDisplayName() {
+        samplePayload.setEventType(PresenceEvent.EventType.JOIN);
+        samplePayload.setDisplayName("Test Display");
+        when(headerAccessor.getSessionId()).thenReturn("session-456");
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        assertEquals("Test Display", roomDisplayNames.get("1234-abcd").get("testUser"));
+        assertTrue(sessionTracker.containsKey("session-456"));
+    }
+
+    @Test
+    void handlePresenceEvent_UnhandledEventType_ShouldNotThrow() {
+        samplePayload.setEventType(PresenceEvent.EventType.SYNC);
+
+        presenceController.handlePresenceEvent("1234-abcd", samplePayload, headerAccessor);
+
+        verifyNoInteractions(messagingTemplate);
     }
 }

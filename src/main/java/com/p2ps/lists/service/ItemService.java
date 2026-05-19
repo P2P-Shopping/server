@@ -198,7 +198,7 @@ public class ItemService {
 
         List<ItemDTO> validatedDtos = performAiPostValidation(dtosToValidate);
 
-        List<Item> itemsToSave = applyAiValidationResults(validatedDtos, trackingMap);
+        List<Item> itemsToSave = applyAiValidationResults(validatedDtos, trackingMap, list.getUser());
 
         List<Item> saved = itemRepository.saveAll(itemsToSave);
         return saved.stream().map(this::mapToDTO).toList();
@@ -229,7 +229,7 @@ public class ItemService {
             return dtosToValidate;
         }
     }
-    private List<Item> applyAiValidationResults(List<ItemDTO> validatedDtos, Map<UUID, Item> trackingMap) {
+    private List<Item> applyAiValidationResults(List<ItemDTO> validatedDtos, Map<UUID, Item> trackingMap, com.p2ps.auth.model.Users user) {
         List<Item> itemsToSave = new ArrayList<>();
 
         for (ItemDTO dto : validatedDtos) {
@@ -242,6 +242,7 @@ public class ItemService {
             Item originalItem = trackingMap.get(dto.getId());
             if (originalItem != null) {
                 applyRefinedAiUpdates(originalItem, dto);
+                ensureResolvableProductLink(originalItem, user);
                 itemsToSave.add(originalItem);
             }
         }
@@ -368,7 +369,7 @@ public class ItemService {
             if (request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
             }
-            item.setName(request.getName());
+            item.setName(request.getName().trim());
         }
 
         if (request.getBrand() != null) item.setBrand(request.getBrand());
@@ -381,6 +382,10 @@ public class ItemService {
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
         if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
+
+        if (request.getName() != null || request.getBrand() != null) {
+            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+        }
 
         if (request.getIsChecked() != null) {
             boolean wasChecked = item.isChecked();
@@ -428,9 +433,23 @@ public class ItemService {
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
             applySyncContent(item, payload.getContent());
+            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+            attachRoutableExternalItemId(item);
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        return mapToDTO(itemRepository.save(item));
+    }
+
+    @Transactional
+    public ItemDTO claimItem(UUID itemId, String claimedByEmail) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
+
+        item.setClaimedBy(claimedByEmail);
+        item.setClaimedAt(claimedByEmail != null ? System.currentTimeMillis() : null);
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -515,6 +534,11 @@ public class ItemService {
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         dto.setCreatedAt(item.getCreatedAt());
         dto.setExternalItemId(item.getExternalItemId());
+        if (item.getCatalogItem() != null) {
+            dto.setCatalogId(item.getCatalogItem().getId());
+        }
+        dto.setClaimedBy(item.getClaimedBy());
+        dto.setClaimedAt(item.getClaimedAt());
         return dto;
     }
 
@@ -528,6 +552,16 @@ public class ItemService {
 
         itemRepository.findRoutableExternalItemIdByName(item.getName().trim())
                 .ifPresent(item::setExternalItemId);
+    }
+
+    private void ensureResolvableProductLink(Item item, com.p2ps.auth.model.Users user) {
+        if (item.getCatalogItem() == null) {
+            ProductCatalog catalogMatch = resolveCatalogMatch(item.getName(), item.getBrand(), user);
+            if (catalogMatch != null) {
+                item.setCatalogItem(catalogMatch);
+            }
+        }
+        attachRoutableExternalItemId(item);
     }
 
     private String sumStringQuantities(String oldQ, String newQ) {
@@ -636,12 +670,22 @@ public class ItemService {
             return specificNameLower.contains(reqBrandLower);
         }
 
-        // 2. Daca utilizatorul NU a specificat un brand, dar catalogul are unul
-        if (catalogHasBrand) {
-            return itemNameLower.contains(catalog.getBrand().toLowerCase());
+        String genericNameLower = catalog.getGenericName() != null ? catalog.getGenericName().toLowerCase() : "";
+        String brandLower = catalogHasBrand ? catalog.getBrand().toLowerCase() : "";
+
+        if (catalogHasBrand && itemNameLower.contains(brandLower)) {
+            return true;
         }
 
-        // 3. Daca niciunul nu are brand oficial
-        return specificNameLower.equals(itemNameLower) || itemNameLower.contains(specificNameLower);
+        return namesOverlap(itemNameLower, genericNameLower)
+                || namesOverlap(itemNameLower, specificNameLower);
+    }
+
+    private boolean namesOverlap(String itemNameLower, String catalogNameLower) {
+        return catalogNameLower != null
+                && !catalogNameLower.isBlank()
+                && (catalogNameLower.equals(itemNameLower)
+                || itemNameLower.contains(catalogNameLower)
+                || catalogNameLower.contains(itemNameLower));
     }
 }

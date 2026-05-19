@@ -7,6 +7,7 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -44,13 +45,8 @@ public class ShoppingList {
     @JoinColumn(name = "user_id", nullable = false)
     private Users user;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "shopping_list_collaborators",
-        joinColumns = @JoinColumn(name = "shopping_list_id"),
-        inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<Users> collaborators = new HashSet<>();
+    @OneToMany(mappedBy = "shoppingList", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ListCollaborator> collaborators = new HashSet<>();
 
     //sterge itemi din lista cand sterge o lista
     @OneToMany(mappedBy = "shoppingList", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -58,6 +54,22 @@ public class ShoppingList {
 
     public boolean canBeModifiedBy(String email) {
         if (user == null) return false;
-        return user.getEmail().equals(email) || collaborators.stream().anyMatch(c -> c.getEmail().equals(email));
+        return user.getEmail().equals(email) || collaborators.stream()
+                .anyMatch(c -> c.getUser().getEmail().equals(email));
+    }
+
+    public Optional<ListCollaborator> getCollaboratorByUserEmail(String email) {
+        return collaborators.stream()
+                .filter(c -> c.getUser().getEmail().equals(email))
+                .findFirst();
+    }
+
+    public boolean hasCollaborator(Integer userId) {
+        return collaborators.stream()
+                .anyMatch(c -> c.getUser().getId().equals(userId));
+    }
+
+    public boolean removeCollaboratorByUserId(Integer userId) {
+        return collaborators.removeIf(c -> c.getUser().getId().equals(userId));
     }
 }

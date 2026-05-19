@@ -44,7 +44,7 @@ class TelemetryCleanupJobTest {
         long cutoff = captor.getValue();
         long sevenDaysMs = 7L * 24 * 60 * 60 * 1000;
 
-        assert cutoff <= before - sevenDaysMs;
-        assert cutoff >= after - sevenDaysMs - 1000;
+        assert cutoff >= before - sevenDaysMs;
+        assert cutoff <= after - sevenDaysMs + 1000;
     }
 }

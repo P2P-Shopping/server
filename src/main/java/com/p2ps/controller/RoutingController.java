@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import jakarta.annotation.PostConstruct;
@@ -94,14 +95,49 @@ public class RoutingController {
      * Returns the top 3 matching stores, or [] when no stores match.
      */
     @PostMapping({"/lookup", "/stores-match"})
-    public ResponseEntity<java.util.List<StoreMatchingEngine.StoreMatchResult>> lookupStores(@RequestBody StoreMatchRequest request) {
-        java.util.List<StoreMatchingEngine.StoreMatchResult> results = storeMatchingEngine.findOptimalStores(
+    public ResponseEntity<List<StoreMatchResponse>> lookupStores(@RequestBody StoreMatchRequest request) {
+        List<StoreMatchingEngine.StoreMatchResult> results = storeMatchingEngine.findOptimalStores(
                 request.getUserLat(),
                 request.getUserLng(),
                 request.getRadiusInMeters(),
-                request.getItemIds()
+                request.getItemIds(),
+                request.getItemNames()
         );
-        return ResponseEntity.ok(results);
+
+        long itemIdCount = 0;
+        if (request.getItemIds() != null) {
+            itemIdCount = request.getItemIds().stream().distinct().count();
+        }
+        long itemNameCount = 0;
+        if (request.getItemNames() != null) {
+            itemNameCount = request.getItemNames().stream()
+                    .filter(name -> name != null && !name.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .count();
+        }
+        long requestedCount = itemIdCount + itemNameCount;
+
+        List<StoreMatchResponse> payload = results.stream()
+                .map(result -> new StoreMatchResponse(
+                        result.storeId(),
+                        result.storeName(),
+                        result.matchedItems(),
+                        result.distanceMeters(),
+                        calculateMatchPercentage(result.matchedItems(), requestedCount)
+                ))
+                .toList();
+
+        return ResponseEntity.ok(payload);
+    }
+
+    private int calculateMatchPercentage(int matchedItems, long requestedItemsCount) {
+        if (requestedItemsCount <= 0) {
+            return 0;
+        }
+
+        double percentage = (matchedItems * 100.0d) / requestedItemsCount;
+        return (int) Math.max(0, Math.min(100, Math.round(percentage)));
     }
 
     // -------------------------------------------------------------------------
@@ -168,7 +204,7 @@ public class RoutingController {
 
     @GetMapping("/location")
     public ResponseEntity<ItemLocationDTO> getItemLocation(@RequestParam UUID storeId, @RequestParam UUID itemId) {
-        return inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)
+        return inventoryMapRepository.findRoutableByStoreIdAndItemId(storeId, itemId)
                 .map(map -> {
                     double confidenceScore = map.getConfidenceScore() == null ? 0.0d : map.getConfidenceScore();
                     int pingCount = map.getPingCount() == null ? 0 : map.getPingCount();

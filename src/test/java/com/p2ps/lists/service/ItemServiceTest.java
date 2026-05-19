@@ -937,7 +937,7 @@ class ItemServiceTest {
     void addItemToList_ReturnsNewQuantity_WhenOldQuantityIsBlank() {
         ItemRequest req = new ItemRequest();
         req.setName("Apa");
-        req.setQuantity("2 buc");
+        req.setQuantity("2 buc"); // Your fix
         Item existingItem = new Item();
         existingItem.setId(UUID.randomUUID());
         existingItem.setName("Apa");
@@ -952,7 +952,7 @@ class ItemServiceTest {
 
         ItemDTO result = itemService.addItemToList(listId, req, userEmail);
 
-        assertThat(result.getQuantity()).isEqualTo("2 buc");
+        assertThat(result.getQuantity()).isEqualTo("2 buc"); // Your fix
     }
 
     @Test
@@ -1191,6 +1191,31 @@ class ItemServiceTest {
     }
 
     @Test
+    void resolveCatalogMatch_UserNotProvided_CatalogHasBrandButGenericNameMatches() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Iaurt");
+        req.setBrand(null);
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("Iaurt");
+        catalogProduct.setBrand("Danone");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Iaurt")).thenReturn(List.of(catalogProduct));
+        when(itemRepository.findByShoppingListIdAndCatalogItem_Id(listId, catalogProduct.getId())).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        itemService.addItemToList(listId, req, userEmail);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
+    }
+
+    @Test
     void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandButUserDidNotTypeIt() {
         ItemRequest req = new ItemRequest();
         req.setName("Iaurt");
@@ -1368,5 +1393,56 @@ class ItemServiceTest {
 
         assertThatThrownBy(() -> itemService.deleteCompletedItems(listId, userEmail))
                 .isInstanceOf(ListAccessDeniedException.class);
+    }
+
+    // ==========================================
+    // CLAIM ITEM TESTS
+    // ==========================================
+
+    @Test
+    void claimItem_SetsClaimedByAndTimestamp() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ItemDTO result = itemService.claimItem(itemId, "alice@test.com");
+
+        assertThat(result.getClaimedBy()).isEqualTo("alice@test.com");
+        assertThat(result.getClaimedAt()).isNotNull();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void claimItem_ClearsClaimWhenEmailIsNull() {
+        mockItem.setClaimedBy("alice@test.com");
+        mockItem.setClaimedAt(1000L);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ItemDTO result = itemService.claimItem(itemId, null);
+
+        assertThat(result.getClaimedBy()).isNull();
+        assertThat(result.getClaimedAt()).isNull();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void claimItem_ThrowsWhenItemNotFound() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.claimItem(itemId, "alice@test.com"))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void claimItem_UpdatesLastUpdatedTimestamp() {
+        mockItem.setLastUpdatedTimestamp(1000L);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itemService.claimItem(itemId, "alice@test.com");
+
+        assertThat(mockItem.getLastUpdatedTimestamp()).isGreaterThan(1000L);
     }
 }
