@@ -13,6 +13,9 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
+import java.security.Principal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -125,11 +128,12 @@ class RoomSubscriptionInterceptorTest {
         assertSame(message, result);
     }
 
-    @Test
-    void preSend_InvalidSubscriptionId_ReturnsNull() {
+    @ParameterizedTest(name = "destination={0}")
+    @MethodSource("rejectedSubscriptionDestinations")
+    void preSend_RejectedSubscriptions_ReturnNull(String destination) {
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
-                "/topic/list/invalid_ID!",
+                destination,
                 new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
         );
         MessageChannel channel = mock(MessageChannel.class);
@@ -137,6 +141,13 @@ class RoomSubscriptionInterceptorTest {
         Message<?> result = interceptor.preSend(message, channel);
 
         assertNull(result);
+    }
+
+    static Stream<String> rejectedSubscriptionDestinations() {
+        return Stream.of(
+                "/topic/list/invalid_ID!",
+                "/topic/list/not-a-uuid"
+        );
     }
 
     @Test
@@ -213,20 +224,6 @@ class RoomSubscriptionInterceptorTest {
     }
 
     @Test
-    void preSend_InvalidUuidFormat_ReturnsNull() {
-        Message<?> message = createMessage(
-                StompCommand.SUBSCRIBE,
-                "/topic/list/not-a-uuid",
-                new UsernamePasswordAuthenticationToken("test@test.com", null, java.util.List.of())
-        );
-        MessageChannel channel = mock(MessageChannel.class);
-
-        Message<?> result = interceptor.preSend(message, channel);
-
-        assertNull(result);
-    }
-
-    @Test
     void extractListId_withPresenceSuffix_removesSuffix() throws Exception {
         RoomSubscriptionInterceptor testInterceptor = new RoomSubscriptionInterceptor(mock(ShoppingListRepository.class), mock(com.p2ps.auth.security.JwtAuthFilter.class));
         java.lang.reflect.Method method = testInterceptor.getClass().getDeclaredMethod("extractListId", String.class);
@@ -270,5 +267,97 @@ class RoomSubscriptionInterceptorTest {
         
         assertThat(result).isNotNull();
         verify(jwtAuthFilter).authenticateToken(token);
+    }
+
+    @Test
+    void preSend_ValidInvitationSubscription_OwnEmail() {
+        String userEmail = "user@test.com";
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/invitations/" + userEmail,
+                new UsernamePasswordAuthenticationToken(userEmail, null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertSame(message, result);
+    }
+
+    @Test
+    void preSend_InvitationSubscription_EmptyEmail_ReturnsNull() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/invitations/",
+                new UsernamePasswordAuthenticationToken("user@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
+    @Test
+    void preSend_InvitationSubscription_WrongUser_ReturnsNull() {
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                "/topic/invitations/other@test.com",
+                new UsernamePasswordAuthenticationToken("user@test.com", null, java.util.List.of())
+        );
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
+    }
+
+    @Test
+    void preSend_NonAuthenticationPrincipal_FallsBackToSessionAttributes() {
+        Principal nonAuthPrincipal = new Principal() {
+            @Override
+            public String getName() {
+                return "user@test.com";
+            }
+        };
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
+        accessor.setUser(nonAuthPrincipal);
+        accessor.setSessionAttributes(new HashMap<>(Map.of(
+            JwtHandshakeInterceptor.SESSION_TOKEN_ATTRIBUTE, "some-token"
+        )));
+
+        UUID listId = UUID.randomUUID();
+        accessor.setDestination("/topic/list/" + listId);
+
+        when(jwtAuthFilter.authenticateToken("some-token")).thenReturn(
+                new UsernamePasswordAuthenticationToken("user@test.com", null, java.util.List.of()));
+        when(shoppingListRepository.existsByIdAndUserEmailOrCollaboratorEmail(listId, "user@test.com")).thenReturn(true);
+
+        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertThat(result).isNotNull();
+        verify(jwtAuthFilter).authenticateToken("some-token");
+    }
+
+    @Test
+    void preSend_NoSessionAttributes_NoToken_ReturnsNull() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
+        accessor.setSessionAttributes(new HashMap<>());
+
+        UUID listId = UUID.randomUUID();
+        accessor.setDestination("/topic/list/" + listId);
+
+        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+        MessageChannel channel = mock(MessageChannel.class);
+
+        Message<?> result = interceptor.preSend(message, channel);
+
+        assertNull(result);
     }
 }

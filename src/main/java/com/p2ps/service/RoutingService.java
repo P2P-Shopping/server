@@ -178,7 +178,7 @@ public class RoutingService {
 
         String sql = """
                 WITH requested_items AS (
-                    SELECT id, name, external_item_id
+                    SELECT id, name, external_item_id, catalog_id
                     FROM items
                     WHERE id::text IN (%s)
                 )
@@ -194,6 +194,23 @@ public class RoutingService {
                   OR (
                       ri.external_item_id IS NOT NULL
                       AND located_item.external_item_id = ri.external_item_id
+                  )
+                  OR (
+                      ri.catalog_id IS NOT NULL
+                      AND located_item.catalog_id = ri.catalog_id
+                  )
+                  OR f_unaccent(LOWER(located_item.name)) = f_unaccent(LOWER(ri.name))
+                  OR f_unaccent(LOWER(COALESCE(located_item.external_item_id, ''))) = f_unaccent(LOWER(ri.name))
+                  OR EXISTS (
+                      SELECT 1
+                      FROM p2p_product_catalog catalog
+                      WHERE catalog.id = located_item.catalog_id
+                        AND (
+                            f_unaccent(LOWER(catalog.generic_name)) = f_unaccent(LOWER(ri.name))
+                            OR f_unaccent(LOWER(catalog.specific_name)) = f_unaccent(LOWER(ri.name))
+                            OR f_unaccent(LOWER(catalog.generic_name)) LIKE f_unaccent(LOWER(CONCAT('%%', ri.name, '%%')))
+                            OR f_unaccent(LOWER(catalog.specific_name)) LIKE f_unaccent(LOWER(CONCAT('%%', ri.name, '%%')))
+                        )
                   )
                 JOIN store_inventory_map sim ON sim.item_id = located_item.id
                 WHERE sim.store_id::text = ?
@@ -265,7 +282,7 @@ public class RoutingService {
 
         String sql = """
                 WITH requested_items AS (
-                    SELECT id, name, external_item_id
+                    SELECT id, name, external_item_id, catalog_id
                     FROM items
                     WHERE id::text IN (%s)
                 )
@@ -281,6 +298,23 @@ public class RoutingService {
                   OR (
                       ri.external_item_id IS NOT NULL
                       AND located_item.external_item_id = ri.external_item_id
+                  )
+                  OR (
+                      ri.catalog_id IS NOT NULL
+                      AND located_item.catalog_id = ri.catalog_id
+                  )
+                  OR f_unaccent(LOWER(located_item.name)) = f_unaccent(LOWER(ri.name))
+                  OR f_unaccent(LOWER(COALESCE(located_item.external_item_id, ''))) = f_unaccent(LOWER(ri.name))
+                  OR EXISTS (
+                      SELECT 1
+                      FROM p2p_product_catalog catalog
+                      WHERE catalog.id = located_item.catalog_id
+                        AND (
+                            f_unaccent(LOWER(catalog.generic_name)) = f_unaccent(LOWER(ri.name))
+                            OR f_unaccent(LOWER(catalog.specific_name)) = f_unaccent(LOWER(ri.name))
+                            OR f_unaccent(LOWER(catalog.generic_name)) LIKE f_unaccent(LOWER(CONCAT('%%', ri.name, '%%')))
+                            OR f_unaccent(LOWER(catalog.specific_name)) LIKE f_unaccent(LOWER(CONCAT('%%', ri.name, '%%')))
+                        )
                   )
                 JOIN raw_user_pings rup ON rup.item_id = located_item.id
                 WHERE rup.store_id::text = ?

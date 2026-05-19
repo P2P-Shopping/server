@@ -29,4 +29,7 @@ public class ItemDTO {
     private Long lastUpdatedTimestamp;
     private Long createdAt;
     private String externalItemId;
+    private UUID catalogId;
+    private String claimedBy;
+    private Long claimedAt;
 }

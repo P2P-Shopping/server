@@ -1,0 +1,2 @@
+ALTER TABLE shopping_list_collaborators
+  ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'EDITOR';

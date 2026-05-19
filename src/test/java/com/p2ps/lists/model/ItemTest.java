@@ -39,6 +39,8 @@ class ItemTest {
         item.setRecurrent(true);
         item.setShoppingList(list);
         item.setVersion(1L);
+        item.setClaimedBy("user@example.com");
+        item.setClaimedAt(1234567890L);
 
         assertThat(item.getId()).isEqualTo(id);
         assertThat(item.getName()).isEqualTo(name);
@@ -50,6 +52,15 @@ class ItemTest {
         assertThat(item.isRecurrent()).isTrue();
         assertThat(item.getShoppingList()).isEqualTo(list);
         assertThat(item.getVersion()).isEqualTo(1L);
+        assertThat(item.getClaimedBy()).isEqualTo("user@example.com");
+        assertThat(item.getClaimedAt()).isEqualTo(1234567890L);
+    }
+
+    @Test
+    void testClaimedByDefaultsToNull() {
+        Item item = new Item();
+        assertThat(item.getClaimedBy()).isNull();
+        assertThat(item.getClaimedAt()).isNull();
     }
 
 }

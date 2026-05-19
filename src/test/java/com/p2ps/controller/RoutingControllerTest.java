@@ -119,14 +119,16 @@ class RoutingControllerTest {
                 new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0),
                 new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0)
         );
-        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(matches);
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
+                .thenReturn(matches);
 
-        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
-        assertEquals("Store A", response.getBody().getFirst().storeName());
+        assertEquals(matches.getFirst().storeId(), response.getBody().getFirst().storeId());
+        assertEquals(100, response.getBody().getFirst().matchPercentage());
     }
 
     @Test
@@ -137,9 +139,10 @@ class RoutingControllerTest {
         request.setRadiusInMeters(5000);
         request.setItemIds(List.of(UUID.randomUUID()));
 
-        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds())).thenReturn(List.of());
+        when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
+                .thenReturn(List.of());
 
-        ResponseEntity<List<StoreMatchingEngine.StoreMatchResult>> response = controller.lookupStores(request);
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -241,7 +244,7 @@ class RoutingControllerTest {
         when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
         map.setEstimatedLocPoint(estimatedPoint);
 
-        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(inventoryMapRepository.findRoutableByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
         when(locationProcessorWorker.isLowConfidence(0.2d, 2)).thenReturn(true);
         when(locationProcessorWorker.recalculateSingleItem(storeId, itemId)).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -267,7 +270,7 @@ class RoutingControllerTest {
         when(estimatedPoint.getCoordinate()).thenReturn(new Coordinate(27.587914, 47.151726));
         map.setEstimatedLocPoint(estimatedPoint);
 
-        when(inventoryMapRepository.findByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
+        when(inventoryMapRepository.findRoutableByStoreIdAndItemId(storeId, itemId)).thenReturn(Optional.of(map));
         when(locationProcessorWorker.isLowConfidence(0.1d, 1)).thenReturn(true);
         when(locationProcessorWorker.recalculateSingleItem(storeId, itemId)).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -275,5 +278,45 @@ class RoutingControllerTest {
         controller.getItemLocation(storeId, itemId);
 
         verify(locationProcessorWorker, times(1)).recalculateSingleItem(storeId, itemId);
+    }
+
+    @Test
+    void lookupStores_shouldHandleMixedItemsAndNames() {
+        StoreMatchRequest request = new StoreMatchRequest();
+        request.setUserLat(44.4);
+        request.setUserLng(26.1);
+        request.setRadiusInMeters(1000);
+        request.setItemIds(List.of(UUID.randomUUID(), UUID.randomUUID()));
+        request.setItemNames(List.of("Apple", "Milk"));
+
+        List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
+            new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store C", 4, 500.0)
+        );
+        when(storeMatchingEngine.findOptimalStores(anyDouble(), anyDouble(), anyDouble(), anyList(), anyList()))
+                .thenReturn(matches);
+
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().size());
+
+        // 4 matched items / (2 requested IDs + 2 requested Names) = 100%
+        assertEquals(100, response.getBody().getFirst().matchPercentage());
+    }
+
+    @Test
+    void lookupStores_shouldHandleEmptyRequest() {
+        StoreMatchRequest request = new StoreMatchRequest();
+        request.setItemIds(null);
+        request.setItemNames(null);
+
+        when(storeMatchingEngine.findOptimalStores(anyDouble(), anyDouble(), anyDouble(), isNull(), isNull()))
+                .thenReturn(List.of());
+
+        ResponseEntity<List<StoreMatchResponse>> response = controller.lookupStores(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue(response.getBody().isEmpty());
     }
 }

@@ -12,6 +12,8 @@ public enum ActionType {
     DELETE("DELETE"),
     BULK_DELETE("BULK_DELETE"),
     CHECK_OFF("CHECK_OFF"),
+    CLAIM_ITEM("CLAIM_ITEM"),
+    UNCLAIM_ITEM("UNCLAIM_ITEM"),
     TYPING("TYPING"),
     UNKNOWN("UNKNOWN");
 

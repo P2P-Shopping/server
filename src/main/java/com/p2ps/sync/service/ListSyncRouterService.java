@@ -49,7 +49,8 @@ public class ListSyncRouterService {
         logger.debug("Routing action {} for room {}", action, listId);
 
         if (action == ActionType.ADD || action == ActionType.UPDATE
-                || action == ActionType.DELETE || action == ActionType.CHECK_OFF) {
+                || action == ActionType.DELETE || action == ActionType.CHECK_OFF
+                || action == ActionType.CLAIM_ITEM || action == ActionType.UNCLAIM_ITEM) {
             String itemId = payload.getItemId();
             if (itemId == null || itemId.isBlank()) {
                 logger.debug("Blank itemId for persistent action; clearing mutable fields");
@@ -70,7 +71,7 @@ public class ListSyncRouterService {
         }
 
         return switch (action) {
-            case ADD, UPDATE, DELETE, CHECK_OFF -> listSyncStore.apply(listId, payload);
+            case ADD, UPDATE, DELETE, CHECK_OFF, CLAIM_ITEM, UNCLAIM_ITEM -> listSyncStore.apply(listId, payload);
             case TYPING, UNKNOWN -> payload;
             case BULK_DELETE -> payload;
         };

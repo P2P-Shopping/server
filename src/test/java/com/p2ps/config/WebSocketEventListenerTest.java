@@ -43,15 +43,18 @@ class WebSocketEventListenerTest {
 
     private ConcurrentHashMap<String, PresenceEvent> sessionTracker;
     private ConcurrentHashMap<String, Set<String>> roomRosters;
+    private ConcurrentHashMap<String, java.util.Map<String, String>> roomDisplayNames;
 
     @BeforeEach
     void setUp() {
         sessionTracker = new ConcurrentHashMap<>();
         roomRosters = new ConcurrentHashMap<>();
+        roomDisplayNames = new ConcurrentHashMap<>();
 
         listener = new WebSocketEventListener(presenceStateService, messagingTemplate);
         lenient().when(presenceStateService.getSessionTracker()).thenReturn(sessionTracker);
         lenient().when(presenceStateService.getRoomRosters()).thenReturn(roomRosters);
+        lenient().when(presenceStateService.getRoomDisplayNames()).thenReturn(roomDisplayNames);
     }
 
     @Test
@@ -179,6 +182,42 @@ class WebSocketEventListenerTest {
         SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "session-123", CloseStatus.NORMAL);
 
         assertDoesNotThrow(() -> listener.handleWebSocketDisconnectListener(event));
+    }
+
+    @Test
+    void shouldRemoveDisplayNameOnDisconnect() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.DISCONNECT);
+        accessor.setSessionId("session-123");
+        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        PresenceEvent sessionEvent = new PresenceEvent();
+        sessionEvent.setEventType(PresenceEvent.EventType.JOIN);
+        sessionEvent.setListId("list-1");
+        sessionEvent.setUsername("user1");
+        sessionTracker.put("session-123", sessionEvent);
+
+        Set<String> roster = ConcurrentHashMap.newKeySet();
+        roster.add("user1");
+        roomRosters.put("list-1", roster);
+
+        java.util.Map<String, String> names = new ConcurrentHashMap<>();
+        names.put("user1", "User One");
+        names.put("user2", "User Two");
+        roomDisplayNames.put("list-1", names);
+
+        SessionDisconnectEvent event = new SessionDisconnectEvent(this, message, "session-123", CloseStatus.NORMAL);
+
+        listener.handleWebSocketDisconnectListener(event);
+
+        assertFalse(names.containsKey("user1"));
+        assertTrue(names.containsKey("user2"));
+
+        ArgumentCaptor<PresenceEvent> eventCaptor = ArgumentCaptor.forClass(PresenceEvent.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/list/list-1/presence"), eventCaptor.capture());
+
+        PresenceEvent sentEvent = eventCaptor.getValue();
+        assertTrue(sentEvent.getDisplayNames().containsKey("user2"));
+        assertFalse(sentEvent.getDisplayNames().containsKey("user1"));
     }
 
 }
