@@ -137,7 +137,7 @@ public class LocationProcessorWorker {
         return confidenceTooLow || insufficientSignals;
     }
 
-    @Scheduled(fixedDelay = 30000)
+    //@Scheduled(fixedDelay = 30000)
     @Transactional
     public void processAndCalculateCenters() {
         if (!schedulingEnabled) {
