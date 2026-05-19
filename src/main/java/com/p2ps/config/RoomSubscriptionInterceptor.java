@@ -31,6 +31,7 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     private static final Logger logger = LoggerFactory.getLogger(RoomSubscriptionInterceptor.class);
 
     private static final Pattern VALID_LIST_ID = Pattern.compile("^[a-zA-Z0-9-]+$");
+    private static final String INVITATIONS_TOPIC_PREFIX = "/topic/invitations/";
 
     private final ShoppingListRepository shoppingListRepository;
     private final JwtAuthFilter jwtAuthFilter;
@@ -62,10 +63,10 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
     }
 
     private boolean isSubscribeToTopic(StompHeaderAccessor accessor, String destination) {
-        return accessor != null &&
-               StompCommand.SUBSCRIBE.equals(accessor.getCommand()) &&
-               destination != null &&
-               destination.startsWith("/topic/list/");
+        if (accessor == null || !StompCommand.SUBSCRIBE.equals(accessor.getCommand()) || destination == null) {
+            return false;
+        }
+        return destination.startsWith("/topic/list/") || destination.startsWith(INVITATIONS_TOPIC_PREFIX);
     }
 
     private boolean handleSubscription(StompHeaderAccessor accessor, String destination) {
@@ -75,6 +76,10 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
             return false;
         }
 
+        if (destination.startsWith(INVITATIONS_TOPIC_PREFIX)) {
+            return handleInvitationSubscription(destination, auth);
+        }
+
         String extractedId = extractListId(destination);
         if (!VALID_LIST_ID.matcher(extractedId).matches()) {
             logger.warn("Security Alert: Blocked malformed room subscription attempt");
@@ -82,6 +87,19 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
         }
 
         return validateUserAccess(extractedId, auth.getName());
+    }
+
+    private boolean handleInvitationSubscription(String destination, Authentication auth) {
+        String requestedEmail = destination.substring(INVITATIONS_TOPIC_PREFIX.length());
+        if (requestedEmail.isEmpty()) {
+            logger.warn("Security Alert: Blocked invitation subscription with empty email");
+            return false;
+        }
+        if (!requestedEmail.equals(auth.getName())) {
+            logger.warn("Security Alert: User {} attempted to subscribe to invitation topic of {}", auth.getName(), requestedEmail);
+            return false;
+        }
+        return true;
     }
 
     private Authentication getAuthenticatedUser(StompHeaderAccessor accessor) {

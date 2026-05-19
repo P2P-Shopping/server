@@ -439,6 +439,18 @@ public class ItemService {
         return mapToDTO(itemRepository.save(item));
     }
 
+    @Transactional
+    public ItemDTO claimItem(UUID itemId, String claimedByEmail) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
+
+        item.setClaimedBy(claimedByEmail);
+        item.setClaimedAt(claimedByEmail != null ? System.currentTimeMillis() : null);
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+
+        return mapToDTO(itemRepository.save(item));
+    }
+
     private void applySyncContent(Item item, String content) {
         try {
             ObjectMapper mapper = new ObjectMapper();
@@ -521,6 +533,8 @@ public class ItemService {
         if (item.getCatalogItem() != null) {
             dto.setCatalogId(item.getCatalogItem().getId());
         }
+        dto.setClaimedBy(item.getClaimedBy());
+        dto.setClaimedAt(item.getClaimedAt());
         return dto;
     }
 

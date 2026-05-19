@@ -11,6 +11,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -306,5 +307,58 @@ class ListSyncRouterServiceTest {
 
         assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
         assertEquals(0, calls.get());
+    }
+
+    @Test
+    void routeClaimItemDelegatesToStore() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+            payload.setClaimedBy("alice@test.com");
+            return payload;
+        });
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CLAIM_ITEM);
+        payload.setItemId("item-1");
+        payload.setClaimedBy("alice@test.com");
+
+        ListUpdatePayload result = service.route("list-1", payload);
+
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
+        assertEquals("alice@test.com", result.getClaimedBy());
+    }
+
+    @Test
+    void routeUnclaimItemDelegatesToStore() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> {
+            payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+            payload.setClaimedBy(null);
+            return payload;
+        });
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UNCLAIM_ITEM);
+        payload.setItemId("item-1");
+
+        ListUpdatePayload result = service.route("list-1", payload);
+
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
+        assertNull(result.getClaimedBy());
+    }
+
+    @Test
+    void routeClaimItemClearsMutableFieldsForBlankItemId() {
+        ListSyncRouterService service = new ListSyncRouterService((listId, payload) -> payload);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CLAIM_ITEM);
+        payload.setItemId("   ");
+        payload.setClaimedBy("alice@test.com");
+        payload.setContent("some content");
+
+        ListUpdatePayload result = service.route("list-1", payload);
+
+        assertNull(result.getContent());
+        assertNull(result.getChecked());
     }
 }
