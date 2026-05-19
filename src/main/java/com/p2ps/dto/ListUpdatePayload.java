@@ -22,6 +22,7 @@ public class ListUpdatePayload {
     private Boolean checked;
     private Long timestamp;
     private String status;
+    private String claimedBy;
 
     /**
      * Default constructor required for JSON deserialization by Jackson.
@@ -108,5 +109,13 @@ public class ListUpdatePayload {
             throw new IllegalArgumentException("Unsupported status: " + status);
         }
         this.status = status;
+    }
+
+    public String getClaimedBy() {
+        return claimedBy;
+    }
+
+    public void setClaimedBy(String claimedBy) {
+        this.claimedBy = claimedBy;
     }
 }

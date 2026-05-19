@@ -82,6 +82,24 @@ public class ShoppingListController {
         shoppingListService.shareList(listId, request.getEmail(), authentication.getName());
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{listId}/collaborators/{userId}")
+    public ResponseEntity<Void> removeCollaborator(
+            @PathVariable UUID listId,
+            @PathVariable Integer userId,
+            Authentication authentication) {
+        shoppingListService.removeCollaborator(listId, userId, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{listId}/collaborators/me")
+    public ResponseEntity<Void> leaveList(
+            @PathVariable UUID listId,
+            Authentication authentication) {
+        shoppingListService.leaveList(listId, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{currentListId}/import")
     public ResponseEntity<ShoppingListDTO> importItems(
             @PathVariable UUID currentListId,

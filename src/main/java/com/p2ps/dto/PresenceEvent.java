@@ -10,33 +10,18 @@ public class PresenceEvent {
      * The type of presence event.
      */
     public enum EventType {
-        /**
-         * Represents a user joining a room.
-         */
         JOIN,
-        /**
-         * Represents a user leaving a room.
-         */
         LEAVE,
-        /**
-         * Represents a user actively typing in a room.
-         */
         TYPING,
-        /**
-         * Represents a request for current room state.
-         */
         SYNC,
-        /**
-         * Represents a server-authoritative roster update.
-         */
         ROSTER_UPDATE
     }
 
-    /**
-     * The username of the user triggering the event.
-     */
     @com.fasterxml.jackson.annotation.JsonProperty("username")
     private String username;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("displayName")
+    private String displayName;
 
     @com.fasterxml.jackson.annotation.JsonProperty("eventType")
     private EventType eventType;
@@ -47,82 +32,28 @@ public class PresenceEvent {
     @com.fasterxml.jackson.annotation.JsonProperty("activeUsers")
     private java.util.Set<String> activeUsers;
 
-    /**
-     * Default no-args constructor required for Jackson deserialization.
-     */
+    @com.fasterxml.jackson.annotation.JsonProperty("displayNames")
+    private java.util.Map<String, String> displayNames;
+
     public PresenceEvent() {
-        // Required for Jackson deserialization by Spring internally
+        // Required for Jackson deserialization
     }
 
-    /**
-     * Gets the username of the user.
-     *
-     * @return the username
-     */
-    public String getUsername() {
-        return username;
-    }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
-    /**
-     * Sets the username of the user.
-     *
-     * @param username the username to set
-     */
-    public void setUsername(String username) {
-        this.username = username;
-    }
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 
-    /**
-     * Gets the type of the event.
-     *
-     * @return the event type
-     */
-    public EventType getEventType() {
-        return eventType;
-    }
+    public EventType getEventType() { return eventType; }
+    public void setEventType(EventType eventType) { this.eventType = eventType; }
 
-    /**
-     * Sets the type of the event.
-     *
-     * @param eventType the event type to set
-     */
-    public void setEventType(EventType eventType) {
-        this.eventType = eventType;
-    }
+    public String getListId() { return listId; }
+    public void setListId(String listId) { this.listId = listId; }
 
-    /**
-     * Gets the unique identifier of the list.
-     *
-     * @return the list ID
-     */
-    public String getListId() {
-        return listId;
-    }
+    public java.util.Set<String> getActiveUsers() { return activeUsers; }
+    public void setActiveUsers(java.util.Set<String> activeUsers) { this.activeUsers = activeUsers; }
 
-    /**
-     * Sets the unique identifier of the list.
-     *
-     * @param listId the list ID to set
-     */
-    public void setListId(String listId) {
-        this.listId = listId;
-    }
-
-    /**
-     * Gets the active users in the room.
-     *
-     * @return the set of active users
-     */
-    public java.util.Set<String> getActiveUsers() {
-        return activeUsers;
-    }
-
-    /**
-     * Sets the active users in the room.
-     *
-     * @param activeUsers the set of active users
-     */
-    public void setActiveUsers(java.util.Set<String> activeUsers) {
-        this.activeUsers = activeUsers;
-    }
+    public java.util.Map<String, String> getDisplayNames() { return displayNames; }
+    public void setDisplayNames(java.util.Map<String, String> displayNames) { this.displayNames = displayNames; }
 }
