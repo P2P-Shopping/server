@@ -44,7 +44,7 @@ class LocationProcessorWorkerTest {
     private LocationProcessorWorker worker;
 
     @Test
-    @DisplayName("Trebuie să execute cu succes DELETE și apoi INSERT pentru recalcularea centrelor")
+    @DisplayName("Trebuie să execute cu succes UPSERT pentru recalcularea centrelor")
     void processAndCalculateCenters_Success() throws Exception {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
@@ -53,23 +53,22 @@ class LocationProcessorWorkerTest {
         when(jdbcTemplate.update(anyString())).thenReturn(5);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.processAndCalculateCenters());
-        verify(jdbcTemplate, times(2)).update(anyString());
+        verify(jdbcTemplate, times(1)).update(anyString());
     }
 
     @Test
-    @DisplayName("Trebuie să arunce excepția mai departe dacă interogarea SQL eșuează (pentru a declanșa Rollback)")
+    @DisplayName("Trebuie să arunce excepția IllegalStateException dacă interogarea SQL eșuează")
     void processAndCalculateCenters_ThrowsExceptionOnError() throws Exception {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
         when(jdbcTemplate.update(anyString()))
-                .thenReturn(10)
-                .thenThrow(new RuntimeException("Database error during insert"));
+                .thenThrow(new RuntimeException("Database error during update"));
 
-        assertThrows(RuntimeException.class, worker::processAndCalculateCenters);
+        assertThrows(IllegalStateException.class, worker::processAndCalculateCenters);
 
-        verify(jdbcTemplate, times(2)).update(anyString());
+        verify(jdbcTemplate, times(1)).update(anyString());
     }
 
     @Test
