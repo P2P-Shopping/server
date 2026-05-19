@@ -98,7 +98,7 @@ class RoutingPerformanceBenchmarkTest {
 
         // Executăm cererile ÎN PARALEL (Multithreading)
         IntStream.range(0, numSimulations).parallel().forEach(ignored -> {
-            RoutingRequest request = new RoutingRequest(userLat, userLng, productIds, 0); // Eager routing (lazyN=0)
+            RoutingRequest request = new RoutingRequest(userLat, userLng, productIds, null, 0); // Eager routing (lazyN=0) // wait
             RoutingResponse response = routingService.calculateOptimalRoute(request);
             assertTrue(response.getTotalDistanceMeters() > 0, "Distanța trebuie să fie calculată");
         });

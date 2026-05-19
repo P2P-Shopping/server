@@ -47,15 +47,19 @@ public class RoutingService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
-        logger.info("Calculez ruta pentru {} produse de la ({}, {})",
+        logger.info("Calculez ruta pentru {} produse de la ({}, {}), storeId={}",
                 request.getProductIds() == null ? 0 : request.getProductIds().size(),
-                request.getUserLat(), request.getUserLng());
+                request.getUserLat(), request.getUserLng(), request.getStoreId());
 
         List<String> warnings = new ArrayList<>();
 
-        String storeId = findStoreForUser(request.getUserLat(), request.getUserLng());
+        String storeId = request.getStoreId();
+        if (storeId == null || storeId.isBlank()) {
+            storeId = findStoreForUser(request.getUserLat(), request.getUserLng());
+        }
+
         if (storeId == null) {
-            logger.warn("Userul nu se afla in niciun magazin cunoscut.");
+            logger.warn("Userul nu se afla in niciun magazin cunoscut si nici nu s-a trimis un storeId explicitly.");
             RoutingResponse errorResponse = new RoutingResponse();
             errorResponse.setStatus("error");
             errorResponse.setWarnings(List.of("Nu esti in niciun magazin cunoscut."));
@@ -163,17 +167,62 @@ public class RoutingService {
     private List<ProductLocation> getProductLocations(List<String> productIds, String storeId, List<String> warnings) {
         if (productIds == null || productIds.isEmpty()) return List.of();
 
-        List<ProductLocation> locations = queryInventoryMap(productIds, storeId, warnings);
+        // 1. Încercăm să găsim locațiile rafinate în store_inventory_map
+        List<ProductLocation> locations = new ArrayList<>(queryInventoryMap(productIds, storeId, warnings));
 
-        if (locations.isEmpty()) {
-            logger.info("store_inventory_map goala - fallback la raw_user_pings");
-            locations = queryRawPingsCentroid(productIds, storeId);
+        // 2. Identificăm produsele care lipsesc din hartă
+        Set<String> foundIdsAtFirstPass = locations.stream()
+                .map(ProductLocation::itemId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<String> missingFromMap = productIds.stream()
+                .filter(id -> !foundIdsAtFirstPass.contains(id))
+                .toList();
+
+        // 3. Pentru produsele lipsă, facem fallback la centrul puncetelor brute (raw_user_pings)
+        if (!missingFromMap.isEmpty()) {
+            logger.info("Produsele {} lipsesc din store_inventory_map - fallback la raw_user_pings", missingFromMap);
+            List<ProductLocation> fallbackLocations = queryRawPingsCentroid(missingFromMap, storeId);
+
+            for (ProductLocation loc : fallbackLocations) {
+                warnings.add(String.format("Produsul '%s' a fost găsit, dar locația sa este aproximativă.", loc.name()));
+                locations.add(loc);
+            }
+        }
+
+        // 4. Identificăm produsele care lipsesc COMPLET (nici în map, nici în pings) pentru a da warning final
+        Set<String> finalFoundIds = locations.stream()
+                .map(ProductLocation::itemId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<String> totallyMissingIds = productIds.stream()
+                .filter(id -> !finalFoundIds.contains(id))
+                .toList();
+
+        if (!totallyMissingIds.isEmpty()) {
+            addMissingProductsWarnings(totallyMissingIds, warnings);
         }
 
         return locations;
     }
 
+    private void addMissingProductsWarnings(List<String> missingIds, List<String> warnings) {
+        String missingPlaceholders = String.join(", ", Collections.nCopies(missingIds.size(), "?"));
+        String namesSql = String.format("SELECT id::text, name FROM items WHERE id::text IN (%s)", missingPlaceholders);
+
+        Map<String, String> idToName = new HashMap<>();
+        jdbcTemplate.queryForList(namesSql, missingIds.toArray())
+                .forEach(row -> idToName.put((String) row.get("id"), (String) row.get("name")));
+
+        for (String missingId : missingIds) {
+            String itemName = idToName.getOrDefault(missingId, missingId);
+            warnings.add("Nu am găsit '" + itemName + "' în acest magazin.");
+        }
+    }
+
     private List<ProductLocation> queryInventoryMap(List<String> productIds, String storeId, List<String> warnings) {
+        if (productIds == null || productIds.isEmpty()) return List.of();
+
         String placeholders = String.join(", ", Collections.nCopies(productIds.size(), "?"));
 
         String sql = """
@@ -237,41 +286,13 @@ public class RoutingService {
         for (ProductLocation loc : results) {
             if (loc.confidenceScore() < CONFIDENCE_THRESHOLD) {
                 warnings.add(String.format(
-                        "Locatia produsului '%s' are un grad de incredere scazut (%.0f%%).",
+                        "E posibil ca produsul '%s' sa nu mai existe in magazin (grad de incredere scazut: %.0f%%).",
                         loc.name(), loc.confidenceScore() * 100
                 ));
             }
         }
 
-        // Resolve names for products that were NOT found, so warnings are human-readable.
-        // We do a single IN-query on `items` instead of N round-trips.
-        Set<String> foundIds = results.stream()
-                .map(ProductLocation::itemId)
-                .collect(java.util.stream.Collectors.toSet());
-
-        List<String> missingIds = productIds.stream()
-                .filter(id -> !foundIds.contains(id))
-                .toList();
-
-        if (!missingIds.isEmpty()) {
-            String missingPlaceholders = String.join(", ",
-                    Collections.nCopies(missingIds.size(), "?"));
-            String namesSql = String.format(
-                    "SELECT id::text, name FROM items WHERE id::text IN (%s)",
-                    missingPlaceholders);
-
-            Map<String, String> idToName = new HashMap<>();
-            jdbcTemplate.queryForList(namesSql, missingIds.toArray())
-                    .forEach(row -> idToName.put(
-                            (String) row.get("id"),
-                            (String) row.get("name")));
-
-            for (String missingId : missingIds) {
-                String itemName = idToName.getOrDefault(missingId, missingId);
-                warnings.add("Nu am găsit '" + itemName + "' în acest magazin.");
-            }
-        }
-
+        // Returnăm doar rezultatele găsite. Logic-ul de missing a fost mutat în getProductLocations.
         return results;
     }
 
@@ -291,7 +312,7 @@ public class RoutingService {
                     ri.name AS name,
                     AVG(ST_Y(rup.location_point)) AS lat,
                     AVG(ST_X(rup.location_point)) AS lng,
-                    0.0 AS confidence_score
+                    0.1 AS confidence_score -- Mic grad de încredere pentru fallback
                 FROM requested_items ri
                 JOIN items located_item
                   ON located_item.id = ri.id
@@ -318,7 +339,7 @@ public class RoutingService {
                   )
                 JOIN raw_user_pings rup ON rup.item_id = located_item.id
                 WHERE rup.store_id::text = ?
-                  AND rup.accuracy_m < 12.0
+                  AND rup.accuracy_m < 30.0
                 GROUP BY ri.id, ri.name
                 """.formatted(placeholders);
 
