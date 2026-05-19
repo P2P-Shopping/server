@@ -1371,4 +1371,55 @@ class ItemServiceTest {
                 .isInstanceOf(ListAccessDeniedException.class);
     }
 
+    // ==========================================
+    // CLAIM ITEM TESTS
+    // ==========================================
+
+    @Test
+    void claimItem_SetsClaimedByAndTimestamp() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ItemDTO result = itemService.claimItem(itemId, "alice@test.com");
+
+        assertThat(result.getClaimedBy()).isEqualTo("alice@test.com");
+        assertThat(result.getClaimedAt()).isNotNull();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void claimItem_ClearsClaimWhenEmailIsNull() {
+        mockItem.setClaimedBy("alice@test.com");
+        mockItem.setClaimedAt(1000L);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ItemDTO result = itemService.claimItem(itemId, null);
+
+        assertThat(result.getClaimedBy()).isNull();
+        assertThat(result.getClaimedAt()).isNull();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void claimItem_ThrowsWhenItemNotFound() {
+        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.claimItem(itemId, "alice@test.com"))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    void claimItem_UpdatesLastUpdatedTimestamp() {
+        mockItem.setLastUpdatedTimestamp(1000L);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itemService.claimItem(itemId, "alice@test.com");
+
+        assertThat(mockItem.getLastUpdatedTimestamp()).isGreaterThan(1000L);
+    }
+
 }

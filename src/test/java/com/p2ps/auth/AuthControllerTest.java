@@ -6,9 +6,9 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.auth.security.JwtUtil;
 import com.p2ps.auth.security.dto.LoginRequest;
 import com.p2ps.auth.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,27 +17,31 @@ import org.springframework.security.core.Authentication;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
 class AuthControllerTest {
 
     @Autowired
+    private WebApplicationContext context;
+
     private MockMvc mockMvc;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @MockitoBean
     private UserService userService;
@@ -48,6 +52,13 @@ class AuthControllerTest {
     @MockitoBean
     private JwtUtil jwtUtil;
 
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders
+                .webAppContextSetup(context)
+                .apply(springSecurity())
+                .build();
+    }
 
     @Test
     void register_ShouldReturnCreated() throws Exception {
@@ -84,7 +95,8 @@ class AuthControllerTest {
         request.setEmail("test@example.com");
         request.setPassword("Password123!");
 
-        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                request.getEmail(), request.getPassword());
 
         Users mockUser = new Users();
         mockUser.setEmail(request.getEmail());
@@ -93,7 +105,8 @@ class AuthControllerTest {
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
         when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
-        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+        when(userService.findByEmail(request.getEmail()))
+                .thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
                         .header("X-Return-Token", "true")
@@ -116,7 +129,8 @@ class AuthControllerTest {
         request.setEmail("test@example.com");
         request.setPassword("Password123!");
 
-        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                request.getEmail(), request.getPassword());
         Users mockUser = new Users();
         mockUser.setEmail(request.getEmail());
         mockUser.setFirstName("John");
@@ -124,7 +138,8 @@ class AuthControllerTest {
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
         when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
-        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+        when(userService.findByEmail(request.getEmail()))
+                .thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -140,12 +155,13 @@ class AuthControllerTest {
         request.setPassword("wrongpass");
 
         when(authenticationManager.authenticate(any()))
-                .thenThrow(new org.springframework.security.authentication.BadCredentialsException("Bad credentials"));
+                .thenThrow(new org.springframework.security.authentication
+                        .BadCredentialsException("Bad credentials"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized()); // Aici verificam ca returneaza 401
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -162,7 +178,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict()); // Testăm ramura de 409
+                .andExpect(status().isConflict());
     }
 
     @Test
@@ -170,8 +186,8 @@ class AuthControllerTest {
         RegisterRequest request = new RegisterRequest();
         request.setEmail("valid@email.com");
         request.setPassword("Password123!");
-        request.setFirstName(""); // Blank
-        request.setLastName("");  // Blank
+        request.setFirstName("");
+        request.setLastName("");
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -187,7 +203,8 @@ class AuthControllerTest {
         mockUser.setFirstName("John");
         mockUser.setId(1);
 
-        when(userService.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(mockUser));
+        when(userService.findByEmail("test@example.com"))
+                .thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isOk())
@@ -197,7 +214,6 @@ class AuthControllerTest {
 
     @Test
     void me_ShouldReturnUnauthorized_WhenNotAuthenticated() throws Exception {
-        // No @WithMockUser, context is empty
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());
     }
@@ -218,7 +234,8 @@ class AuthControllerTest {
         request.setEmail("test@example.com");
         request.setPassword("Password123!");
 
-        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                request.getEmail(), request.getPassword());
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
         when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mocked-jwt-token-123");
@@ -234,7 +251,8 @@ class AuthControllerTest {
     @Test
     @org.springframework.security.test.context.support.WithMockUser(username = "missing@example.com")
     void me_ShouldReturnUnauthorized_WhenUserRecordMissingInDb() throws Exception {
-        when(userService.findByEmail("missing@example.com")).thenReturn(java.util.Optional.empty());
+        when(userService.findByEmail("missing@example.com"))
+                .thenReturn(java.util.Optional.empty());
 
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());
@@ -246,7 +264,8 @@ class AuthControllerTest {
         request.setEmail("test@example.com");
         request.setPassword("Password123!");
 
-        Authentication auth = new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                request.getEmail(), request.getPassword());
         Users mockUser = new Users();
         mockUser.setEmail(request.getEmail());
         mockUser.setFirstName("John");
@@ -254,10 +273,11 @@ class AuthControllerTest {
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(auth);
         when(jwtUtil.generateToken(anyString(), anyInt())).thenReturn("mock-token");
-        when(userService.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(mockUser));
+        when(userService.findByEmail(request.getEmail()))
+                .thenReturn(java.util.Optional.of(mockUser));
 
         mockMvc.perform(post("/api/auth/login")
-                        .secure(true) // Simulate HTTPS
+                        .secure(true)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -267,7 +287,7 @@ class AuthControllerTest {
     @Test
     void logout_ShouldSetSecureCookie_WhenRequestIsSecure() throws Exception {
         mockMvc.perform(post("/api/auth/logout")
-                        .secure(true)) // Simulate HTTPS
+                        .secure(true))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Set-Cookie", containsString("Secure")));
     }

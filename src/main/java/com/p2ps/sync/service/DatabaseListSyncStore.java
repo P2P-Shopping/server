@@ -1,5 +1,6 @@
 package com.p2ps.sync.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.dto.ActionType;
 import com.p2ps.dto.ListUpdatePayload;
 import com.p2ps.lists.dto.ItemDTO;
@@ -16,6 +17,7 @@ import java.util.UUID;
 public class DatabaseListSyncStore implements ListSyncStore {
 
     private static final Logger logger = LoggerFactory.getLogger(DatabaseListSyncStore.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final ItemService itemService;
 
@@ -39,23 +41,53 @@ public class DatabaseListSyncStore implements ListSyncStore {
             return payload;
         }
 
-        UUID uuid;
-        try {
-            uuid = UUID.fromString(itemId);
-        } catch (IllegalArgumentException _) {
-            logger.warn("Ignoring sync update for non-UUID itemId={}, listId={}", itemId, listId);
+        UUID uuid = parseUuid(itemId, listId);
+        if (uuid == null) {
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;
         }
 
-        // For ADD and DELETE, the REST API has already performed the persistence.
-        // We just need to mark as SUCCESS so the broker broadcasts it to other clients.
-        if (action == ActionType.ADD || action == ActionType.DELETE) {
+        return switch (action) {
+            case ADD, DELETE -> handleAddOrDelete(payload);
+            case CLAIM_ITEM, UNCLAIM_ITEM -> handleClaim(listId, itemId, action, uuid, payload);
+            case CHECK_OFF, UPDATE -> handleUpdate(listId, itemId, action, uuid, payload);
+            default -> payload;
+        };
+    }
+
+    private UUID parseUuid(String itemId, String listId) {
+        try {
+            return UUID.fromString(itemId);
+        } catch (IllegalArgumentException _) {
+            logger.warn("Ignoring sync update for non-UUID itemId={}, listId={}", itemId, listId);
+            return null;
+        }
+    }
+
+    private ListUpdatePayload handleAddOrDelete(ListUpdatePayload payload) {
+        payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
+        return payload;
+    }
+
+    private ListUpdatePayload handleClaim(String listId, String itemId, ActionType action, UUID uuid, ListUpdatePayload payload) {
+        try {
+            String claimedByEmail = action == ActionType.CLAIM_ITEM ? payload.getClaimedBy() : null;
+            ItemDTO updatedItem = itemService.claimItem(uuid, claimedByEmail);
+            payload.setClaimedBy(updatedItem.getClaimedBy());
+            payload.setContent(objectMapper.writeValueAsString(updatedItem));
+            payload.setTimestamp(updatedItem.getLastUpdatedTimestamp());
+            payload.setChecked(updatedItem.isChecked());
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
+        } catch (Exception ex) {
+            logger.error("Claim update failed for listId={}, itemId={}, action={}",
+                listId, itemId, action, ex);
+            payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
+            return payload;
         }
+    }
 
-        // For CHECK_OFF and UPDATE, we perform a persistence check/update via ItemService.
+    private ListUpdatePayload handleUpdate(String listId, String itemId, ActionType action, UUID uuid, ListUpdatePayload payload) {
         try {
             ItemDTO updatedItem = itemService.updateItemFromSync(uuid, payload);
             payload.setChecked(updatedItem.isChecked());
@@ -63,7 +95,7 @@ public class DatabaseListSyncStore implements ListSyncStore {
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);
             return payload;
         } catch (Exception ex) {
-            logger.error("Sync update failed for listId={}, itemId={}, action={}", 
+            logger.error("Sync update failed for listId={}, itemId={}, action={}",
                 listId, itemId, action, ex);
             payload.setStatus(ListUpdatePayload.STATUS_REJECTION);
             return payload;

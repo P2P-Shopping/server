@@ -30,4 +30,6 @@ public class ItemDTO {
     private Long createdAt;
     private String externalItemId;
     private UUID catalogId;
+    private String claimedBy;
+    private Long claimedAt;
 }

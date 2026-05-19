@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2ps.exception.GlobalExceptionHandler;
 import com.p2ps.lists.dto.CreateListRequest;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
+import com.p2ps.lists.dto.ShareListRequest;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.dto.UpdateListRequest;
 import com.p2ps.lists.exception.ListAccessDeniedException;
@@ -292,5 +293,71 @@ class ShoppingListControllerTest {
                 .andExpect(jsonPath("$.message").value("Validation Error"));
 
         verify(shoppingListService, never()).importItems(any(), any(), any());
+    }
+
+    @Test
+    void removeCollaboratorShouldReturnNoContent() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("owner@example.com", null)))
+                .andExpect(status().isNoContent());
+
+        verify(shoppingListService).removeCollaborator(listId, userId, "owner@example.com");
+    }
+
+    @Test
+    void removeCollaboratorShouldReturnForbiddenWhenNotOwner() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        doThrow(new ListAccessDeniedException("Only the owner can remove collaborators"))
+                .when(shoppingListService)
+                .removeCollaborator(listId, userId, "other@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("other@example.com", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Forbidden"));
+    }
+
+    @Test
+    void removeCollaboratorShouldReturnNotFoundWhenCollaboratorMissing() throws Exception {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 99;
+        doThrow(new ListUserNotFoundException("Collaborator not found on this list"))
+                .when(shoppingListService)
+                .removeCollaborator(listId, userId, "owner@example.com");
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/{userId}", listId, userId)
+                        .principal(new UsernamePasswordAuthenticationToken("owner@example.com", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.details").value("Collaborator not found on this list"));
+    }
+
+    @Test
+    void shareListShouldReturnNoContent() throws Exception {
+        UUID listId = UUID.randomUUID();
+        ShareListRequest request = new ShareListRequest();
+        request.setEmail("collab@example.com");
+
+        mockMvc.perform(post("/api/lists/{listId}/share", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("owner@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        verify(shoppingListService).shareList(listId, "collab@example.com", "owner@example.com");
+    }
+
+    @Test
+    void leaveListShouldReturnNoContent() throws Exception {
+        UUID listId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/lists/{listId}/collaborators/me", listId)
+                        .principal(new UsernamePasswordAuthenticationToken("collab@example.com", null)))
+                .andExpect(status().isNoContent());
+
+        verify(shoppingListService).leaveList(listId, "collab@example.com");
     }
 }

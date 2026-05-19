@@ -20,6 +20,9 @@ class ListUpdatePayloadTest {
 
         payload.setContent("Apples");
         assertEquals("Apples", payload.getContent());
+
+        payload.setClaimedBy("user@example.com");
+        assertEquals("user@example.com", payload.getClaimedBy());
     }
 
     @Test
@@ -28,6 +31,7 @@ class ListUpdatePayloadTest {
         original.setAction(ActionType.ADD);
         original.setItemId("item-123");
         original.setContent("Apples");
+        original.setClaimedBy("user@example.com");
 
         String json = objectMapper.writeValueAsString(original);
         ListUpdatePayload deserialized = objectMapper.readValue(json, ListUpdatePayload.class);
@@ -35,6 +39,26 @@ class ListUpdatePayloadTest {
         assertEquals(original.getAction(), deserialized.getAction());
         assertEquals(original.getItemId(), deserialized.getItemId());
         assertEquals(original.getContent(), deserialized.getContent());
+        assertEquals(original.getClaimedBy(), deserialized.getClaimedBy());
+    }
+
+    @Test
+    void testClaimItemDeserialization() throws Exception {
+        String json = "{\"action\":\"CLAIM_ITEM\",\"itemId\":\"item-1\",\"claimedBy\":\"alice@test.com\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.CLAIM_ITEM, payload.getAction());
+        assertEquals("item-1", payload.getItemId());
+        assertEquals("alice@test.com", payload.getClaimedBy());
+    }
+
+    @Test
+    void testUnclaimItemDeserialization() throws Exception {
+        String json = "{\"action\":\"UNCLAIM_ITEM\",\"itemId\":\"item-1\"}";
+        ListUpdatePayload payload = objectMapper.readValue(json, ListUpdatePayload.class);
+
+        assertEquals(ActionType.UNCLAIM_ITEM, payload.getAction());
+        assertNull(payload.getClaimedBy());
     }
 
     @Test
