@@ -47,12 +47,12 @@ public class ListCollaborator {
     }
 
     public static class ListCollaboratorId implements Serializable {
-        private transient ShoppingList shoppingList;
-        private transient Users user;
+        private UUID shoppingList;
+        private Integer user;
 
         public ListCollaboratorId() {}
 
-        public ListCollaboratorId(ShoppingList shoppingList, Users user) {
+        public ListCollaboratorId(UUID shoppingList, Integer user) {
             this.shoppingList = shoppingList;
             this.user = user;
         }
@@ -62,19 +62,13 @@ public class ListCollaborator {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             ListCollaboratorId that = (ListCollaboratorId) o;
-            return Objects.equals(
-                    shoppingList != null ? shoppingList.getId() : null,
-                    that.shoppingList != null ? that.shoppingList.getId() : null) &&
-                    Objects.equals(
-                    user != null ? user.getId() : null,
-                    that.user != null ? that.user.getId() : null);
+            return Objects.equals(shoppingList, that.shoppingList) &&
+                    Objects.equals(user, that.user);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(
-                    shoppingList != null ? shoppingList.getId() : null,
-                    user != null ? user.getId() : null);
+            return Objects.hash(shoppingList, user);
         }
     }
 }

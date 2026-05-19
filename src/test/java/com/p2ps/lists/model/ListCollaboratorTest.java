@@ -74,23 +74,19 @@ class ListCollaboratorTest {
 
     @Test
     void listCollaboratorId_parameterizedConstructor() {
-        Users user = new Users();
-        user.setId(1);
-        ShoppingList list = new ShoppingList();
-        list.setId(UUID.randomUUID());
+        UUID listId = UUID.randomUUID();
+        Integer userId = 1;
 
-        ListCollaborator.ListCollaboratorId id = new ListCollaborator.ListCollaboratorId(list, user);
+        ListCollaborator.ListCollaboratorId id = new ListCollaborator.ListCollaboratorId(listId, userId);
         assertThat(id).isNotNull();
     }
 
     @Test
     void listCollaboratorId_equals_sameInstance() {
-        Users user = new Users();
-        user.setId(1);
-        ShoppingList list = new ShoppingList();
-        list.setId(UUID.randomUUID());
+        UUID listId = UUID.randomUUID();
+        Integer userId = 1;
 
-        ListCollaborator.ListCollaboratorId id = new ListCollaborator.ListCollaboratorId(list, user);
+        ListCollaborator.ListCollaboratorId id = new ListCollaborator.ListCollaboratorId(listId, userId);
         assertThat(id.equals(id)).isTrue();
     }
 
@@ -109,32 +105,22 @@ class ListCollaboratorTest {
     @Test
     void listCollaboratorId_equals_equalIds() {
         UUID listId = UUID.randomUUID();
-        Users user1 = new Users();
-        user1.setId(1);
-        Users user2 = new Users();
-        user2.setId(1);
-        ShoppingList list1 = new ShoppingList();
-        list1.setId(listId);
-        ShoppingList list2 = new ShoppingList();
-        list2.setId(listId);
+        Integer userId = 1;
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list1, user1);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list2, user2);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId, userId);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(listId, userId);
 
         assertThat(id1).isEqualTo(id2);
     }
 
     @Test
     void listCollaboratorId_notEqual_differentListId() {
-        Users user = new Users();
-        user.setId(1);
-        ShoppingList list1 = new ShoppingList();
-        list1.setId(UUID.randomUUID());
-        ShoppingList list2 = new ShoppingList();
-        list2.setId(UUID.randomUUID());
+        Integer userId = 1;
+        UUID listId1 = UUID.randomUUID();
+        UUID listId2 = UUID.randomUUID();
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list1, user);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list2, user);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId1, userId);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(listId2, userId);
 
         assertThat(id1).isNotEqualTo(id2);
     }
@@ -142,15 +128,9 @@ class ListCollaboratorTest {
     @Test
     void listCollaboratorId_notEqual_differentUserId() {
         UUID listId = UUID.randomUUID();
-        Users user1 = new Users();
-        user1.setId(1);
-        Users user2 = new Users();
-        user2.setId(2);
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list, user1);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list, user2);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId, 1);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(listId, 2);
 
         assertThat(id1).isNotEqualTo(id2);
     }
@@ -164,13 +144,11 @@ class ListCollaboratorTest {
 
     @Test
     void listCollaboratorId_equals_oneNullField() {
-        Users user = new Users();
-        user.setId(1);
-        ShoppingList list = new ShoppingList();
-        list.setId(UUID.randomUUID());
+        UUID listId = UUID.randomUUID();
+        Integer userId = 1;
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list, user);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(null, user);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId, userId);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(null, userId);
 
         assertThat(id1).isNotEqualTo(id2);
     }
@@ -178,17 +156,10 @@ class ListCollaboratorTest {
     @Test
     void listCollaboratorId_hashCode_equalIds() {
         UUID listId = UUID.randomUUID();
-        Users user1 = new Users();
-        user1.setId(1);
-        Users user2 = new Users();
-        user2.setId(1);
-        ShoppingList list1 = new ShoppingList();
-        list1.setId(listId);
-        ShoppingList list2 = new ShoppingList();
-        list2.setId(listId);
+        Integer userId = 1;
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list1, user1);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list2, user2);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId, userId);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(listId, userId);
 
         assertThat(id1).hasSameHashCodeAs(id2);
     }
@@ -202,15 +173,10 @@ class ListCollaboratorTest {
 
     @Test
     void listCollaboratorId_hashCode_differentIds() {
-        Users user1 = new Users();
-        user1.setId(1);
-        Users user2 = new Users();
-        user2.setId(2);
-        ShoppingList list = new ShoppingList();
-        list.setId(UUID.randomUUID());
+        UUID listId = UUID.randomUUID();
 
-        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(list, user1);
-        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(list, user2);
+        ListCollaborator.ListCollaboratorId id1 = new ListCollaborator.ListCollaboratorId(listId, 1);
+        ListCollaborator.ListCollaboratorId id2 = new ListCollaborator.ListCollaboratorId(listId, 2);
 
         assertThat(id1.hashCode()).isNotEqualTo(id2.hashCode());
     }
