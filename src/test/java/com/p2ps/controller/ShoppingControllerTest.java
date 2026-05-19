@@ -3,9 +3,11 @@ package com.p2ps.controller;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.service.AiOrchestrationService;
-import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.service.ItemService;
 import com.p2ps.lists.service.ShoppingListService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +39,10 @@ class ShoppingControllerTest {
     private AiOrchestrationService aiOrchestrationService;
 
     @Mock
-    private CatalogService catalogService;
+    private ItemService itemService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private ShoppingController shoppingController;
@@ -45,6 +50,7 @@ class ShoppingControllerTest {
     private UUID listId;
     private String userEmail;
     private ShoppingListDTO shoppingListDTO;
+    private Users user;
 
     @BeforeEach
     void setUp() {
@@ -52,6 +58,9 @@ class ShoppingControllerTest {
         userEmail = "test@example.com";
         shoppingListDTO = new ShoppingListDTO();
         shoppingListDTO.setId(listId);
+        user = new Users();
+        user.setId(1);
+        user.setEmail(userEmail);
 
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
         org.mockito.Mockito.lenient().when(authentication.getName()).thenReturn(userEmail);
@@ -121,10 +130,11 @@ class ShoppingControllerTest {
 
         when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
+        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
 
         ProductCatalog catalogProduct = new ProductCatalog();
-        when(catalogService.recordPurchase(any(), any(), any(), any(), any()))
-                .thenReturn(catalogProduct);
+        when(itemService.recordReceiptItem(any(), any(), any()))
+                .thenReturn(new ItemService.ReceiptProcessingResult(false, catalogProduct));
 
         MockMultipartFile receipt = new MockMultipartFile(
                 "receipt",
@@ -145,7 +155,7 @@ class ShoppingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
         verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), any());
-        verify(catalogService).recordPurchase(any(), any(), any(), any(), any());
+        verify(itemService).recordReceiptItem(any(), eq("Kaufland"), eq(user));
         verify(shoppingListService).markReceiptItemPurchased(eq(listId), any(), eq(catalogProduct), eq(userEmail));
     }
 
@@ -162,6 +172,7 @@ class ShoppingControllerTest {
 
         when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
                 .thenReturn(aiResponse);
+        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
 
         MockMultipartFile receipt = new MockMultipartFile(
                 "receipt",
@@ -182,7 +193,45 @@ class ShoppingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
         verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), any());
-        verify(catalogService, org.mockito.Mockito.never()).recordPurchase(any(), any(), any(), any(), any());
+        verify(itemService, org.mockito.Mockito.never()).recordReceiptItem(any(), any(), any());
+    }
+
+    @Test
+    void finishShopping_withReceiptJunkItem_shouldIgnoreIt() {
+        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
+                .thenReturn(shoppingListDTO);
+
+        AiGenerationResponse aiResponse = new AiGenerationResponse();
+        ParsedItemResponse item = new ParsedItemResponse();
+        item.setGenericName("Sacosa");
+        item.setPrice(new BigDecimal("1.50"));
+        aiResponse.setItems(java.util.List.of(item));
+
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
+                .thenReturn(aiResponse);
+        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
+        when(itemService.recordReceiptItem(any(), any(), any()))
+                .thenReturn(ItemService.ReceiptProcessingResult.createIgnored());
+
+        MockMultipartFile receipt = new MockMultipartFile(
+                "receipt",
+                "receipt.jpg",
+                "image/jpeg",
+                "fake-image-content".getBytes()
+        );
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        var response = shoppingController.finishShopping(
+                "Kaufland",
+                listId,
+                receipt,
+                authentication
+        );
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(itemService).recordReceiptItem(any(), eq("Kaufland"), eq(user));
+        verify(shoppingListService, org.mockito.Mockito.never()).markReceiptItemPurchased(any(), any(), any(), any());
     }
 
     @org.junit.jupiter.params.ParameterizedTest

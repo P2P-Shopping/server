@@ -3,8 +3,10 @@ package com.p2ps.controller;
 import com.p2ps.ai.dto.AiGenerationResponse;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.service.AiOrchestrationService;
-import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.auth.model.Users;
+import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.lists.dto.ShoppingListDTO;
+import com.p2ps.lists.service.ItemService;
 import com.p2ps.lists.service.ShoppingListService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,15 +25,18 @@ public class ShoppingController {
 
     private final ShoppingListService shoppingListService;
     private final AiOrchestrationService aiOrchestrationService;
-    private final CatalogService catalogService;
+    private final ItemService itemService;
+    private final UserRepository userRepository;
 
     public ShoppingController(
             ShoppingListService shoppingListService,
             AiOrchestrationService aiOrchestrationService,
-            CatalogService catalogService) {
+            ItemService itemService,
+            UserRepository userRepository) {
         this.shoppingListService = shoppingListService;
         this.aiOrchestrationService = aiOrchestrationService;
-        this.catalogService = catalogService;
+        this.itemService = itemService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping(value = "/finish", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -53,13 +58,15 @@ public class ShoppingController {
         );
 
         if (receipt != null) {
-            processReceiptAndUpdateCatalog(receipt, storeName, listId, userEmail);
+            Users user = userRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            processReceipt(receipt, storeName, listId, userEmail, user);
         }
 
         return ResponseEntity.ok(updatedList);
     }
 
-    private void processReceiptAndUpdateCatalog(MultipartFile receipt, String storeName, UUID listId, String userEmail) {
+    private void processReceipt(MultipartFile receipt, String storeName, UUID listId, String userEmail, Users user) {
         String receiptPrompt = "This is a shopping receipt from " + storeName +
                 ". Extract every purchased product. Prefer real catalog products when possible, including specificName, brand, category, and price.";
 
@@ -77,14 +84,12 @@ public class ShoppingController {
                 continue;
             }
 
-            var recordedProduct = catalogService.recordPurchase(
-                    item.getGenericName(),
-                    specificName,
-                    item.getBrand(),
-                    item.getCategory(),
-                    item.getPrice()
-            );
-            shoppingListService.markReceiptItemPurchased(listId, item, recordedProduct, userEmail);
+            ItemService.ReceiptProcessingResult processingResult = itemService.recordReceiptItem(item, storeName, user);
+            if (processingResult.ignored()) {
+                continue;
+            }
+
+            shoppingListService.markReceiptItemPurchased(listId, item, processingResult.catalogMatch(), userEmail);
         }
     }
 

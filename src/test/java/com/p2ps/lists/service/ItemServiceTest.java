@@ -1,9 +1,11 @@
 package com.p2ps.lists.service;
 
+import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.ai.service.AiService;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.catalog.service.CatalogService;
+import com.p2ps.catalog.service.StorePriceService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -57,6 +59,9 @@ class ItemServiceTest {
 
     @Mock
     private AiService aiService;
+
+    @Mock
+    private StorePriceService storePriceService;
 
     @InjectMocks
     private ItemService itemService;
@@ -183,6 +188,43 @@ class ItemServiceTest {
         verify(historyRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getCatalogItem()).isNull();
 
+        verify(catalogRepository, never()).save(any());
+        verify(catalogService, never()).recordPurchase(anyString(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void recordReceiptItem_shouldIgnoreJunkItems() {
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setSpecificName("Garantie Extinsa TV");
+        receiptItem.setPrice(new BigDecimal("99.99"));
+
+        ItemService.ReceiptProcessingResult result = itemService.recordReceiptItem(receiptItem, "Kaufland", mockUser);
+
+        assertThat(result.ignored()).isTrue();
+        assertThat(result.catalogMatch()).isNull();
+        verify(historyRepository, never()).save(any());
+        verify(catalogRepository, never()).findById(any());
+    }
+
+    @Test
+    void recordReceiptItem_shouldUseCatalogIdAndSaveOnlyToHistory() {
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("Lapte");
+        receiptItem.setSpecificName("Lapte Zuzu");
+        receiptItem.setCatalogId(UUID.randomUUID().toString());
+        receiptItem.setPrice(new BigDecimal("8.99"));
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.fromString(receiptItem.getCatalogId()));
+
+        when(catalogRepository.findById(catalogProduct.getId())).thenReturn(Optional.of(catalogProduct));
+        when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Lapte Zuzu")).thenReturn(null);
+
+        ItemService.ReceiptProcessingResult result = itemService.recordReceiptItem(receiptItem, "Kaufland", mockUser);
+
+        assertThat(result.ignored()).isFalse();
+        assertThat(result.catalogMatch()).isEqualTo(catalogProduct);
+        verify(historyRepository).save(any(UserProductHistory.class));
         verify(catalogRepository, never()).save(any());
         verify(catalogService, never()).recordPurchase(anyString(), anyString(), anyString(), anyString(), any());
     }

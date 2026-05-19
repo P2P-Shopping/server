@@ -5,6 +5,7 @@ import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
+import com.p2ps.catalog.service.StorePriceService;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
@@ -35,12 +36,14 @@ public class ShoppingListService {
     private final ListInvitationRepository invitationRepository;
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
     private final ItemRepository itemRepository;
+    private final StorePriceService storePriceService;
 
-    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository) {
+    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository, StorePriceService storePriceService) {
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
         this.invitationRepository = invitationRepository;
+        this.storePriceService = storePriceService;
     }
 
     @Transactional
@@ -196,6 +199,9 @@ public class ShoppingListService {
         }
         if (receiptItem.getPrice() != null) {
             matchedItem.setPrice(receiptItem.getPrice());
+            if (catalogProduct != null && list.getFinalStore() != null) {
+                storePriceService.recordStorePrice(catalogProduct, list.getFinalStore(), receiptItem.getPrice());
+            }
         }
         if ((matchedItem.getBrand() == null || matchedItem.getBrand().isBlank()) && receiptItem.getBrand() != null) {
             matchedItem.setBrand(receiptItem.getBrand().trim());

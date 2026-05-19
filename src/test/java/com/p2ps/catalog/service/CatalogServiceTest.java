@@ -36,6 +36,9 @@ class CatalogServiceTest {
     @Mock
     private UserProductHistoryRepository userProductHistoryRepository;
 
+    @Mock
+    private StorePriceService storePriceService;
+
     @InjectMocks
     private CatalogService catalogService;
 
@@ -65,8 +68,27 @@ class CatalogServiceTest {
         ProductCatalog result = catalogService.recordPurchase(genericName, specificName, brand, category, price);
 
         verify(catalogRepository).upsertProduct(genericName, specificName, brand, category, price);
+        verify(storePriceService).recordStorePrice(mockProduct, null, price);
         assertNotNull(result);
         assertEquals(specificName, result.getSpecificName());
+    }
+
+    @Test
+    void recordPurchaseShouldUpdateStorePriceWhenStoreNameIsPresent() {
+        String specificName = "New Product";
+        String brand = "New Brand";
+        BigDecimal price = BigDecimal.valueOf(12.25);
+        ProductCatalog mockProduct = new ProductCatalog();
+        mockProduct.setId(UUID.randomUUID());
+        mockProduct.setSpecificName(specificName);
+        mockProduct.setBrand(brand);
+
+        when(catalogRepository.findBySpecificNameAndBrand(specificName, brand)).thenReturn(Optional.of(mockProduct));
+
+        ProductCatalog result = catalogService.recordPurchase("Generic", specificName, brand, "Category", price, "Kaufland");
+
+        assertEquals(mockProduct, result);
+        verify(storePriceService).recordStorePrice(mockProduct, "Kaufland", price);
     }
 
     @Test
@@ -93,6 +115,7 @@ class CatalogServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("Product should have been created by upsert"));
+        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
     }
 
     @Test

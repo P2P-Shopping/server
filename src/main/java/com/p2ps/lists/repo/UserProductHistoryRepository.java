@@ -2,6 +2,7 @@ package com.p2ps.lists.repo;
 
 import com.p2ps.lists.model.UserProductHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -19,6 +20,16 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
         String getBrand();
         String getCategory();
         BigDecimal getPrice();
+    }
+
+    // 1. Am unificat interfața aici. Are toate câmpurile de care are nevoie AI-ul!
+    interface PopularUnknownProduct {
+        String getCustomName();
+        Integer getUserCount();
+        String getBrand();
+        String getCategory();
+        BigDecimal getPrice();
+        String getStoreName();
     }
 
     @Query(value = """
@@ -48,6 +59,23 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
             LIMIT 10
             """, nativeQuery = true)
     List<HistoryMatch> findMatches(@Param("userId") Integer userId, @Param("keyword") String keyword);
+
+    // 2. Am legat Query-ul corect de numele metodei pe care o așteaptă Service-ul
+    @Query("SELECT lower(trim(u.customName)) as customName, COUNT(DISTINCT u.user.id) as userCount, " +
+            "MAX(u.brand) as brand, MAX(u.category) as category, AVG(u.price) as price, MAX(u.storeName) as storeName " +
+            "FROM UserProductHistory u WHERE u.catalogItem IS NULL " +
+            "GROUP BY lower(trim(u.customName)) HAVING COUNT(DISTINCT u.user.id) >= :minUsers")
+    List<PopularUnknownProduct> findPopularUnknownProducts(@Param("minUsers") int minUsers);
+
+    @Modifying
+    @Query("""
+            update UserProductHistory h
+            set h.catalogItem = :catalogItem
+            where lower(h.customName) = lower(:customName)
+              and h.catalogItem is null
+            """)
+    int linkUnknownHistoryToCatalog(@Param("customName") String customName,
+                                    @Param("catalogItem") com.p2ps.catalog.model.ProductCatalog catalogItem);
 
     UserProductHistory findByUser_IdAndCustomNameIgnoreCase(Integer userId, String customName);
 }

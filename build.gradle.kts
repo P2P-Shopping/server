@@ -47,6 +47,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.hibernate.orm:hibernate-spatial")
 
+
     runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
     runtimeOnly("org.postgresql:postgresql")
@@ -62,6 +63,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
+    testImplementation ("org.springframework.boot:spring-boot-starter-test")
 
     testRuntimeOnly("org.junit.platform:junit-platform-suite-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
