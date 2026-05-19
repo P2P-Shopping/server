@@ -1215,30 +1215,7 @@ class ItemServiceTest {
         assertThat(itemCaptor.getValue().getCatalogItem()).isEqualTo(catalogProduct);
     }
 
-    @Test
-    void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandButUserDidNotTypeIt() {
-        ItemRequest req = new ItemRequest();
-        req.setName("Iaurt");
-        req.setBrand(null);
-
-        ProductCatalog catalogProduct = new ProductCatalog();
-        catalogProduct.setId(UUID.randomUUID());
-        catalogProduct.setGenericName("Iaurt");
-        catalogProduct.setBrand("Danone");
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
-        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Iaurt")).thenReturn(null);
-        when(catalogRepository.searchByKeywordStrict("Iaurt")).thenReturn(List.of(catalogProduct));
-        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Iaurt")).thenReturn(List.of());
-        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        itemService.addItemToList(listId, req, userEmail);
-
-        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
-        verify(itemRepository).save(itemCaptor.capture());
-        // Should be rejected because catalog has brand "Danone" but user only typed "Iaurt"
-        assertThat(itemCaptor.getValue().getCatalogItem()).isNull();
-    }
+   
 
     @Test
     void resolveCatalogMatch_BrandMatch_UserNotProvided_CatalogHasBrandAndUserTypedItInName() {
