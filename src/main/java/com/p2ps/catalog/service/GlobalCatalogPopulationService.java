@@ -60,7 +60,7 @@ public class GlobalCatalogPopulationService {
         ProductCatalog targetCatalog = findExistingCatalogMatch(normalizedRawName)
                 .orElseGet(() -> createCatalogEntry(normalizedRawName, candidate));
 
-        if (candidate.getStoreName() != null && candidate.getPrice() != null) {
+        if (isUsableStorePrice(candidate.getStoreName(), candidate.getPrice())) {
             storePriceService.recordStorePrice(targetCatalog, candidate.getStoreName(), candidate.getPrice());
         }
 
@@ -107,5 +107,12 @@ public class GlobalCatalogPopulationService {
             throw new IllegalArgumentException("Candidate product name must not be blank");
         }
         return value.trim();
+    }
+
+    private boolean isUsableStorePrice(String storeName, java.math.BigDecimal price) {
+        return storeName != null
+                && !storeName.trim().isEmpty()
+                && price != null
+                && price.compareTo(java.math.BigDecimal.ZERO) >= 0;
     }
 }

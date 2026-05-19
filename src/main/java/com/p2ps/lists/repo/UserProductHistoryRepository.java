@@ -71,7 +71,7 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
     @Query("""
             update UserProductHistory h
             set h.catalogItem = :catalogItem
-            where lower(h.customName) = lower(:customName)
+            where lower(trim(h.customName)) = lower(trim(:customName))
               and h.catalogItem is null
             """)
     int linkUnknownHistoryToCatalog(@Param("customName") String customName,

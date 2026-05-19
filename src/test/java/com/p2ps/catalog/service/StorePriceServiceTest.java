@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,11 +74,14 @@ class StorePriceServiceTest {
     @Test
     void recordStorePriceShouldSkipIncompleteInput() {
         StorePriceService service = new StorePriceService(storePriceRepository, Clock.systemUTC());
+        ProductCatalog catalog = new ProductCatalog();
+        catalog.setId(UUID.randomUUID());
 
         assertThat(service.recordStorePrice(null, "Mega", BigDecimal.ONE)).isNull();
         assertThat(service.recordStorePrice(new ProductCatalog(), "Mega", BigDecimal.ONE)).isNull();
-        assertThat(service.recordStorePrice(new ProductCatalog(), " ", BigDecimal.ONE)).isNull();
-        assertThat(service.recordStorePrice(new ProductCatalog(), "Mega", null)).isNull();
+        assertThat(service.recordStorePrice(catalog, " ", BigDecimal.ONE)).isNull();
+        assertThat(service.recordStorePrice(catalog, "Mega", null)).isNull();
+        assertThat(service.recordStorePrice(catalog, "Mega", BigDecimal.valueOf(-1))).isNull();
 
         verify(storePriceRepository, never()).save(any());
     }
@@ -92,5 +96,16 @@ class StorePriceServiceTest {
         ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(storePriceRepository).deleteByLastUpdatedAtBefore(cutoffCaptor.capture());
         assertThat(cutoffCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 4, 18, 0, 0));
+    }
+
+    @Test
+    void deletePricesOlderThanDaysShouldRejectNegativeRetention() {
+        StorePriceService service = new StorePriceService(storePriceRepository, Clock.systemUTC());
+
+        assertThatThrownBy(() -> service.deletePricesOlderThanDays(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("retentionDays");
+
+        verify(storePriceRepository, never()).deleteByLastUpdatedAtBefore(any());
     }
 }

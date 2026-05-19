@@ -31,7 +31,8 @@ public class StorePriceService {
 
     @Transactional
     public StorePrice recordStorePrice(ProductCatalog catalogItem, String storeName, BigDecimal price) {
-        if (catalogItem == null || catalogItem.getId() == null || isBlank(storeName) || price == null) {
+        if (catalogItem == null || catalogItem.getId() == null || isBlank(storeName) || price == null
+                || price.compareTo(BigDecimal.ZERO) < 0) {
             return null;
         }
 
@@ -50,6 +51,9 @@ public class StorePriceService {
 
     @Transactional
     public long deletePricesOlderThanDays(int retentionDays) {
+        if (retentionDays < 0) {
+            throw new IllegalArgumentException("retentionDays must be zero or positive");
+        }
         LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(retentionDays);
         return storePriceRepository.deleteByLastUpdatedAtBefore(cutoff);
     }

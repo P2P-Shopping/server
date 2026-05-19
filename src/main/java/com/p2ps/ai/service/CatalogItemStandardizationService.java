@@ -60,6 +60,10 @@ public class CatalogItemStandardizationService {
         // ... restul metodei rămâne exact la fel (aiClient.generateResponse...)
 
         AiMessage response = aiClient.generateResponse(messages, List.of());
+        if (response == null || response.parts() == null) {
+            throw new AiProcessingException("AI returned an empty catalog standardization response.");
+        }
+
         String rawResponse = response.parts().stream()
                 .filter(AiMessage.TextPart.class::isInstance)
                 .map(AiMessage.TextPart.class::cast)

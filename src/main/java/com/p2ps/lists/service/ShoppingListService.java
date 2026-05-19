@@ -197,11 +197,8 @@ public class ShoppingListService {
         if (catalogProduct != null) {
             matchedItem.setCatalogItem(catalogProduct);
         }
-        if (receiptItem.getPrice() != null) {
+        if (receiptItem.getPrice() != null && receiptItem.getPrice().compareTo(java.math.BigDecimal.ZERO) >= 0) {
             matchedItem.setPrice(receiptItem.getPrice());
-            if (catalogProduct != null && list.getFinalStore() != null) {
-                storePriceService.recordStorePrice(catalogProduct, list.getFinalStore(), receiptItem.getPrice());
-            }
         }
         if ((matchedItem.getBrand() == null || matchedItem.getBrand().isBlank()) && receiptItem.getBrand() != null) {
             matchedItem.setBrand(receiptItem.getBrand().trim());

@@ -92,10 +92,11 @@ public class ItemService {
             return ReceiptProcessingResult.createIgnored();
         }
 
+        BigDecimal validPrice = sanitizeNonNegativePrice(item.getPrice());
         ProductCatalog catalogMatch = resolveCatalogMatch(item, user);
 
-        if (catalogMatch != null && item.getPrice() != null) {
-            storePriceService.recordStorePrice(catalogMatch, storeName, item.getPrice());
+        if (catalogMatch != null && validPrice != null) {
+            storePriceService.recordStorePrice(catalogMatch, storeName, validPrice);
         }
 
         saveToHistory(
@@ -105,7 +106,7 @@ public class ItemService {
                 storeName,
                 item.getBrand(),
                 item.getCategory(),
-                item.getPrice(),
+                validPrice,
                 catalogMatch
         );
 
@@ -178,6 +179,13 @@ public class ItemService {
             return fallback.trim();
         }
         return null;
+    }
+
+    private BigDecimal sanitizeNonNegativePrice(BigDecimal price) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
+            return null;
+        }
+        return price;
     }
 
     private String normalizeBrand(String brand) {

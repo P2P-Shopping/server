@@ -81,6 +81,16 @@ class CatalogItemStandardizationServiceTest {
     }
 
     @Test
+    void standardizeShouldThrowWhenAiReturnsNullPayload() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(null);
+
+        assertThatThrownBy(() -> service.standardize("lapte", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("empty catalog standardization response");
+    }
+
+    @Test
     void standardizeShouldSendStrictPromptToAiClient() {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
