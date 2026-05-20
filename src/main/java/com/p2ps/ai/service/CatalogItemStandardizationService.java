@@ -11,6 +11,7 @@ import java.util.List;
 @Service
 public class CatalogItemStandardizationService {
 
+    private static final String UNKNOWN_HINT = "Unknown";
     private static final String SYSTEM_PROMPT = """
     You standardize grocery product names for a Romanian shopping app catalog.
     Return ONLY one valid JSON object with this exact schema:
@@ -46,9 +47,9 @@ public class CatalogItemStandardizationService {
                 Please use the hints above if they are valid, correct any typos, and return the final standardized JSON.
                 """,
                 rawName.trim(),
-                (userBrand != null && !userBrand.isBlank() ? userBrand : "Unknown"),
-                (userCategory != null && !userCategory.isBlank() ? userCategory : "Unknown"),
-                (userPrice != null ? userPrice.toString() : "Unknown")
+                (userBrand != null && !userBrand.isBlank() ? userBrand : UNKNOWN_HINT),
+                (userCategory != null && !userCategory.isBlank() ? userCategory : UNKNOWN_HINT),
+                (userPrice != null ? userPrice.toString() : UNKNOWN_HINT)
         );
 
         String combinedPrompt = SYSTEM_PROMPT + "\n\n" + contextPrompt;

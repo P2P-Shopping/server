@@ -22,7 +22,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +38,9 @@ class GlobalCatalogPopulationServiceTest {
     @Mock
     private CatalogItemStandardizationService catalogItemStandardizationService;
 
+    @Mock
+    private StorePriceService storePriceService;
+
     private GlobalCatalogPopulationService service;
 
     @BeforeEach
@@ -49,8 +51,18 @@ class GlobalCatalogPopulationServiceTest {
                 productCatalogRepository,
                 catalogItemStandardizationService,
                 transactionTemplate,
-                null
+                storePriceService
         );
+    }
+
+    @Test
+    void populateFromPopularUnknownProductsShouldReturnZeroWhenNoCandidatesExist() {
+        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of());
+
+        int result = service.populateFromPopularUnknownProducts(3);
+
+        assertThat(result).isZero();
+        verify(productCatalogRepository, never()).searchByKeywordStrict(any());
     }
 
     @Test
@@ -131,7 +143,70 @@ class GlobalCatalogPopulationServiceTest {
         verify(userProductHistoryRepository).linkUnknownHistoryToCatalog("good item", existingCatalog);
     }
 
+    @Test
+    void populateFromPopularUnknownProductsShouldRecordStorePriceForValidCandidateMetadata() {
+        ProductCatalog existingCatalog = new ProductCatalog();
+        existingCatalog.setId(UUID.randomUUID());
+        UserProductHistoryRepository.PopularUnknownProduct candidate =
+                candidate("cola", 3, "Coca Cola", "Bauturi", new BigDecimal("5.50"), "Mega");
+
+        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
+        when(productCatalogRepository.searchByKeywordStrict("cola")).thenReturn(List.of(existingCatalog));
+        when(userProductHistoryRepository.linkUnknownHistoryToCatalog("cola", existingCatalog)).thenReturn(1);
+
+        int result = service.populateFromPopularUnknownProducts(3);
+
+        assertThat(result).isEqualTo(1);
+        verify(storePriceService).recordStorePrice(existingCatalog, "Mega", new BigDecimal("5.50"));
+    }
+
+    @Test
+    void populateFromPopularUnknownProductsShouldSkipStorePriceForBlankStoreOrNegativePrice() {
+        ProductCatalog existingCatalog = new ProductCatalog();
+        existingCatalog.setId(UUID.randomUUID());
+        UserProductHistoryRepository.PopularUnknownProduct blankStore =
+                candidate("cola", 3, null, null, new BigDecimal("5.50"), "   ");
+        UserProductHistoryRepository.PopularUnknownProduct negativePrice =
+                candidate("suc", 3, null, null, new BigDecimal("-1.00"), "Mega");
+
+        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(blankStore, negativePrice));
+        when(productCatalogRepository.searchByKeywordStrict(any())).thenReturn(List.of(existingCatalog));
+        when(userProductHistoryRepository.linkUnknownHistoryToCatalog(any(), any(ProductCatalog.class))).thenReturn(1);
+
+        int result = service.populateFromPopularUnknownProducts(3);
+
+        assertThat(result).isEqualTo(2);
+        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
+    }
+
+    @Test
+    void populateFromPopularUnknownProductsShouldSkipBlankCandidateNamesAndContinue() {
+        UserProductHistoryRepository.PopularUnknownProduct broken = candidate("   ", 3);
+        UserProductHistoryRepository.PopularUnknownProduct good = candidate("lapte", 4);
+        ProductCatalog existingCatalog = new ProductCatalog();
+        existingCatalog.setId(UUID.randomUUID());
+
+        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(broken, good));
+        when(productCatalogRepository.searchByKeywordStrict("lapte")).thenReturn(List.of(existingCatalog));
+        when(userProductHistoryRepository.linkUnknownHistoryToCatalog("lapte", existingCatalog)).thenReturn(1);
+
+        int result = service.populateFromPopularUnknownProducts(3);
+
+        assertThat(result).isEqualTo(1);
+        verify(userProductHistoryRepository).linkUnknownHistoryToCatalog("lapte", existingCatalog);
+    }
+
     private UserProductHistoryRepository.PopularUnknownProduct candidate(String customName, long distinctUsers) {
+        return candidate(customName, distinctUsers, null, null, null, null);
+    }
+
+    private UserProductHistoryRepository.PopularUnknownProduct candidate(
+            String customName,
+            long distinctUsers,
+            String brand,
+            String category,
+            BigDecimal price,
+            String storeName) {
         return new UserProductHistoryRepository.PopularUnknownProduct() {
             @Override
             public String getCustomName() {
@@ -145,22 +220,22 @@ class GlobalCatalogPopulationServiceTest {
 
             @Override
             public String getBrand() {
-                return null;
+                return brand;
             }
 
             @Override
             public String getCategory() {
-                return null;
+                return category;
             }
 
             @Override
             public BigDecimal getPrice() {
-                return null;
+                return price;
             }
 
             @Override
             public String getStoreName() {
-                return null;
+                return storeName;
             }
         };
     }
@@ -174,10 +249,12 @@ class GlobalCatalogPopulationServiceTest {
 
         @Override
         public void commit(TransactionStatus status) {
+            // No-op: transactional side effects are irrelevant for these isolated unit tests.
         }
 
         @Override
         public void rollback(TransactionStatus status) {
+            // No-op: rollback behavior is not exercised by this in-memory transaction stub.
         }
     }
 }

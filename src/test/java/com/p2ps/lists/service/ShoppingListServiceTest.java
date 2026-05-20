@@ -5,6 +5,7 @@ import com.p2ps.auth.repository.UserRepository;
 import java.math.BigDecimal;
 
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
+import com.p2ps.lists.dto.ListInvitationDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListUserNotFoundException;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -387,6 +389,46 @@ class ShoppingListServiceTest {
     }
 
     @Test
+    void importItemsShouldCopyCatalogAndExternalItemId() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+
+        UUID currentListId = UUID.randomUUID();
+        ShoppingList currentList = new ShoppingList();
+        currentList.setId(currentListId);
+        currentList.setUser(user);
+
+        UUID sourceListId = UUID.randomUUID();
+        ShoppingList sourceList = new ShoppingList();
+        sourceList.setId(sourceListId);
+        sourceList.setUser(user);
+
+        ProductCatalog catalog = new ProductCatalog();
+        catalog.setId(UUID.randomUUID());
+
+        Item sourceItem = new Item();
+        sourceItem.setId(UUID.randomUUID());
+        sourceItem.setName("Item 1");
+        sourceItem.setCatalogItem(catalog);
+        sourceItem.setExternalItemId("ext-1");
+        sourceList.getItems().add(sourceItem);
+
+        ImportItemsRequestDTO request = new ImportItemsRequestDTO();
+        request.setSourceListId(sourceListId);
+
+        when(shoppingListRepository.findById(currentListId)).thenReturn(Optional.of(currentList));
+        when(shoppingListRepository.findById(sourceListId)).thenReturn(Optional.of(sourceList));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.importItems(currentListId, request, userEmail);
+
+        assertEquals(catalog.getId(), result.getItems().get(0).getCatalogId());
+        assertEquals("ext-1", result.getItems().get(0).getExternalItemId());
+    }
+
+    @Test
     void importItemsShouldThrowWhenSourceListIdIsNull() {
         ImportItemsRequestDTO request = new ImportItemsRequestDTO();
         // sourceListId is null
@@ -459,6 +501,7 @@ class ShoppingListServiceTest {
         assertTrue(list.getCollaborators().isEmpty());
         verify(invitationRepository).save(any(ListInvitation.class));
         verify(shoppingListRepository, never()).save(list);
+        verify(messagingTemplate).convertAndSend(contains("/topic/invitations/"), any(ListInvitationDTO.class));
     }
 
     @Test
@@ -907,6 +950,58 @@ class ShoppingListServiceTest {
         shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
 
         assertEquals("Dairy", item.getCategory());
+    }
+
+    @Test
+    void markReceiptItemPurchased_shouldIgnoreNegativePriceButStillMarkItem() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+
+        Item item = new Item();
+        item.setId(UUID.randomUUID());
+        item.setName("Lapte");
+        item.setChecked(false);
+        item.setPrice(new BigDecimal("5.00"));
+        list.getItems().add(item);
+
+        ParsedItemResponse receiptItem = new ParsedItemResponse();
+        receiptItem.setGenericName("lapte");
+        receiptItem.setPrice(new BigDecimal("-1.00"));
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.markReceiptItemPurchased(listId, receiptItem, null, userEmail);
+
+        assertTrue(item.isChecked());
+        assertEquals(new BigDecimal("5.00"), item.getPrice());
+    }
+
+    @Test
+    void getListByIdShouldExposeCollaboratorsAndOwnerRole() {
+        String ownerEmail = "owner@example.com";
+        Users owner = new Users(ownerEmail, "secret", "Owner", "User");
+        owner.setId(1);
+        Users collaborator = new Users("collab@example.com", "secret", "Collab", "User");
+        collaborator.setId(2);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(UUID.randomUUID());
+        list.setUser(owner);
+        list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
+
+        when(shoppingListRepository.findById(list.getId())).thenReturn(Optional.of(list));
+
+        ShoppingListDTO result = shoppingListService.getListById(list.getId(), ownerEmail);
+
+        assertEquals("ADMIN", result.getCurrentUserRole());
+        assertEquals(2, result.getCollaborators().size());
+        assertTrue(result.getCollaborators().stream().anyMatch(c -> "EDITOR".equals(c.getRole())));
     }
 
     @Test

@@ -29,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Service
@@ -62,7 +60,6 @@ public class ItemService {
     private final ProductCatalogRepository catalogRepository;
     private final AiService aiService;
     private final StorePriceService storePriceService;
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^([\\d.,]+)\\s*(.{0,50})$");
 
     private final ItemService self;
 
@@ -128,7 +125,7 @@ public class ItemService {
                 if (catalogById != null) {
                     return catalogById;
                 }
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException _) {
                 logger.debug("Ignoring invalid catalog id from receipt item: {}", item.getCatalogId());
             }
         }
@@ -734,12 +731,26 @@ public class ItemService {
     }
 
     void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName, String storeName) {
-        saveToHistory(item, user, rawName, storeName, null, null, null, null);
+        saveToHistory(item, user, new HistoryContext(rawName, storeName, null, null, null, null));
     }
 
-    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName, String storeName, String brand, String category, BigDecimal price, ProductCatalog catalogItem) {
-        String historyName = (rawName != null && !rawName.isBlank()) ? rawName : (item != null ? item.getName() : null);
-        if (historyName == null) return;
+    void saveToHistory(
+            Item item,
+            com.p2ps.auth.model.Users user,
+            String rawName,
+            String storeName,
+            String brand,
+            String category,
+            BigDecimal price,
+            ProductCatalog catalogItem) {
+        saveToHistory(item, user, new HistoryContext(rawName, storeName, brand, category, price, catalogItem));
+    }
+
+    private void saveToHistory(Item item, com.p2ps.auth.model.Users user, HistoryContext context) {
+        String historyName = resolveHistoryName(item, context.rawName());
+        if (historyName == null) {
+            return;
+        }
 
         UserProductHistory history = historyRepository.findByUser_IdAndCustomNameIgnoreCase(user.getId(), historyName);
 
@@ -750,36 +761,14 @@ public class ItemService {
         }
 
         if (item != null) {
-            if (item.getBrand() != null && !item.getBrand().isBlank()) {
-                history.setBrand(item.getBrand());
-            }
-            if (item.getCategory() != null && !item.getCategory().isBlank()) {
-                history.setCategory(item.getCategory());
-            }
-            if (item.getPrice() != null && item.getPrice().compareTo(BigDecimal.ZERO) > 0) {
-                history.setPrice(item.getPrice());
-            }
+            applyItemDetails(history, item);
         } else {
-            if (brand != null && !brand.isBlank()) {
-                history.setBrand(brand);
-            }
-            if (category != null && !category.isBlank()) {
-                history.setCategory(category);
-            }
-            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
-                history.setPrice(price);
-            }
+            applyExplicitDetails(history, context);
         }
 
-        if (storeName != null && !storeName.isBlank()) {
-            history.setStoreName(storeName);
-        }
+        applyStoreName(history, context.storeName());
 
-        ProductCatalog finalCatalogItem = (item != null && item.getCatalogItem() != null) ? item.getCatalogItem() : catalogItem;
-
-        if (finalCatalogItem == null) {
-            finalCatalogItem = resolveCatalogMatch(historyName, history.getBrand(), user);
-        }
+        ProductCatalog finalCatalogItem = resolveHistoryCatalogItem(item, context.catalogItem(), historyName, history.getBrand(), user);
 
         if (finalCatalogItem != null) {
             history.setCatalogItem(finalCatalogItem);
@@ -792,6 +781,69 @@ public class ItemService {
 
         history.setLastAddedTimestamp(System.currentTimeMillis());
         historyRepository.save(history);
+    }
+
+    private String resolveHistoryName(Item item, String rawName) {
+        if (rawName != null && !rawName.isBlank()) {
+            return rawName;
+        }
+        if (item != null) {
+            return item.getName();
+        }
+        return null;
+    }
+
+    private void applyItemDetails(UserProductHistory history, Item item) {
+        applyTextIfPresent(history::setBrand, item.getBrand());
+        applyTextIfPresent(history::setCategory, item.getCategory());
+        applyPositivePrice(history, item.getPrice());
+    }
+
+    private void applyExplicitDetails(UserProductHistory history, HistoryContext context) {
+        applyTextIfPresent(history::setBrand, context.brand());
+        applyTextIfPresent(history::setCategory, context.category());
+        applyPositivePrice(history, context.price());
+    }
+
+    private void applyStoreName(UserProductHistory history, String storeName) {
+        applyTextIfPresent(history::setStoreName, storeName);
+    }
+
+    private ProductCatalog resolveHistoryCatalogItem(
+            Item item,
+            ProductCatalog catalogItem,
+            String historyName,
+            String brand,
+            com.p2ps.auth.model.Users user) {
+        ProductCatalog existingCatalogItem = item != null ? item.getCatalogItem() : null;
+        if (existingCatalogItem != null) {
+            return existingCatalogItem;
+        }
+        if (catalogItem != null) {
+            return catalogItem;
+        }
+        return resolveCatalogMatch(historyName, brand, user);
+    }
+
+    private void applyTextIfPresent(java.util.function.Consumer<String> setter, String value) {
+        if (value != null && !value.isBlank()) {
+            setter.accept(value);
+        }
+    }
+
+    private void applyPositivePrice(UserProductHistory history, BigDecimal price) {
+        if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
+            history.setPrice(price);
+        }
+    }
+
+    private record HistoryContext(
+            String rawName,
+            String storeName,
+            String brand,
+            String category,
+            BigDecimal price,
+            ProductCatalog catalogItem) {
     }
 
     private ProductCatalog resolveCatalogMatch(String itemName, String itemBrand, com.p2ps.auth.model.Users user) {

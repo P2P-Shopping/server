@@ -80,16 +80,11 @@ public class ShoppingController {
 
         for (ParsedItemResponse item : aiResponse.getItems()) {
             String specificName = firstNonBlank(item.getSpecificName(), item.getGenericName());
-            if (specificName == null) {
-                continue;
-            }
-
             ItemService.ReceiptProcessingResult processingResult = itemService.recordReceiptItem(item, storeName, user);
-            if (processingResult.ignored()) {
-                continue;
+            boolean shouldMarkPurchased = specificName != null && !processingResult.ignored();
+            if (shouldMarkPurchased) {
+                shoppingListService.markReceiptItemPurchased(listId, item, processingResult.catalogMatch(), userEmail);
             }
-
-            shoppingListService.markReceiptItemPurchased(listId, item, processingResult.catalogMatch(), userEmail);
         }
     }
 

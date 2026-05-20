@@ -110,4 +110,65 @@ class CatalogItemStandardizationServiceTest {
         assertThat(((AiMessage.TextPart) captor.getValue().get(0).parts().get(0)).text())
                 .contains("Return ONLY one valid JSON object");
     }
+
+    @Test
+    void standardizeShouldAcceptJsonEmbeddedInSurroundingText() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("""
+                        Here is the normalized product:
+                        {"cleanName":"Ardei","category":"Fructe și Legume","brand":null}
+                        """)))
+        );
+
+        CatalogStandardizationResult result = service.standardize("ardei", null, null, null);
+
+        assertThat(result.cleanName()).isEqualTo("Ardei");
+        assertThat(result.category()).isEqualTo("Fructe și Legume");
+    }
+
+    @Test
+    void standardizeShouldThrowWhenAiReturnsBlankText() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("   ")))
+        );
+
+        assertThatThrownBy(() -> service.standardize("lapte", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("empty catalog standardization response");
+    }
+
+    @Test
+    void standardizeShouldThrowWhenRequiredFieldIsMissing() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("""
+                        {"cleanName":"Lapte","category":" ","brand":"Zuzu"}
+                        """)))
+        );
+
+        assertThatThrownBy(() -> service.standardize("lapte", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("missing field: category");
+    }
+
+    @Test
+    void standardizeShouldIncludeUserHintsInPrompt() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("""
+                        {"cleanName":"Lapte Zuzu 1L","category":"Lactate și Ouă","brand":"Zuzu"}
+                        """)))
+        );
+
+        service.standardize("lapte", "Zuzu", "Lactate și Ouă", new java.math.BigDecimal("8.99"));
+
+        ArgumentCaptor<List<AiMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(aiClient).generateResponse(captor.capture(), eq(List.of()));
+        String prompt = ((AiMessage.TextPart) captor.getValue().get(0).parts().get(0)).text();
+        assertThat(prompt).contains("Hint - User provided brand: Zuzu");
+        assertThat(prompt).contains("Hint - User provided category: Lactate și Ouă");
+        assertThat(prompt).contains("Hint - User provided price: 8.99");
+    }
 }
