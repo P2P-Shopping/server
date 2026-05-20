@@ -43,6 +43,11 @@ public class MacroRoutingService {
      * @return MacroRoutingResponse with walking and driving fields (either can be null if OSRM fails)
      */
     public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId) {
+        if (storeId == null) {
+            logger.warn("Store ID is null");
+            return null;
+        }
+
         double[] entrance = fetchStoreEntrance(storeId);
         if (entrance.length == 0) {
             logger.warn("Store not found or has no boundary polygon");
@@ -97,5 +102,17 @@ public class MacroRoutingService {
     private MacroRoutingResponse.TransportEstimate toDto(OsrmClient.TransportEstimate raw) {
         if (raw == null) return null;
         return new MacroRoutingResponse.TransportEstimate(raw.distanceM(), raw.durationSeconds(), raw.polyline());
+    }
+
+    /**
+     * Gets the boundary_polygon for a store as GeoJSON.
+     */
+    public String getStorePolygonGeoJson(String storeId) {
+        String sql = "SELECT ST_AsGeoJSON(boundary_polygon) FROM store_geofences WHERE store_id = ?::uuid";
+        try {
+            return jdbcTemplate.queryForObject(sql, String.class, storeId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return null;
+        }
     }
 }

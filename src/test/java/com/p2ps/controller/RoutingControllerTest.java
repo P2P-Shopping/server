@@ -319,4 +319,25 @@ class RoutingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());
     }
+
+    @Test
+    void getStorePolygon_shouldReturn200WithGeoJsonWhenStoreExists() {
+        when(macroRoutingService.getStorePolygonGeoJson("store-uuid"))
+                .thenReturn("{\"type\":\"Polygon\",\"coordinates\":[[[27.58,47.15]]]}");
+
+        ResponseEntity<String> response = controller.getStorePolygon("store-uuid");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().contains("Polygon"));
+    }
+
+    @Test
+    void getStorePolygon_shouldReturn404WhenStoreNotFound() {
+        when(macroRoutingService.getStorePolygonGeoJson("nonexistent")).thenReturn(null);
+
+        ResponseEntity<String> response = controller.getStorePolygon("nonexistent");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
 }
