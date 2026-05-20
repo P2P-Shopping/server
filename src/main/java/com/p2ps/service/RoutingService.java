@@ -49,7 +49,8 @@ public class RoutingService {
     public RoutingResponse calculateOptimalRoute(RoutingRequest request) {
         logger.info("Calculez ruta pentru {} produse de la ({}, {}), storeId={}",
                 request.getProductIds() == null ? 0 : request.getProductIds().size(),
-                request.getUserLat(), request.getUserLng(), request.getStoreId());
+                request.getUserLat(), request.getUserLng(),
+                request.getStoreId() == null ? "null" : "***");
 
         List<String> warnings = new ArrayList<>();
 

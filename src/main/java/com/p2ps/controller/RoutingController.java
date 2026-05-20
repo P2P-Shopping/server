@@ -131,13 +131,13 @@ public class RoutingController {
         return ResponseEntity.ok(payload);
     }
 
-    private int calculateMatchPercentage(int matchedItems, long requestedItemsCount) {
+    private long calculateMatchPercentage(int matchedItems, long requestedItemsCount) {
         if (requestedItemsCount <= 0) {
             return 0;
         }
 
         double percentage = (matchedItems * 100.0d) / requestedItemsCount;
-        return (int) Math.max(0, Math.min(100, Math.round(percentage)));
+        return Math.clamp(Math.round(percentage), 0, 100);
     }
 
     // -------------------------------------------------------------------------

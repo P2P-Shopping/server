@@ -7,6 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -63,13 +65,11 @@ class LocationProcessorWorkerTest {
     @Test
     @DisplayName("Should skip when scheduling is disabled")
     void processAndCalculateCenters_SkipWhenDisabled() throws Exception {
-        // Use reflection to disable scheduling if needed,
-        // but it's easier to just verify behavior via mocks if we can trigger it.
-        // Actually, let's keep it simple.
+        ReflectionTestUtils.setField(worker, "schedulingEnabled", false);
 
-        // Resetting worker's state manually via field injection or just creating a new one with mocks
-        // Since we can't easily change @Value without reflection or Spring context,
-        // we'll focus on the PostgreSQL short-circuit which is definitely new code.
+        worker.processAndCalculateCenters();
+
+        verify(jdbcTemplate, never()).update(anyString());
     }
 
     @Test
@@ -199,7 +199,8 @@ class LocationProcessorWorkerTest {
         when(connection.getMetaData()).thenReturn(metaData);
         when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
 
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.initialize());
+        assertThatNoException()
+                .isThrownBy(() -> worker.initialize());
 
         verify(jdbcTemplate, atLeastOnce()).execute(anyString());
     }

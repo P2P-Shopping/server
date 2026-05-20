@@ -35,7 +35,7 @@ public class PresenceController {
             case JOIN -> handleJoin(listId, payload, sessionId);
             case LEAVE -> handleLeave(listId, payload, sessionId);
             case TYPING -> handleTyping(listId, payload);
-            default -> { }
+            default -> { /* intentionally ignored */ }
         }
     }
 

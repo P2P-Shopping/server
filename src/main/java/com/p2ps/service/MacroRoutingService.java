@@ -111,7 +111,7 @@ public class MacroRoutingService {
         String sql = "SELECT ST_AsGeoJSON(boundary_polygon) FROM store_geofences WHERE store_id = ?::uuid";
         try {
             return jdbcTemplate.queryForObject(sql, String.class, storeId);
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+        } catch (org.springframework.dao.EmptyResultDataAccessException _) {
             return null;
         }
     }
