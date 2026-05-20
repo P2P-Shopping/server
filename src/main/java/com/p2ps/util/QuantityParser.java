@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 public class QuantityParser {
 
     // Accept both decimal dot and comma, with or without space before the unit.
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?\\d+(?:[\\.,]\\d+)?)\\s*([a-zA-Z]+)?$");
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?\\d+(?:[\\.,]\\d+)?)\\s*([\\p{L}.]+)?$");
     private static final String WEIGHT = "weight";
     private static final String VOLUME = "volume";
     private static final double MAX_ALLOWED_VALUE = 9999.0;
