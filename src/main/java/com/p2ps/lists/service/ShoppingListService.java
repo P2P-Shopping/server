@@ -16,7 +16,6 @@ import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.InvitationStatus;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
-import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
