@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 
 @Data
 public class RecordPurchaseRequest {
+    private String storeName;
+
     private String genericName;
     
     @NotBlank(message = "Specific name is required")

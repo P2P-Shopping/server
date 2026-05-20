@@ -16,7 +16,6 @@ import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.InvitationStatus;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
-import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListInvitation;
 import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
@@ -211,7 +210,7 @@ public class ShoppingListService {
         if (catalogProduct != null) {
             matchedItem.setCatalogItem(catalogProduct);
         }
-        if (receiptItem.getPrice() != null) {
+        if (receiptItem.getPrice() != null && receiptItem.getPrice().compareTo(java.math.BigDecimal.ZERO) >= 0) {
             matchedItem.setPrice(receiptItem.getPrice());
         }
         if ((matchedItem.getBrand() == null || matchedItem.getBrand().isBlank()) && receiptItem.getBrand() != null) {

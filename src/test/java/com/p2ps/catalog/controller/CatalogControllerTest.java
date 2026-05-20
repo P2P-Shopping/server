@@ -75,8 +75,9 @@ class CatalogControllerTest {
         request.setBrand("Coca Cola");
         request.setCategory("Bauturi");
         request.setPrice(new BigDecimal("7.50"));
+        request.setStoreName("Mega Image");
 
-        when(catalogService.recordPurchase("Cola", "Coca Cola Zero 2L", "Coca Cola", "Bauturi", new BigDecimal("7.50")))
+        when(catalogService.recordPurchase("Cola", "Coca Cola Zero 2L", "Coca Cola", "Bauturi", new BigDecimal("7.50"), "Mega Image"))
                 .thenReturn(p1);
 
         mockMvc.perform(post("/api/catalog/record")
@@ -86,7 +87,7 @@ class CatalogControllerTest {
                 .andExpect(jsonPath("$.specificName").value("Coca Cola Zero 2L"))
                 .andExpect(jsonPath("$.purchaseCount").value(1));
 
-        verify(catalogService).recordPurchase("Cola", "Coca Cola Zero 2L", "Coca Cola", "Bauturi", new BigDecimal("7.50"));
+        verify(catalogService).recordPurchase("Cola", "Coca Cola Zero 2L", "Coca Cola", "Bauturi", new BigDecimal("7.50"), "Mega Image");
     }
 
     @Test
@@ -99,7 +100,7 @@ class CatalogControllerTest {
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest());
 
-        verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any());
+        verify(catalogService, never()).recordPurchase(any(), any(), any(), any(), any(), any());
     }
 
     @Test
