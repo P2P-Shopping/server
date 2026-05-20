@@ -8,15 +8,17 @@ import java.util.regex.Pattern;
 public class QuantityParser {
 
     // Extract the numeric part
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?[0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z]+)?$");
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?$");
+    private static final String WEIGHT = "weight";
+    private static final String VOLUME = "volume";
     private static final double MAX_ALLOWED_VALUE = 9999.0;
 
 
     public enum Unit {
-        G(1.0, "g", "weight"),
-        KG(1000.0, "kg", "weight"),
-        ML(1.0, "ml", "volume"),
-        L(1000.0, "l", "volume"),
+        G(1.0, "g", WEIGHT),
+        KG(1000.0, "kg", WEIGHT),
+        ML(1.0, "ml", VOLUME),
+        L(1000.0, "l", VOLUME),
         PCS(1.0, "buc", "pieces");
 
         final double baseMultiplier;
@@ -54,9 +56,7 @@ public class QuantityParser {
             throw new ListValidationException("Quantity string is abnormally long and was rejected for security reasons.");
         }
 
-        String cleanQuantity = quantityStr.trim();
-
-        Matcher matcher = QUANTITY_PATTERN.matcher(quantityStr);
+        Matcher matcher = QUANTITY_PATTERN.matcher(quantityStr.trim());
         if (!matcher.matches()) {
             throw new ListValidationException("Quantity format is NOT valid: " + quantityStr);
         }
@@ -86,8 +86,6 @@ public class QuantityParser {
         double totalBaseValue = (parsed1.value() * parsed1.unit().baseMultiplier) +
                 (parsed2.value() * parsed2.unit().baseMultiplier);
 
-        double limit = parsed1.unit().family.equals("pieces") ? MAX_ALLOWED_VALUE : MAX_ALLOWED_VALUE * 1000;
-
         if (totalBaseValue > MAX_ALLOWED_VALUE * 1000) {
             throw new ListValidationException("Total sum of quantity is too big to be processed.");
         }
@@ -97,12 +95,12 @@ public class QuantityParser {
 
 
     private static String formatToOptimalUnit(double baseValue, String family) {
-        if ("weight".equals(family)) {
+        if (WEIGHT.equals(family)) {
             if (baseValue >= 1000) {
                 return formatNumber(baseValue / 1000.0) + " kg";
             }
             return formatNumber(baseValue) + " g";
-        } else if ("volume".equals(family)) {
+        } else if (VOLUME.equals(family)) {
             if (baseValue >= 1000) {
                 return formatNumber(baseValue / 1000.0) + " l";
             }

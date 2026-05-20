@@ -137,7 +137,7 @@ public class RoutingController {
         }
 
         double percentage = (matchedItems * 100.0d) / requestedItemsCount;
-        return (int) Math.max(0, Math.min(100, Math.round(percentage)));
+        return (int) Math.clamp(Math.round(percentage), 0, 100);
     }
 
     // -------------------------------------------------------------------------

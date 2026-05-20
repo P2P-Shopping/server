@@ -365,6 +365,21 @@ public class ItemService {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
         }
 
+        applyUpdatableFields(item, request);
+
+        if (request.getName() != null || request.getBrand() != null) {
+            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+        }
+
+        applyCheckedState(item, request);
+
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        attachRoutableExternalItemId(item);
+
+        return mapToDTO(itemRepository.save(item));
+    }
+
+    private void applyUpdatableFields(Item item, ItemRequest request) {
         if (request.getName() != null) {
             if (request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
@@ -382,23 +397,15 @@ public class ItemService {
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
         if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
+    }
 
-        if (request.getName() != null || request.getBrand() != null) {
-            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+    private void applyCheckedState(Item item, ItemRequest request) {
+        if (request.getIsChecked() == null) return;
+        boolean wasChecked = item.isChecked();
+        item.setChecked(request.getIsChecked());
+        if (item.isChecked() && !wasChecked) {
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
         }
-
-        if (request.getIsChecked() != null) {
-            boolean wasChecked = item.isChecked();
-            item.setChecked(request.getIsChecked());
-            if (item.isChecked() && !wasChecked) {
-                saveToHistory(item, item.getShoppingList().getUser(), item.getName());
-            }
-        }
-
-        item.setLastUpdatedTimestamp(System.currentTimeMillis());
-        attachRoutableExternalItemId(item);
-
-        return mapToDTO(itemRepository.save(item));
     }
 
     @Transactional

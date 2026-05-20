@@ -20,6 +20,8 @@ import com.p2ps.auth.model.Users;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -1068,41 +1070,20 @@ class ItemServiceTest {
         assertThat(result.getQuantity()).isEqualTo("3 buc");
     }
 
-    @Test
-    void addItemToList_ThrowsValidationException_WhenQuantityIsNegative() {
+    @ParameterizedTest
+    @CsvSource({
+            "-2 kg, positive number",
+            "9999999 kg, maximum accepted limit",
+            "'un pic de lapte te rog', Quantity format is NOT valid"
+    })
+    void addItemToList_ThrowsValidationException_WhenQuantityIsInvalid(String quantity, String expectedMessage) {
         ItemRequest req = new ItemRequest();
         req.setName("Rosii");
-        req.setQuantity("-2 kg");
+        req.setQuantity(quantity);
 
         assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
                 .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("positive number");
-
-        verify(itemRepository, never()).save(any(Item.class));
-    }
-
-    @Test
-    void addItemToList_ThrowsValidationException_WhenQuantityIsOverflow() {
-        ItemRequest req = new ItemRequest();
-        req.setName("Rosii");
-        req.setQuantity("9999999 kg");
-
-        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
-                .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("maximum accepted limit");
-
-        verify(itemRepository, never()).save(any(Item.class));
-    }
-
-    @Test
-    void addItemToList_ThrowsValidationException_WhenQuantityFormatIsJunk() {
-        ItemRequest req = new ItemRequest();
-        req.setName("Lapte");
-        req.setQuantity("un pic de lapte te rog");
-
-        assertThatThrownBy(() -> itemService.addItemToList(listId, req, userEmail))
-                .isInstanceOf(ListValidationException.class)
-                .hasMessageContaining("Quantity format is NOT valid");
+                .hasMessageContaining(expectedMessage);
 
         verify(itemRepository, never()).save(any(Item.class));
     }
