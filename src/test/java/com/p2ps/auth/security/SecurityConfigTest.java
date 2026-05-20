@@ -67,7 +67,7 @@ class SecurityConfigTest {
         CorsConfiguration corsConfig = ((UrlBasedCorsConfigurationSource) source).getCorsConfiguration(new MockHttpServletRequest("/api/test"));
 
         assertNotNull(corsConfig);
-        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
+        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOriginPatterns());
         assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"), corsConfig.getAllowedMethods());
         assertEquals(List.of("Authorization", "Content-Type", "Accept", "X-Return-Token"), corsConfig.getAllowedHeaders());
         assertTrue(corsConfig.getAllowCredentials());
@@ -84,7 +84,7 @@ class SecurityConfigTest {
 
         assertNotNull(corsConfig);
         // * should be filtered out
-        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
+        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOriginPatterns());
     }
 
     @Test
@@ -97,7 +97,7 @@ class SecurityConfigTest {
                 .getCorsConfiguration(new MockHttpServletRequest("/api/test"));
 
         assertNotNull(corsConfig);
-        assertEquals(List.of("http://localhost:5173", "https://example.com"), corsConfig.getAllowedOrigins());
+        assertEquals(List.of("http://localhost:5173", "https://example.com"), corsConfig.getAllowedOriginPatterns());
     }
 
     @Test
