@@ -1119,6 +1119,31 @@ class ItemServiceTest {
     }
 
     @Test
+    void addItemToList_SumsGramsAndKilogramsIntoSingleItem() {
+        ItemRequest req = new ItemRequest();
+        req.setName("Zahar");
+        req.setQuantity("1 kg");
+
+        Item existingItem = new Item();
+        existingItem.setId(UUID.randomUUID());
+        existingItem.setName("Zahar");
+        existingItem.setQuantity("200 g");
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(mockList));
+        lenient().when(historyRepository.findByUser_IdAndCustomNameIgnoreCase(mockUser.getId(), "Zahar")).thenReturn(null);
+        when(catalogRepository.searchByKeywordStrict("Zahar")).thenReturn(List.of());
+        when(itemRepository.findByShoppingListIdAndNameIgnoreCase(listId, "Zahar"))
+                .thenReturn(List.of(existingItem));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.addItemToList(listId, req, userEmail);
+
+        assertThat(result.getQuantity()).isEqualTo("1.2 kg");
+        verify(itemRepository).save(any(Item.class));
+    }
+
+    @Test
     void addItemToList_ReplacesQuantityWhenUnitsAreIncompatible() {
         ItemRequest req = new ItemRequest();
         req.setName("Mere");

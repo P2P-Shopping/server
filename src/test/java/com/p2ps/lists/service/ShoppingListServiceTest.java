@@ -5,6 +5,7 @@ import com.p2ps.auth.repository.UserRepository;
 import java.math.BigDecimal;
 
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
+import com.p2ps.catalog.service.StorePriceService;
 import com.p2ps.lists.dto.ListInvitationDTO;
 import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.exception.ListAccessDeniedException;
@@ -61,6 +62,9 @@ class ShoppingListServiceTest {
 
     @Mock
     private ItemRepository itemRepository;
+
+    @Mock
+    private StorePriceService storePriceService;
 
     @Mock
     private ListInvitationRepository invitationRepository;
@@ -731,6 +735,78 @@ class ShoppingListServiceTest {
 
         assertEquals("Kaufland", result.getFinalStore());
         verify(shoppingListRepository).save(list);
+    }
+
+    @Test
+    void finishShopping_shouldRecordStorePricesForCheckedCatalogItems() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+
+        Item checkedCatalogItem = new Item();
+        checkedCatalogItem.setId(UUID.randomUUID());
+        checkedCatalogItem.setChecked(true);
+        checkedCatalogItem.setCatalogItem(catalogProduct);
+        checkedCatalogItem.setPrice(new BigDecimal("12.50"));
+
+        Item uncheckedCatalogItem = new Item();
+        uncheckedCatalogItem.setId(UUID.randomUUID());
+        uncheckedCatalogItem.setChecked(false);
+        uncheckedCatalogItem.setCatalogItem(catalogProduct);
+        uncheckedCatalogItem.setPrice(new BigDecimal("9.99"));
+
+        Item checkedWithoutCatalog = new Item();
+        checkedWithoutCatalog.setId(UUID.randomUUID());
+        checkedWithoutCatalog.setChecked(true);
+        checkedWithoutCatalog.setPrice(new BigDecimal("7.50"));
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+        list.getItems().add(checkedCatalogItem);
+        list.getItems().add(uncheckedCatalogItem);
+        list.getItems().add(checkedWithoutCatalog);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShoppingListDTO result = shoppingListService.finishShopping(listId, "Mega", userEmail);
+
+        assertEquals("Mega", result.getFinalStore());
+        verify(storePriceService).recordStorePrice(catalogProduct, "Mega", new BigDecimal("12.50"));
+    }
+
+    @Test
+    void finishShopping_shouldSkipStorePricesForCheckedCatalogItemsWithoutPrice() {
+        String userEmail = "ana@example.com";
+        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
+        user.setId(1);
+        UUID listId = UUID.randomUUID();
+
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+
+        Item checkedCatalogItem = new Item();
+        checkedCatalogItem.setId(UUID.randomUUID());
+        checkedCatalogItem.setChecked(true);
+        checkedCatalogItem.setCatalogItem(catalogProduct);
+        checkedCatalogItem.setPrice(null);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(user);
+        list.getItems().add(checkedCatalogItem);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        shoppingListService.finishShopping(listId, "Mega", userEmail);
+
+        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
     }
 
     @Test
