@@ -6,6 +6,7 @@ import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
 import com.p2ps.util.ProductStringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,18 +19,29 @@ public class CatalogService {
     private final ProductCatalogRepository catalogRepository;
     private final UserRepository userRepository;
     private final UserProductHistoryRepository userProductHistoryRepository;
+    private final StorePriceService storePriceService;
+    private final CatalogService self;
 
     public CatalogService(
             ProductCatalogRepository catalogRepository,
             UserRepository userRepository,
-            UserProductHistoryRepository userProductHistoryRepository) {
+            UserProductHistoryRepository userProductHistoryRepository,
+            StorePriceService storePriceService,
+            @Lazy CatalogService self) {
         this.catalogRepository = catalogRepository;
         this.userRepository = userRepository;
         this.userProductHistoryRepository = userProductHistoryRepository;
+        this.storePriceService = storePriceService;
+        this.self = self;
     }
 
     @Transactional
     public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price) {
+        return self.recordPurchase(genericName, specificName, brand, category, price, null);
+    }
+
+    @Transactional
+    public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price, String storeName) {
         if (specificName == null || specificName.isBlank()) {
             return null; // Cannot catalog without a specific name
         }
@@ -44,8 +56,10 @@ public class CatalogService {
         );
         
         // Dupa ce operatia atomica s-a incheiat, cautam produsul pentru a-l returna controller-ului
-        return catalogRepository.findBySpecificNameAndBrand(specificName, brand)
+        ProductCatalog recordedProduct = catalogRepository.findBySpecificNameAndBrand(specificName, brand)
                 .orElseThrow(() -> new IllegalStateException("Product should have been created by upsert but was not found."));
+        storePriceService.recordStorePrice(recordedProduct, storeName, price);
+        return recordedProduct;
     }
 
     @Transactional(readOnly = true)

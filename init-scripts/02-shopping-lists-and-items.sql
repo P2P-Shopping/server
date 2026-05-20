@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS user_product_history (
     last_added_timestamp BIGINT
     );
 
+ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS brand VARCHAR(100);
+ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2);
+ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS store_name VARCHAR(255);
+ALTER TABLE user_product_history DROP CONSTRAINT IF EXISTS chk_user_product_history_price_non_negative;
+ALTER TABLE user_product_history ADD CONSTRAINT chk_user_product_history_price_non_negative CHECK (price IS NULL OR price >= 0);
+
 CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_product_history(user_id);
 -- Adaugam index de trigrame pe numele custom pentru a pastra cautarea rapida
 CREATE INDEX IF NOT EXISTS trgm_idx_user_history_custom_name
@@ -41,6 +48,19 @@ ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS estimated_price DECIMAL(10, 2);
 CREATE UNIQUE INDEX IF NOT EXISTS unq_product_catalog_name_brand
     ON p2p_product_catalog(specific_name, COALESCE(brand, ''));
+
+CREATE TABLE IF NOT EXISTS store_prices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    catalog_id UUID NOT NULL REFERENCES p2p_product_catalog(id) ON DELETE CASCADE,
+    store_name VARCHAR(255) NOT NULL,
+    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    last_updated_at TIMESTAMP NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS unq_store_prices_catalog_store
+    ON store_prices(catalog_id, lower(store_name));
+CREATE INDEX IF NOT EXISTS idx_store_prices_last_updated_at
+    ON store_prices(last_updated_at);
 
 CREATE TABLE IF NOT EXISTS shopping_lists (
     id UUID PRIMARY KEY,

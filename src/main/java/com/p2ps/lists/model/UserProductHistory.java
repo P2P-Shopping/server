@@ -5,6 +5,8 @@ import com.p2ps.catalog.model.ProductCatalog;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
@@ -30,4 +32,16 @@ public class UserProductHistory {
 
     @Column(name = "last_added_timestamp")
     private Long lastAddedTimestamp;
+
+    @Column(name = "brand", length = 100)
+    private String brand;
+
+    @Column(name = "category", length = 50)
+    private String category;
+
+    @Column(name = "price", precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Column(name = "store_name")
+    private String storeName;
 }
