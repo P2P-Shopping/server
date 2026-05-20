@@ -5,7 +5,7 @@ public record StoreMatchResponse(
         String storeName,
         int matchedItems,
         double distanceMeters,
-        int matchPercentage
+        long matchPercentage
 ) {
 }
 
