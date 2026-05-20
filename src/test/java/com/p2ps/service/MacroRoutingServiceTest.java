@@ -124,6 +124,35 @@ class MacroRoutingServiceTest {
         assertNull(response.getWalking().getPolyline());
     }
 
+    @Test
+    void getEstimates_shouldReturnNullWhenStoreIdIsNull() {
+        MacroRoutingResponse response = service.getEstimates(47.15, 27.58, null);
+
+        assertNull(response);
+        verifyNoInteractions(osrmClient);
+    }
+
+    @Test
+    void getStorePolygonGeoJson_shouldReturnGeoJsonWhenStoreExists() {
+        String geojson = "{\"type\":\"Polygon\",\"coordinates\":[[[27.58,47.15]]]}";
+        when(jdbcTemplate.queryForObject(anyString(), eq(String.class), eq(STORE_ID)))
+                .thenReturn(geojson);
+
+        String result = service.getStorePolygonGeoJson(STORE_ID);
+
+        assertEquals(geojson, result);
+    }
+
+    @Test
+    void getStorePolygonGeoJson_shouldReturnNullWhenStoreNotFound() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(String.class), eq(STORE_ID)))
+                .thenThrow(new org.springframework.dao.EmptyResultDataAccessException(0));
+
+        String result = service.getStorePolygonGeoJson(STORE_ID);
+
+        assertNull(result);
+    }
+
     private void mockStoreEntrance(double lat, double lng) {
         Map<String, Object> row = Map.of("lat", lat, "lng", lng);
         when(jdbcTemplate.queryForList(anyString(), eq(STORE_UUID))).thenReturn(List.of(row));
