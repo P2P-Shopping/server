@@ -147,23 +147,19 @@ public class LocationProcessorWorker {
         if (!isPostgreSQL()) {
             return;
         }
-        logger.info("Starting location centroid recalculation.");
-
+        
         try {
-            int deletedRows = jdbcTemplate.update("DELETE FROM store_inventory_map");
-            logger.info("Deleted {} stale inventory map rows.", deletedRows);
-
             String sql = """
                 INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
                     SELECT item_id, store_id, location_point, accuracy_m
                     FROM raw_user_pings
-                    WHERE loc_provider IN ('WIFI_RTT', 'GPS') AND accuracy_m < 12.0
+                    WHERE loc_provider IN ('WIFI_RTT', 'GPS') AND accuracy_m < 30.0
                 ),
                 ClusteredData AS (
                     SELECT 
                         item_id, store_id, location_point, accuracy_m,
-                        ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 10) 
+                        ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1) 
                         OVER (PARTITION BY store_id, item_id) AS cluster_id
                     FROM FilteredPings
                 ),
@@ -187,6 +183,11 @@ public class LocationProcessorWorker {
                     ping_count
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC
+                ON CONFLICT (store_id, item_id) DO UPDATE SET
+                    estimated_loc_point = EXCLUDED.estimated_loc_point,
+                    confidence_score = EXCLUDED.confidence_score,
+                    ping_count = EXCLUDED.ping_count,
+                    last_updated = NOW()
             """;
 
             int insertedRows = jdbcTemplate.update(sql);
@@ -215,11 +216,11 @@ public class LocationProcessorWorker {
                     FROM raw_user_pings
                     WHERE store_id = ? AND item_id = ?
                       AND loc_provider IN ('WIFI_RTT', 'GPS')
-                      AND accuracy_m < 12.0
+                      AND accuracy_m < 30.0
                 ),
                 Clustered AS (
                     SELECT location_point, accuracy_m,
-                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 3.0, minpoints := 3)
+                           ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1)
                            OVER () AS cluster_id
                     FROM ItemPings
                 ),

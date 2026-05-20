@@ -129,3 +129,6 @@ CREATE INDEX IF NOT EXISTS trgm_idx_catalog_specific_name_unaccent
 CREATE INDEX IF NOT EXISTS trgm_idx_catalog_brand_unaccent
     ON p2p_product_catalog USING gin (f_unaccent(lower(COALESCE(brand, ''))) gin_trgm_ops);
 
+ALTER TABLE items ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(255);
+ALTER TABLE items ADD COLUMN IF NOT EXISTS claimed_at BIGINT;
+

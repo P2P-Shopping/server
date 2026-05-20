@@ -20,6 +20,7 @@ import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
 import com.p2ps.lists.repo.ShoppingListRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
+import com.p2ps.util.QuantityParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -213,6 +214,7 @@ public class ItemService {
             throw new ListValidationException("Item name cannot be empty");
         }
         validatePrice(request.getPrice());
+        QuantityParser.parse(request.getQuantity());
 
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
@@ -327,7 +329,7 @@ public class ItemService {
 
         List<ItemDTO> validatedDtos = performAiPostValidation(dtosToValidate);
 
-        List<Item> itemsToSave = applyAiValidationResults(validatedDtos, trackingMap);
+        List<Item> itemsToSave = applyAiValidationResults(validatedDtos, trackingMap, list.getUser());
 
         List<Item> saved = itemRepository.saveAll(itemsToSave);
         return saved.stream().map(this::mapToDTO).toList();
@@ -358,8 +360,7 @@ public class ItemService {
             return dtosToValidate;
         }
     }
-
-    private List<Item> applyAiValidationResults(List<ItemDTO> validatedDtos, Map<UUID, Item> trackingMap) {
+    private List<Item> applyAiValidationResults(List<ItemDTO> validatedDtos, Map<UUID, Item> trackingMap, com.p2ps.auth.model.Users user) {
         List<Item> itemsToSave = new ArrayList<>();
 
         for (ItemDTO dto : validatedDtos) {
@@ -371,6 +372,7 @@ public class ItemService {
             Item originalItem = trackingMap.get(dto.getId());
             if (originalItem != null) {
                 applyRefinedAiUpdates(originalItem, dto);
+                ensureResolvableProductLink(originalItem, user);
                 itemsToSave.add(originalItem);
             }
         }
@@ -381,8 +383,8 @@ public class ItemService {
         if (dto.getName() != null && !dto.getName().isBlank()) {
             originalItem.setName(dto.getName());
         }
-
         if (dto.getQuantity() != null) {
+            QuantityParser.parse(dto.getQuantity());
             originalItem.setQuantity(dto.getQuantity());
         }
     }
@@ -392,6 +394,7 @@ public class ItemService {
             throw new ListValidationException("Item name cannot be empty");
         }
         validatePrice(request.getPrice());
+        QuantityParser.parse(request.getQuantity());
 
         String normalizedItemName = request.getName().trim();
         ProductCatalog catalogMatch = resolveCatalogMatch(normalizedItemName, request.getBrand(), list.getUser());
@@ -496,16 +499,23 @@ public class ItemService {
             if (request.getName().trim().isEmpty()) {
                 throw new ListValidationException("Item name cannot be empty");
             }
-            item.setName(request.getName());
+            item.setName(request.getName().trim());
         }
 
         if (request.getBrand() != null) item.setBrand(request.getBrand());
-        if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
+        if (request.getQuantity() != null) {
+            QuantityParser.parse(request.getQuantity());
+            item.setQuantity(request.getQuantity());
+        }
         validatePrice(request.getPrice());
         if (request.getPrice() != null) item.setPrice(request.getPrice());
         if (request.getCategory() != null) item.setCategory(request.getCategory());
         if (request.getIsRecurrent() != null) item.setRecurrent(request.getIsRecurrent());
         if (request.getPositionIndex() != null) item.setPositionIndex(request.getPositionIndex());
+
+        if (request.getName() != null || request.getBrand() != null) {
+            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+        }
 
         if (request.getIsChecked() != null) {
             boolean wasChecked = item.isChecked();
@@ -553,9 +563,23 @@ public class ItemService {
 
         if (payload.getAction() == com.p2ps.dto.ActionType.UPDATE && payload.getContent() != null) {
             applySyncContent(item, payload.getContent());
+            item.setCatalogItem(resolveCatalogMatch(item.getName(), item.getBrand(), item.getShoppingList().getUser()));
+            attachRoutableExternalItemId(item);
         }
 
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        return mapToDTO(itemRepository.save(item));
+    }
+
+    @Transactional
+    public ItemDTO claimItem(UUID itemId, String claimedByEmail) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
+
+        item.setClaimedBy(claimedByEmail);
+        item.setClaimedAt(claimedByEmail != null ? System.currentTimeMillis() : null);
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+
         return mapToDTO(itemRepository.save(item));
     }
 
@@ -570,8 +594,10 @@ public class ItemService {
                 item.setName(dto.getName());
             }
             if (dto.getBrand() != null) item.setBrand(dto.getBrand());
-            if (dto.getQuantity() != null) item.setQuantity(dto.getQuantity());
-            if (dto.getPrice() != null) {
+            if (dto.getQuantity() != null) {
+                QuantityParser.parse(dto.getQuantity());
+                item.setQuantity(dto.getQuantity());
+            }if (dto.getPrice() != null) {
                 validatePrice(dto.getPrice());
                 item.setPrice(dto.getPrice());
             }
@@ -670,6 +696,11 @@ public class ItemService {
         dto.setLastUpdatedTimestamp(item.getLastUpdatedTimestamp());
         dto.setCreatedAt(item.getCreatedAt());
         dto.setExternalItemId(item.getExternalItemId());
+        if (item.getCatalogItem() != null) {
+            dto.setCatalogId(item.getCatalogItem().getId());
+        }
+        dto.setClaimedBy(item.getClaimedBy());
+        dto.setClaimedAt(item.getClaimedAt());
         return dto;
     }
 
@@ -685,55 +716,21 @@ public class ItemService {
                 .ifPresent(item::setExternalItemId);
     }
 
+    private void ensureResolvableProductLink(Item item, com.p2ps.auth.model.Users user) {
+        if (item.getCatalogItem() == null) {
+            ProductCatalog catalogMatch = resolveCatalogMatch(item.getName(), item.getBrand(), user);
+            if (catalogMatch != null) {
+                item.setCatalogItem(catalogMatch);
+            }
+        }
+        attachRoutableExternalItemId(item);
+    }
+
     private String sumStringQuantities(String oldQ, String newQ) {
         if (oldQ == null || oldQ.trim().isEmpty()) return newQ;
         if (newQ == null || newQ.trim().isEmpty()) return oldQ;
 
-        Map<String, BigDecimal> unitSums = new LinkedHashMap<>();
-        List<String> unparseableParts = new ArrayList<>();
-
-        parseAndAccumulate(oldQ, unitSums, unparseableParts);
-        parseAndAccumulate(newQ, unitSums, unparseableParts);
-
-        List<String> finalParts = new ArrayList<>();
-
-        for (Map.Entry<String, BigDecimal> entry : unitSums.entrySet()) {
-            String valStr = entry.getValue().stripTrailingZeros().toPlainString();
-            String unit = entry.getKey();
-
-            if (unit.isEmpty()) {
-                finalParts.add(valStr);
-            } else {
-                finalParts.add(valStr + " " + unit);
-            }
-        }
-
-        finalParts.addAll(unparseableParts);
-
-        return String.join(" + ", finalParts);
-    }
-
-    private void parseAndAccumulate(String quantityStr, Map<String, BigDecimal> unitSums, List<String> unparseableParts) {
-        String[] parts = quantityStr.split("\\+");
-
-        for (String part : parts) {
-            String cleanPart = part.trim();
-            if (cleanPart.isEmpty()) continue;
-
-            Matcher matcher = QUANTITY_PATTERN.matcher(cleanPart);
-            if (matcher.matches()) {
-                try {
-                    BigDecimal val = new BigDecimal(matcher.group(1).replace(",", "."));
-                    String unit = matcher.group(2).trim().toLowerCase();
-                    BigDecimal currentSum = unitSums.getOrDefault(unit, BigDecimal.ZERO);
-                    unitSums.put(unit, currentSum.add(val));
-                } catch (NumberFormatException _) {
-                    unparseableParts.add(cleanPart);
-                }
-            } else {
-                unparseableParts.add(cleanPart);
-            }
-        }
+        return com.p2ps.util.QuantityParser.addQuantities(oldQ, newQ);
     }
 
     void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName, String storeName) {
@@ -862,9 +859,22 @@ public class ItemService {
         }
 
         if (catalogHasBrand) {
-            return itemNameLower.contains(catalog.getBrand().toLowerCase());
+            String brandLower = catalog.getBrand().toLowerCase();
+            if (itemNameLower.contains(brandLower)) {
+                return true;
+            }
         }
 
-        return specificNameLower.equals(itemNameLower) || itemNameLower.contains(specificNameLower);
+        String genericNameLower = catalog.getGenericName() != null ? catalog.getGenericName().toLowerCase() : "";
+        return namesOverlap(itemNameLower, genericNameLower)
+                || namesOverlap(itemNameLower, specificNameLower);
+    }
+
+    private boolean namesOverlap(String itemNameLower, String catalogNameLower) {
+        return catalogNameLower != null
+                && !catalogNameLower.isBlank()
+                && (catalogNameLower.equals(itemNameLower)
+                || itemNameLower.contains(catalogNameLower)
+                || catalogNameLower.contains(itemNameLower));
     }
 }

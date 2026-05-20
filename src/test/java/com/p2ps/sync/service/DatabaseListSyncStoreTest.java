@@ -12,8 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -175,5 +177,75 @@ class DatabaseListSyncStoreTest {
         ListUpdatePayload payload = new ListUpdatePayload();
         
         assertSame(payload, store.apply("   ", payload));
+    }
+
+    @Test
+    void claimItemSetsClaimedByAndTimestamp() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        UUID itemId = UUID.randomUUID();
+
+        ItemDTO updated = new ItemDTO();
+        updated.setClaimedBy("alice@test.com");
+        updated.setChecked(false);
+        updated.setLastUpdatedTimestamp(456L);
+
+        when(itemService.claimItem(itemId, "alice@test.com")).thenReturn(updated);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CLAIM_ITEM);
+        payload.setItemId(itemId.toString());
+        payload.setClaimedBy("alice@test.com");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals("alice@test.com", result.getClaimedBy());
+        assertEquals(456L, result.getTimestamp());
+        assertNotNull(result.getContent());
+        assertTrue(result.getContent().contains("alice@test.com"));
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
+    }
+
+    @Test
+    void unclaimItemClearsClaimedBy() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        UUID itemId = UUID.randomUUID();
+
+        ItemDTO updated = new ItemDTO();
+        updated.setClaimedBy(null);
+        updated.setChecked(false);
+        updated.setLastUpdatedTimestamp(789L);
+
+        when(itemService.claimItem(itemId, null)).thenReturn(updated);
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.UNCLAIM_ITEM);
+        payload.setItemId(itemId.toString());
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertNull(result.getClaimedBy());
+        assertEquals(789L, result.getTimestamp());
+        assertEquals(ListUpdatePayload.STATUS_SUCCESS, result.getStatus());
+    }
+
+    @Test
+    void claimItemRejectsOnException() {
+        DatabaseListSyncStore store = new DatabaseListSyncStore(itemService);
+        UUID itemId = UUID.randomUUID();
+
+        when(itemService.claimItem(any(UUID.class), any()))
+                .thenThrow(new com.p2ps.lists.exception.ItemNotFoundException("not found"));
+
+        ListUpdatePayload payload = new ListUpdatePayload();
+        payload.setAction(ActionType.CLAIM_ITEM);
+        payload.setItemId(itemId.toString());
+        payload.setClaimedBy("alice@test.com");
+
+        ListUpdatePayload result = store.apply("list-1", payload);
+
+        assertSame(payload, result);
+        assertEquals(ListUpdatePayload.STATUS_REJECTION, result.getStatus());
     }
 }

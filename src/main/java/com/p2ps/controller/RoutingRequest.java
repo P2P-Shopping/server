@@ -15,6 +15,8 @@ public class RoutingRequest {
     private double userLng;
     private List<String> productIds;
 
+    private String storeId; // BE: Optional override for the store
+
     /**
      * BE 3.1 — Lazy Routing.
      *

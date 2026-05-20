@@ -9,6 +9,7 @@ plugins {
 group = "p2p-shopping"
 version = "0.0.1-SNAPSHOT"
 description = "P2P-Shopping"
+val firebaseAdminVersion = "9.4.3"
 
 java {
     toolchain {
@@ -46,6 +47,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.hibernate.orm:hibernate-spatial")
+    implementation("com.google.firebase:firebase-admin:${firebaseAdminVersion}")
 
 
     runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
@@ -92,4 +94,13 @@ tasks.jacocoTestReport {
 
 tasks.test {
     finalizedBy(tasks.jacocoTestReport)
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("io.netty:netty-codec-http:4.2.13.Final")
+        force("io.netty:netty-codec-http2:4.2.13.Final")
+        force("io.netty:netty-codec-dns:4.2.13.Final")
+        force("io.netty:netty-codec-compression:4.2.13.Final")
+    }
 }

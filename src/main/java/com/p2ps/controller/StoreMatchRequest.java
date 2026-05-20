@@ -11,4 +11,5 @@ public class StoreMatchRequest {
     private double userLng;
     private double radiusInMeters;
     private List<UUID> itemIds;
+    private List<String> itemNames;
 }

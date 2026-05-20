@@ -136,11 +136,31 @@ class PresenceStateServiceTest {
     }
 
     @Test
+    void getRoomDisplayNames_shouldReturnConcurrentMap() {
+        ConcurrentMap<String, java.util.Map<String, String>> displayNames = presenceStateService.getRoomDisplayNames();
+        assertNotNull(displayNames);
+    }
+
+    @Test
+    void getRoomDisplayNames_shouldReturnSameInstance() {
+        ConcurrentMap<String, java.util.Map<String, String>> first = presenceStateService.getRoomDisplayNames();
+        ConcurrentMap<String, java.util.Map<String, String>> second = presenceStateService.getRoomDisplayNames();
+        assertSame(first, second);
+    }
+
+    @Test
+    void getRoomDisplayNames_shouldReturnEmptyMapInitially() {
+        assertTrue(presenceStateService.getRoomDisplayNames().isEmpty());
+    }
+
+    @Test
     void operations_shouldNotThrowExceptions() {
         assertDoesNotThrow(() -> {
             presenceStateService.getRoomRosters().put("key", ConcurrentHashMap.newKeySet());
+            presenceStateService.getRoomDisplayNames().put("key", new ConcurrentHashMap<>());
             presenceStateService.getSessionTracker().put("key", new PresenceEvent());
             presenceStateService.getRoomRosters().clear();
+            presenceStateService.getRoomDisplayNames().clear();
             presenceStateService.getSessionTracker().clear();
         });
     }
