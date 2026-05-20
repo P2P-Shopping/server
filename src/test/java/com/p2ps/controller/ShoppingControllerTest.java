@@ -193,7 +193,9 @@ class ShoppingControllerTest {
         assertEquals(200, response.getStatusCode().value());
         verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
         verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), any());
-        verify(itemService, org.mockito.Mockito.never()).recordReceiptItem(any(), any(), any());
+        verify(itemService).recordReceiptItem(any(), any(), any());
+        verify(shoppingListService, org.mockito.Mockito.never())
+                .markReceiptItemPurchased(any(), any(), any(), any());
     }
 
     @Test
