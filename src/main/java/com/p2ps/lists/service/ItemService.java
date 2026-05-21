@@ -488,8 +488,41 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
-        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+        ShoppingList list = item.getShoppingList();
+        boolean canModify = list.canBeModifiedBy(userEmail);
+        boolean canCheck = list.canCheckItems(userEmail);
+
+        if (!canModify && !canCheck) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
+        }
+
+        if (!canModify) {
+            // User is a GUEST. Verify they only change isChecked
+            boolean hasUnauthorizedChanges = false;
+            if (request.getName() != null && !request.getName().trim().equals(item.getName())) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getBrand() != null && !Objects.equals(request.getBrand(), item.getBrand())) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getQuantity() != null && !Objects.equals(request.getQuantity(), item.getQuantity())) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getPrice() != null && (item.getPrice() == null || request.getPrice().compareTo(item.getPrice()) != 0)) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getCategory() != null && !Objects.equals(request.getCategory(), item.getCategory())) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getIsRecurrent() != null && request.getIsRecurrent() != item.isRecurrent()) {
+                hasUnauthorizedChanges = true;
+            }
+            if (request.getPositionIndex() != null && !Objects.equals(request.getPositionIndex(), item.getPositionIndex())) {
+                hasUnauthorizedChanges = true;
+            }
+            if (hasUnauthorizedChanges) {
+                throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
+            }
         }
 
         applyUpdatableFields(item, request);

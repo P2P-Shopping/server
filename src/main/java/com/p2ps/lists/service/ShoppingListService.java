@@ -17,6 +17,7 @@ import com.p2ps.lists.model.InvitationStatus;
 import com.p2ps.lists.model.Item;
 import com.p2ps.lists.model.ListCategory;
 import com.p2ps.lists.model.ListInvitation;
+import com.p2ps.lists.model.ListCollaborator;
 import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.repo.ItemRepository;
@@ -286,15 +287,15 @@ public class ShoppingListService {
     }
 
     @Transactional
-    public void shareList(java.util.UUID listId, String collaboratorEmail, String ownerEmail) {
+    public void shareList(java.util.UUID listId, String collaboratorEmail, String requesterEmail, String roleName) {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
-        if (!list.getUser().getEmail().equals(ownerEmail)) {
-            throw new ListAccessDeniedException("Only the owner can share this list");
+        if (!list.isAdmin(requesterEmail)) {
+            throw new ListAccessDeniedException("Only admins can share this list");
         }
 
-        if (collaboratorEmail.equals(ownerEmail)) {
+        if (collaboratorEmail.equals(list.getUser().getEmail())) {
             throw new IllegalArgumentException("Cannot share list with owner");
         }
 
@@ -305,8 +306,20 @@ public class ShoppingListService {
             throw new IllegalArgumentException("User is already a collaborator on this list");
         }
 
+        ListRole role = ListRole.EDITOR;
+        if (roleName != null) {
+            try {
+                role = ListRole.valueOf(roleName.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid role specified");
+            }
+        }
+
         Optional<ListInvitation> existingInvitation = invitationRepository.findByShoppingListIdAndInviteeId(
                 listId, collaborator.getId());
+
+        Users inviter = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new ListUserNotFoundException("Inviter user not found"));
 
         if (existingInvitation.isPresent()) {
             ListInvitation existing = existingInvitation.get();
@@ -316,7 +329,8 @@ public class ShoppingListService {
             if (existing.getStatus() == InvitationStatus.ACCEPTED) {
                 throw new IllegalArgumentException("User has already accepted an invitation for this list");
             }
-            existing.setInviter(list.getUser());
+            existing.setInviter(inviter);
+            existing.setRole(role);
             existing.setStatus(InvitationStatus.PENDING);
             invitationRepository.save(existing);
             notifyInvitee(existing);
@@ -325,20 +339,25 @@ public class ShoppingListService {
 
         ListInvitation invitation = new ListInvitation();
         invitation.setShoppingList(list);
-        invitation.setInviter(list.getUser());
+        invitation.setInviter(inviter);
         invitation.setInvitee(collaborator);
+        invitation.setRole(role);
         invitation.setStatus(InvitationStatus.PENDING);
         invitationRepository.save(invitation);
         notifyInvitee(invitation);
     }
 
     @Transactional
-    public void removeCollaborator(UUID listId, Integer userId, String ownerEmail) {
+    public void removeCollaborator(UUID listId, Integer userId, String requesterEmail) {
         ShoppingList list = shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
 
-        if (!list.getUser().getEmail().equals(ownerEmail)) {
-            throw new ListAccessDeniedException("Only the owner can remove collaborators");
+        if (!list.isAdmin(requesterEmail)) {
+            throw new ListAccessDeniedException("Only admins can remove collaborators");
+        }
+
+        if (list.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("Cannot remove the list owner");
         }
 
         if (!listCollaboratorRepository.existsByListIdAndUserId(listId, userId)) {
@@ -348,6 +367,36 @@ public class ShoppingListService {
         listCollaboratorRepository.deleteByListIdAndUserId(listId, userId);
         invitationRepository.findByShoppingListIdAndInviteeId(listId, userId)
                 .ifPresent(invitationRepository::delete);
+        broadcastMembershipChange(listId);
+    }
+
+    @Transactional
+    public void updateCollaboratorRole(UUID listId, Integer userId, String roleName, String requesterEmail) {
+        ShoppingList list = shoppingListRepository.findById(listId)
+                .orElseThrow(() -> new ShoppingListNotFoundException(SHOPPING_LIST_NOT_FOUND));
+
+        if (!list.isAdmin(requesterEmail)) {
+            throw new ListAccessDeniedException("Only admins can change collaborator roles");
+        }
+
+        if (list.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("Cannot change the role of the list owner");
+        }
+
+        ListRole newRole;
+        try {
+            newRole = ListRole.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid role specified");
+        }
+
+        ListCollaborator collaborator = list.getCollaborators().stream()
+                .filter(c -> c.getUser().getId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new ListUserNotFoundException("Collaborator not found on this list"));
+
+        collaborator.setRole(newRole);
+        listCollaboratorRepository.save(collaborator);
         broadcastMembershipChange(listId);
     }
 
@@ -374,7 +423,7 @@ public class ShoppingListService {
     }
 
     private void broadcastMembershipChange(UUID listId) {
-        messagingTemplate.convertAndSend("/topic/lists/" + listId + "/members", "changed");
+        messagingTemplate.convertAndSend("/topic/list/" + listId + "/members", "changed");
     }
 
     private void notifyInvitee(ListInvitation invitation) {
@@ -449,6 +498,8 @@ public class ShoppingListService {
                             itemDto.setCatalogId(item.getCatalogItem().getId());
                         }
                         itemDto.setExternalItemId(item.getExternalItemId());
+                        itemDto.setClaimedBy(item.getClaimedBy());
+                        itemDto.setClaimedAt(item.getClaimedAt());
                         return itemDto;
                     })
                     .toList());
