@@ -310,7 +310,7 @@ public class ShoppingListService {
         if (roleName != null) {
             try {
                 role = ListRole.valueOf(roleName.toUpperCase());
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 throw new IllegalArgumentException("Invalid role specified");
             }
         }
@@ -386,7 +386,7 @@ public class ShoppingListService {
         ListRole newRole;
         try {
             newRole = ListRole.valueOf(roleName.toUpperCase());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new IllegalArgumentException("Invalid role specified");
         }
 
@@ -394,6 +394,16 @@ public class ShoppingListService {
                 .filter(c -> c.getUser().getId().equals(userId))
                 .findFirst()
                 .orElseThrow(() -> new ListUserNotFoundException("Collaborator not found on this list"));
+
+        boolean isSelfDemotion = collaborator.getRole() == ListRole.ADMIN && newRole != ListRole.ADMIN;
+        if (collaborator.getUser().getEmail().equals(requesterEmail) && isSelfDemotion) {
+            long otherCollaboratorAdminsCount = list.getCollaborators().stream()
+                    .filter(c -> c.getRole() == ListRole.ADMIN && !c.getUser().getEmail().equals(requesterEmail))
+                    .count();
+            if (otherCollaboratorAdminsCount == 0) {
+                throw new ListAccessDeniedException("You cannot change your own role because you are the only admin collaborator on this list.");
+            }
+        }
 
         collaborator.setRole(newRole);
         listCollaboratorRepository.save(collaborator);

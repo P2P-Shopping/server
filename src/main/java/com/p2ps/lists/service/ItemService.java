@@ -498,31 +498,7 @@ public class ItemService {
 
         if (!canModify) {
             // User is a GUEST. Verify they only change isChecked
-            boolean hasUnauthorizedChanges = false;
-            if (request.getName() != null && !request.getName().trim().equals(item.getName())) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getBrand() != null && !Objects.equals(request.getBrand(), item.getBrand())) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getQuantity() != null && !Objects.equals(request.getQuantity(), item.getQuantity())) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getPrice() != null && (item.getPrice() == null || request.getPrice().compareTo(item.getPrice()) != 0)) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getCategory() != null && !Objects.equals(request.getCategory(), item.getCategory())) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getIsRecurrent() != null && request.getIsRecurrent() != item.isRecurrent()) {
-                hasUnauthorizedChanges = true;
-            }
-            if (request.getPositionIndex() != null && !Objects.equals(request.getPositionIndex(), item.getPositionIndex())) {
-                hasUnauthorizedChanges = true;
-            }
-            if (hasUnauthorizedChanges) {
-                throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
-            }
+            validateGuestAccess(item, request);
         }
 
         applyUpdatableFields(item, request);
@@ -567,6 +543,35 @@ public class ItemService {
             saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
         }
     }
+
+    private void validateGuestAccess(Item item, ItemRequest request) {
+        if (isFieldChanged(request.getName(), item.getName(), (req, cur) -> !req.trim().equals(cur))
+                || isFieldChanged(request.getBrand(), item.getBrand())
+                || isFieldChanged(request.getQuantity(), item.getQuantity())
+                || isPriceChanged(request.getPrice(), item.getPrice())
+                || isFieldChanged(request.getCategory(), item.getCategory())
+                || isRecurrentChanged(request.getIsRecurrent(), item.isRecurrent())
+                || isFieldChanged(request.getPositionIndex(), item.getPositionIndex())) {
+            throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
+        }
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue) {
+        return newValue != null && !newValue.equals(currentValue);
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue, java.util.function.BiFunction<T, T, Boolean> comparer) {
+        return newValue != null && comparer.apply(newValue, currentValue);
+    }
+
+    private boolean isPriceChanged(java.math.BigDecimal newValue, java.math.BigDecimal currentValue) {
+        return newValue != null && (currentValue == null || newValue.compareTo(currentValue) != 0);
+    }
+
+    private boolean isRecurrentChanged(Boolean newValue, boolean currentValue) {
+        return newValue != null && newValue != currentValue;
+    }
+
 
     @Transactional
     public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {

@@ -1505,4 +1505,64 @@ class ShoppingListServiceTest {
         assertEquals(listId, result.getId());
         assertEquals(ListCategory.FREQUENT, result.getCategory());
     }
+
+    @Test
+    void updateCollaboratorRole_AllowsAdminSelfDemotionIfOtherAdminsExist() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        String requesterEmail = "admin1@example.com";
+
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+
+        Users admin1User = new Users(requesterEmail, "pass", "Admin1", "User");
+        admin1User.setId(userId);
+
+        Users admin2User = new Users("admin2@example.com", "pass", "Admin2", "User");
+        admin2User.setId(3);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListCollaborator c1 = new ListCollaborator(list, admin1User, ListRole.ADMIN);
+        ListCollaborator c2 = new ListCollaborator(list, admin2User, ListRole.ADMIN);
+        list.getCollaborators().add(c1);
+        list.getCollaborators().add(c2);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        shoppingListService.updateCollaboratorRole(listId, userId, "EDITOR", requesterEmail);
+
+        assertEquals(ListRole.EDITOR, c1.getRole());
+        verify(listCollaboratorRepository).save(c1);
+    }
+
+    @Test
+    void updateCollaboratorRole_ThrowsAccessDeniedOnSelfDemotionIfSoleAdmin() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        String requesterEmail = "admin1@example.com";
+
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+
+        Users admin1User = new Users(requesterEmail, "pass", "Admin1", "User");
+        admin1User.setId(userId);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListCollaborator c1 = new ListCollaborator(list, admin1User, ListRole.ADMIN);
+        list.getCollaborators().add(c1);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        assertThrows(ListAccessDeniedException.class,
+                () -> shoppingListService.updateCollaboratorRole(listId, userId, "EDITOR", requesterEmail));
+
+        assertEquals(ListRole.ADMIN, c1.getRole());
+        verify(listCollaboratorRepository, never()).save(any());
+    }
 }
