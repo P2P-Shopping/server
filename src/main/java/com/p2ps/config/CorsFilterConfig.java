@@ -29,7 +29,11 @@ public class CorsFilterConfig {
                         .toList()
         );
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(Arrays.asList(
+                "Authorization", "Content-Type", "Accept",
+                "X-Return-Token", "X-API-Key", "X-Device-Id",
+                "X-Requested-With", "Origin", "Referer"
+        ));
         config.setExposedHeaders(List.of("Authorization", "Set-Cookie"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
