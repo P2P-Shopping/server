@@ -952,8 +952,8 @@ public class ItemService {
             Double lng = clientLng;
             Double accuracy = clientAccuracy != null ? clientAccuracy : 10.0;
 
-            logger.info("Processing checkoff telemetry for item '{}' in list '{}' (finalStore: '{}'). Received client coords: lat={}, lng={}", 
-                        item.getName(), item.getShoppingList().getTitle(), storeName, lat, lng);
+            logger.debug("Processing checkoff telemetry for item ID: {} in list ID: {} (finalStore: '{}'). Received client coords: lat=[REDACTED], lng=[REDACTED]", 
+                        item.getId(), item.getShoppingList().getId(), storeName);
 
             if (storeName == null || storeName.isBlank()) {
                 // FALLBACK: If list's store is null but client provided active coordinates,
@@ -968,20 +968,19 @@ public class ItemService {
                             Map<String, Object> row = rows.get(0);
                             storeId = (String) row.get("store_id");
                             storeName = (String) row.get("name");
-                            logger.info("Matched coordinates ({}, {}) to geofence store '{}' (ID: {})", 
-                                        lat, lng, storeName, storeId);
+                            logger.debug("Matched coordinates to geofence store '{}' (ID: {})", storeName, storeId);
                         }
                     } catch (Exception e) {
-                        logger.warn("Failed to query store geofences by coordinates ({}, {})", lat, lng, e);
+                        logger.warn("Failed to query store geofences by coordinates ([REDACTED], [REDACTED])", e);
                     }
                 }
             }
 
             if (storeName == null || storeName.isBlank()) {
-                logger.warn("List '{}' does not have a finalStore set, and coordinates do not match any geofence. Recording as 'Unknown Store'.", 
-                            item.getShoppingList().getTitle());
+                logger.warn("List ID: '{}' does not have a finalStore set, and coordinates do not match any geofence. Recording as 'Unknown Store'.", 
+                            item.getShoppingList().getId());
                 storeName = "Unknown Store";
-                storeId = "unknown-" + UUID.randomUUID().toString();
+                storeId = "unknown-" + item.getShoppingList().getId().toString();
             }
 
             // Look up store coordinates and store_id from store_geofences if not already matched
@@ -1011,9 +1010,8 @@ public class ItemService {
             }
 
             if (lat == null || lng == null) {
-                // Last resort coordinates (center of Bucharest)
-                lat = 44.4268;
-                lng = 26.1025;
+                logger.warn("No valid coordinates could be resolved for item ID: {} in list ID: {} (store: '{}'). Geocoding/geofence lookup failed.", 
+                            item.getId(), item.getShoppingList().getId(), storeName);
             }
 
             com.p2ps.telemetry.model.TelemetryRecord record = new com.p2ps.telemetry.model.TelemetryRecord();
@@ -1030,7 +1028,7 @@ public class ItemService {
             record.setServerReceivedTimestamp(java.time.Instant.now());
 
             telemetryRepository.save(record);
-            logger.info("Successfully recorded checkoff telemetry for item {} in store {}", item.getName(), storeName);
+            logger.debug("Successfully recorded checkoff telemetry for item ID: {} in store: '{}'", item.getId(), storeName);
 
         } catch (Exception e) {
             logger.error("Failed to record checkoff telemetry for item {}", item != null ? item.getId() : null, e);
