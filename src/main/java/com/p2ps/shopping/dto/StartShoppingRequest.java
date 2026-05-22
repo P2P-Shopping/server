@@ -11,4 +11,6 @@ public class StartShoppingRequest {
     private String customStoreName;
     private String customStoreAddress;
     private String customStoreNotes;
+    private Double latitude;
+    private Double longitude;
 }

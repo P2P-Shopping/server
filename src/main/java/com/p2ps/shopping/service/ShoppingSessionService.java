@@ -20,6 +20,12 @@ import com.p2ps.shopping.repository.ShoppingSessionRepository;
 import com.p2ps.shopping.repository.StoreCandidateSubmissionRepository;
 import com.p2ps.store.model.StoreGeofence;
 import com.p2ps.store.repository.StoreGeofenceRepository;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.geom.PrecisionModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +37,9 @@ import java.util.UUID;
 @Service
 public class ShoppingSessionService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ShoppingSessionService.class);
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
+    private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
     private final ShoppingSessionRepository shoppingSessionRepository;
     private final StoreCandidateSubmissionRepository storeCandidateSubmissionRepository;
     private final ShoppingListRepository shoppingListRepository;
@@ -89,6 +97,40 @@ public class ShoppingSessionService {
             submission.setSubmittedBy(user);
             submission.setSourceList(list);
             submission.setStatus(StoreSubmissionStatus.PENDING);
+
+            // Create placeholder store if coordinates are provided
+            if (request.getLatitude() != null && request.getLongitude() != null) {
+                logger.info("Creating placeholder store for: {} at [{}, {}]",
+                        submission.getSubmittedName(), request.getLatitude(), request.getLongitude());
+
+                StoreGeofence placeholderStore = new StoreGeofence();
+                placeholderStore.setId(UUID.randomUUID());
+                placeholderStore.setName(submission.getSubmittedName());
+
+                try {
+                    // Create a 50m approximate buffer (0.0005 degrees)
+                    Coordinate coord = new Coordinate(request.getLongitude(), request.getLatitude());
+                    org.locationtech.jts.geom.Geometry buffer = GEOMETRY_FACTORY.createPoint(coord).buffer(0.0005);
+                    buffer.setSRID(4326);
+
+                    if (buffer instanceof Polygon polygon) {
+                        placeholderStore.setBoundaryPolygon(polygon);
+                    } else if (buffer instanceof org.locationtech.jts.geom.MultiPolygon multiPolygon) {
+                        placeholderStore.setBoundaryPolygon((Polygon) multiPolygon.getGeometryN(0));
+                    }
+
+                    placeholderStore = storeGeofenceRepository.save(placeholderStore);
+                    logger.info("Placeholder store created with ID: {}", placeholderStore.getId());
+
+                    session.setStore(placeholderStore);
+                    submission.setMatchedStore(placeholderStore);
+                } catch (Exception e) {
+                    logger.error("Failed to create spatial boundary for placeholder store", e);
+                }
+            } else {
+                logger.warn("Custom store coordinates missing, skipping placeholder store creation.");
+            }
+
             session.setStoreCandidateSubmission(storeCandidateSubmissionRepository.save(submission));
         }
 

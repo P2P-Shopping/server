@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import org.locationtech.jts.geom.Polygon;
 
 import java.util.UUID;
 
@@ -21,4 +22,7 @@ public class StoreGeofence {
 
     @Column(name = "name", nullable = false, length = 255)
     private String name;
+
+    @Column(name = "boundary_polygon", nullable = false, columnDefinition = "geometry(Polygon, 4326)")
+    private Polygon boundaryPolygon;
 }
