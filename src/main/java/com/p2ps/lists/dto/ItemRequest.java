@@ -22,4 +22,8 @@ public class ItemRequest {
     private Boolean isRecurrent;
     private Double positionIndex;
     private Long timestamp;
+
+    private Double lat;
+    private Double lng;
+    private Double accuracyMeters;
 }
