@@ -38,7 +38,7 @@ public class CatalogController {
                 request.getBrand(),
                 request.getCategory(),
                 request.getPrice(),
-                request.getStoreName()
+                request.getStoreId()
         );
 
         return ResponseEntity.ok(recordedProduct);

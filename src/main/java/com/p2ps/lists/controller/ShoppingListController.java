@@ -44,7 +44,6 @@ public class ShoppingListController {
         updateDto.setTitle(request.getTitle());
         updateDto.setCategory(request.getCategory());
         updateDto.setSubcategory(request.getSubcategory());
-        updateDto.setFinalStore(request.getFinalStore());
         ShoppingListDTO updatedList = shoppingListService.updateList(listId, updateDto, userEmail);
         return ResponseEntity.ok(updatedList);
     }

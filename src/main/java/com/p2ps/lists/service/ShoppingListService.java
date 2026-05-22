@@ -4,7 +4,6 @@ package com.p2ps.lists.service;
 import com.p2ps.ai.dto.ParsedItemResponse;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
-import com.p2ps.catalog.service.StorePriceService;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.lists.dto.CollaboratorDTO;
 import com.p2ps.lists.dto.ImportItemsRequestDTO;
@@ -47,16 +46,14 @@ public class ShoppingListService {
     private static final String EMAIL_MASK_REGEX = "(^.)[^@]*(@.*$)";
     private static final String EMAIL_MASK_REPLACEMENT = "$1***$2";
     private final ItemRepository itemRepository;
-    private final StorePriceService storePriceService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository, ListCollaboratorRepository listCollaboratorRepository, StorePriceService storePriceService, SimpMessagingTemplate messagingTemplate) {
+    public ShoppingListService(ShoppingListRepository shoppingListRepository, UserRepository userRepository, ItemRepository itemRepository, ListInvitationRepository invitationRepository, ListCollaboratorRepository listCollaboratorRepository, SimpMessagingTemplate messagingTemplate) {
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
         this.invitationRepository = invitationRepository;
         this.listCollaboratorRepository = listCollaboratorRepository;
-        this.storePriceService = storePriceService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -96,10 +93,6 @@ public class ShoppingListService {
         if (updateDto.getSubcategory() != null) {
             list.setSubcategory(updateDto.getSubcategory().isEmpty() ? null : updateDto.getSubcategory());
         }
-        if (updateDto.getFinalStore() != null) {
-            list.setFinalStore(updateDto.getFinalStore().isEmpty() ? null : updateDto.getFinalStore());
-        }
-
         ShoppingList savedList = shoppingListRepository.save(list);
         return mapToDTO(savedList, userEmail);
     }
@@ -169,25 +162,6 @@ public class ShoppingListService {
         }
 
         return mapToDTO(shoppingListRepository.save(currentList), userEmail);
-    }
-
-    @Transactional
-    public ShoppingListDTO finishShopping(UUID listId, String storeName, String userEmail) {
-        if (storeName == null || storeName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Store name cannot be empty");
-        }
-
-        ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
-        String normalizedStoreName = storeName.trim();
-        list.setFinalStore(normalizedStoreName);
-
-        list.getItems().stream()
-                .filter(Item::isChecked)
-                .filter(item -> item.getCatalogItem() != null)
-                .filter(item -> item.getPrice() != null && item.getPrice().compareTo(java.math.BigDecimal.ZERO) >= 0)
-                .forEach(item -> storePriceService.recordStorePrice(item.getCatalogItem(), normalizedStoreName, item.getPrice()));
-
-        return mapToDTO(shoppingListRepository.save(list), userEmail);
     }
 
     @Transactional
@@ -431,7 +405,10 @@ public class ShoppingListService {
         dto.setTitle(list.getTitle());
         dto.setCategory(list.getCategory());
         dto.setSubcategory(list.getSubcategory());
-        dto.setFinalStore(list.getFinalStore());
+        if (list.getFinalStore() != null) {
+            dto.setFinalStoreId(list.getFinalStore().getId());
+            dto.setFinalStoreName(list.getFinalStore().getName());
+        }
         if (list.getUser() != null) {
             dto.setUserId(list.getUser().getId() != null ? list.getUser().getId().toString() : null);
             dto.setOwnerEmail(list.getUser().getEmail());

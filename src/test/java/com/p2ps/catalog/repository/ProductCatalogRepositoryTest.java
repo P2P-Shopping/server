@@ -160,7 +160,32 @@ class ProductCatalogRepositoryTest {
                 id UUID PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
                 user_id INTEGER NOT NULL REFERENCES users(id),
-                category VARCHAR(50) NOT NULL DEFAULT 'NORMAL'
+                category VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
+                subcategory VARCHAR(100),
+                final_store VARCHAR(255)
+            )
+        """);
+        
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS items (
+                id UUID PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                is_checked BOOLEAN NOT NULL DEFAULT FALSE,
+                brand VARCHAR(100),
+                quantity VARCHAR(50),
+                price DECIMAL(10, 2) DEFAULT 0 CHECK (price >= 0),
+                category VARCHAR(50),
+                is_recurrent BOOLEAN DEFAULT FALSE,
+                last_updated_timestamp BIGINT,
+                created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
+                version BIGINT DEFAULT 0,
+                list_id UUID NOT NULL,
+                catalog_id UUID,
+                external_item_id VARCHAR(255),
+                claimed_by VARCHAR(255),
+                claimed_at BIGINT,
+                CONSTRAINT fk_list FOREIGN KEY (list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE,
+                CONSTRAINT fk_catalog FOREIGN KEY (catalog_id) REFERENCES p2p_product_catalog(id) ON DELETE SET NULL
             )
         """);
 
@@ -180,15 +205,15 @@ class ProductCatalogRepositoryTest {
         UUID store2Id = UUID.randomUUID();
 
         // Cast la ::uuid
-        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 1', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store1Id);
-        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 2', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326))", store2Id);
+        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 1', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326)) ON CONFLICT DO NOTHING", store1Id);
+        jdbcTemplate.update("INSERT INTO store_geofences (store_id, name, boundary_polygon) VALUES (?::uuid, 'Store 2', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326)) ON CONFLICT DO NOTHING", store2Id);
 
         // Adăugat token_version
         jdbcTemplate.update("INSERT INTO users (id, first_name, last_name, email, password, token_version) VALUES (999, 'Test', 'User', 'catalog@example.com', 'pass', 0) ON CONFLICT DO NOTHING");
 
         UUID listId = UUID.randomUUID();
         // Adăugat category și cast la ::uuid
-        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id, category) VALUES (?::uuid, 'List', 999, 'NORMAL')", listId);
+        jdbcTemplate.update("INSERT INTO shopping_lists (id, title, user_id, category) VALUES (?::uuid, 'List', 999, 'NORMAL') ON CONFLICT DO NOTHING", listId);
 
         // Create the product catalog
         ProductCatalog catalogProduct = new ProductCatalog();
@@ -203,8 +228,8 @@ class ProductCatalogRepositoryTest {
         UUID item2Id = UUID.randomUUID();
 
         // Cast la ::uuid pentru id, list_id și catalog_id
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid, ?)", item1Id, listId, catalogId, System.currentTimeMillis());
-        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid, ?)", item2Id, listId, catalogId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 1', false, ?::uuid, ?::uuid, ?) ON CONFLICT DO NOTHING", item1Id, listId, catalogId, System.currentTimeMillis());
+        jdbcTemplate.update("INSERT INTO items (id, name, is_checked, list_id, catalog_id, created_at) VALUES (?::uuid, 'Zahar 2', false, ?::uuid, ?::uuid, ?) ON CONFLICT DO NOTHING", item2Id, listId, catalogId, System.currentTimeMillis());
 
         // Inventory mapping cu cast la ::uuid
         jdbcTemplate.update("INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated) VALUES (?::uuid, ?::uuid, ?::uuid, ST_GeomFromText('POINT(0 0)', 4326), 0.9, 1, NOW())", UUID.randomUUID(), store1Id, item1Id);

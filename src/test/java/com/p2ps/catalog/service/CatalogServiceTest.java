@@ -74,16 +74,17 @@ class CatalogServiceTest {
         ProductCatalog result = catalogService.recordPurchase(genericName, specificName, brand, category, price);
 
         verify(catalogRepository).upsertProduct(genericName, specificName, brand, category, price);
-        verify(storePriceService).recordStorePrice(mockProduct, null, price);
+        verify(storePriceService).recordStorePrice(mockProduct, (UUID) null, price);
         assertNotNull(result);
         assertEquals(specificName, result.getSpecificName());
     }
 
     @Test
-    void recordPurchaseShouldUpdateStorePriceWhenStoreNameIsPresent() {
+    void recordPurchaseShouldUpdateStorePriceWhenStoreIdIsPresent() {
         String specificName = "New Product";
         String brand = "New Brand";
         BigDecimal price = BigDecimal.valueOf(12.25);
+        UUID storeId = UUID.randomUUID();
         ProductCatalog mockProduct = new ProductCatalog();
         mockProduct.setId(UUID.randomUUID());
         mockProduct.setSpecificName(specificName);
@@ -91,10 +92,10 @@ class CatalogServiceTest {
 
         when(catalogRepository.findBySpecificNameAndBrand(specificName, brand)).thenReturn(Optional.of(mockProduct));
 
-        ProductCatalog result = catalogService.recordPurchase("Generic", specificName, brand, "Category", price, "Kaufland");
+        ProductCatalog result = catalogService.recordPurchase("Generic", specificName, brand, "Category", price, storeId);
 
         assertEquals(mockProduct, result);
-        verify(storePriceService).recordStorePrice(mockProduct, "Kaufland", price);
+        verify(storePriceService).recordStorePrice(mockProduct, storeId, price);
     }
 
     @Test
@@ -121,7 +122,7 @@ class CatalogServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("Product should have been created by upsert"));
-        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
+        verify(storePriceService, never()).recordStorePrice(any(), (UUID) any(), any());
     }
 
     @Test

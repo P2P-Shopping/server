@@ -8,6 +8,7 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.catalog.service.StorePriceService;
+import com.p2ps.shopping.service.ShoppingSessionService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -60,6 +61,7 @@ public class ItemService {
     private final ProductCatalogRepository catalogRepository;
     private final AiService aiService;
     private final StorePriceService storePriceService;
+    private final ShoppingSessionService shoppingSessionService;
 
     private final ItemService self;
 
@@ -69,6 +71,7 @@ public class ItemService {
                        ProductCatalogRepository catalogRepository,
                        AiService aiService,
                        StorePriceService storePriceService,
+                       ShoppingSessionService shoppingSessionService,
                        @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
@@ -76,11 +79,12 @@ public class ItemService {
         this.catalogRepository = catalogRepository;
         this.aiService = aiService;
         this.storePriceService = storePriceService;
+        this.shoppingSessionService = shoppingSessionService;
         this.self = self;
     }
 
     @Transactional
-    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, String storeName, Users user) {
+    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, UUID listId, Users user) {
         if (item == null || isReceiptJunkItem(item)) {
             return ReceiptProcessingResult.createIgnored();
         }
@@ -92,16 +96,20 @@ public class ItemService {
 
         BigDecimal validPrice = sanitizeNonNegativePrice(item.getPrice());
         ProductCatalog catalogMatch = resolveCatalogMatch(item, user);
+        UUID activeStoreId = listId == null ? null : shoppingSessionService
+                .getActiveSession(listId, user.getEmail())
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
 
-        if (catalogMatch != null && validPrice != null) {
-            storePriceService.recordStorePrice(catalogMatch, storeName, validPrice);
+        if (catalogMatch != null && validPrice != null && activeStoreId != null) {
+            storePriceService.recordStorePrice(catalogMatch, activeStoreId, validPrice);
         }
 
         saveToHistory(
                 null,
                 user,
                 specificName,
-                storeName,
                 item.getBrand(),
                 item.getCategory(),
                 validPrice,
@@ -109,6 +117,11 @@ public class ItemService {
         );
 
         return new ReceiptProcessingResult(false, catalogMatch);
+    }
+
+    @Transactional
+    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, String ignoredStoreName, Users user) {
+        return recordReceiptItem(item, (UUID) null, user);
     }
 
     public record ReceiptProcessingResult(boolean ignored, ProductCatalog catalogMatch) {
@@ -283,7 +296,7 @@ public class ItemService {
 
         try {
             Item savedItem = itemRepository.save(item);
-            saveToHistory(savedItem, list.getUser(), normalizedItemName, list.getFinalStore());
+            saveToHistory(savedItem, list.getUser(), normalizedItemName);
             return mapToDTO(savedItem);
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemToList(listId, request, userEmail);
@@ -470,7 +483,7 @@ public class ItemService {
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(newItem);
-        saveToHistory(newItem, list.getUser(), normalizedItemName, list.getFinalStore());
+        saveToHistory(newItem, list.getUser(), normalizedItemName);
         return newItem;
     }
 
@@ -531,7 +544,7 @@ public class ItemService {
         boolean wasChecked = item.isChecked();
         item.setChecked(request.getIsChecked());
         if (item.isChecked() && !wasChecked) {
-            saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
         }
     }
 
@@ -546,7 +559,7 @@ public class ItemService {
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         if (checked && !wasChecked) {
-            saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
         }
 
         return mapToDTO(itemRepository.save(item));
@@ -561,7 +574,7 @@ public class ItemService {
             boolean wasChecked = item.isChecked();
             item.setChecked(payload.getChecked());
             if (item.isChecked() && !wasChecked) {
-                saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+                saveToHistory(item, item.getShoppingList().getUser(), item.getName());
             }
         }
 
@@ -649,7 +662,7 @@ public class ItemService {
     }
 
     @Transactional
-    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String storeName, String userEmail) {
+    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String userEmail) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
@@ -667,17 +680,27 @@ public class ItemService {
         Item savedItem = itemRepository.save(item);
 
         ProductCatalog catalogItem = savedItem.getCatalogItem();
+        UUID activeStoreId = shoppingSessionService
+                .getActiveSession(savedItem.getShoppingList().getId(), userEmail)
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
 
         if (catalogItem == null) {
-            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName(), storeName);
+            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
         } else {
-            if (storeName != null && !storeName.isBlank() && receiptPrice != null) {
-                storePriceService.recordStorePrice(catalogItem, storeName, receiptPrice);
+            if (activeStoreId != null && receiptPrice != null) {
+                storePriceService.recordStorePrice(catalogItem, activeStoreId, receiptPrice);
             }
-            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName(), storeName);
+            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
         }
 
         return mapToDTO(savedItem);
+    }
+
+    @Transactional
+    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String ignoredStoreName, String userEmail) {
+        return processReceiptItem(itemId, receiptPrice, userEmail);
     }
 
     private void validatePrice(BigDecimal price) {
@@ -737,20 +760,19 @@ public class ItemService {
         return com.p2ps.util.QuantityParser.addQuantities(oldQ, newQ);
     }
 
-    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName, String storeName) {
-        saveToHistory(item, user, new HistoryContext(rawName, storeName, null, null, null, null));
+    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName) {
+        saveToHistory(item, user, new HistoryContext(rawName, null, null, null, null));
     }
 
     void saveToHistory(
             Item item,
             com.p2ps.auth.model.Users user,
             String rawName,
-            String storeName,
             String brand,
             String category,
             BigDecimal price,
             ProductCatalog catalogItem) {
-        saveToHistory(item, user, new HistoryContext(rawName, storeName, brand, category, price, catalogItem));
+        saveToHistory(item, user, new HistoryContext(rawName, brand, category, price, catalogItem));
     }
 
     private void saveToHistory(Item item, com.p2ps.auth.model.Users user, HistoryContext context) {
@@ -772,9 +794,6 @@ public class ItemService {
         } else {
             applyExplicitDetails(history, context);
         }
-
-        applyStoreName(history, context.storeName());
-
         ProductCatalog finalCatalogItem = resolveHistoryCatalogItem(item, context.catalogItem(), historyName, history.getBrand(), user);
 
         if (finalCatalogItem != null) {
@@ -812,10 +831,6 @@ public class ItemService {
         applyPositivePrice(history, context.price());
     }
 
-    private void applyStoreName(UserProductHistory history, String storeName) {
-        applyTextIfPresent(history::setStoreName, storeName);
-    }
-
     private ProductCatalog resolveHistoryCatalogItem(
             Item item,
             ProductCatalog catalogItem,
@@ -846,7 +861,6 @@ public class ItemService {
 
     private record HistoryContext(
             String rawName,
-            String storeName,
             String brand,
             String category,
             BigDecimal price,

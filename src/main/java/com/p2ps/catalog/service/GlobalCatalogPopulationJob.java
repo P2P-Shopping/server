@@ -18,7 +18,7 @@ public class GlobalCatalogPopulationJob {
         this.globalCatalogPopulationService = globalCatalogPopulationService;
     }
 
-    @Scheduled(fixedRate = 2*60000)
+    @Scheduled(fixedRate = 100*60000)
     public void populateGlobalCatalog() {
         int processedCount = globalCatalogPopulationService.populateFromPopularUnknownProducts(minDistinctUsers);
         log.info("[GLOBAL_CATALOG_POPULATION] Processed {} popular unknown product groups", processedCount);

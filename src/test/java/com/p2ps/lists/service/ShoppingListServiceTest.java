@@ -124,22 +124,20 @@ class ShoppingListServiceTest {
         existingList.setId(listId);
         existingList.setTitle("Old Title");
         existingList.setUser(user);
-        
+
         ShoppingListDTO updateDto = new ShoppingListDTO();
         updateDto.setTitle("New Title");
         updateDto.setCategory(ListCategory.FREQUENT);
         updateDto.setSubcategory("Alimente");
-        updateDto.setFinalStore("Kaufland");
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(existingList));
         when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        
+
         ShoppingListDTO result = shoppingListService.updateList(listId, updateDto, userEmail);
-        
+
         assertEquals("New Title", result.getTitle());
         assertEquals(ListCategory.FREQUENT, result.getCategory());
         assertEquals("Alimente", result.getSubcategory());
-        assertEquals("Kaufland", result.getFinalStore());
         verify(shoppingListRepository).save(existingList);
     }
 
@@ -155,19 +153,16 @@ class ShoppingListServiceTest {
         existingList.setTitle("Old Title");
         existingList.setUser(user);
         existingList.setSubcategory("Alimente");
-        existingList.setFinalStore("Kaufland");
-        
+
         ShoppingListDTO updateDto = new ShoppingListDTO();
         updateDto.setSubcategory("");
-        updateDto.setFinalStore("");
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(existingList));
         when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        
+
         ShoppingListDTO result = shoppingListService.updateList(listId, updateDto, userEmail);
-        
+
         assertNull(result.getSubcategory());
-        assertNull(result.getFinalStore());
         verify(shoppingListRepository).save(existingList);
     }
 
@@ -309,7 +304,7 @@ class ShoppingListServiceTest {
         assertThrows(ListAccessDeniedException.class,
                 () -> shoppingListService.getListById(listId, "ana@example.com"));
     }
-    
+
     @Test
     void importItemsShouldCopyAllItemsWhenNoItemIdsProvided() {
         String userEmail = "ana@example.com";
@@ -485,23 +480,23 @@ class ShoppingListServiceTest {
         String ownerEmail = "owner@example.com";
         String collabEmail = "collab@example.com";
         UUID listId = UUID.randomUUID();
-        
+
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
         owner.setId(1);
         Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
         collaborator.setId(2);
-        
+
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.empty());
-        
+
         shoppingListService.shareList(listId, collabEmail, ownerEmail);
-        
+
         assertTrue(list.getCollaborators().isEmpty());
         verify(invitationRepository).save(any(ListInvitation.class));
         verify(shoppingListRepository, never()).save(list);
@@ -647,16 +642,16 @@ class ShoppingListServiceTest {
         String ownerEmail = "owner@example.com";
         String otherEmail = "other@example.com";
         UUID listId = UUID.randomUUID();
-        
+
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
         owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        
-        assertThrows(ListAccessDeniedException.class, 
+
+        assertThrows(ListAccessDeniedException.class,
                 () -> shoppingListService.shareList(listId, "some@email.com", otherEmail));
     }
 
@@ -664,16 +659,16 @@ class ShoppingListServiceTest {
     void shareListShouldThrowWhenSharingWithSelf() {
         String ownerEmail = "owner@example.com";
         UUID listId = UUID.randomUUID();
-        
+
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
         owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        
-        assertThrows(IllegalArgumentException.class, 
+
+        assertThrows(IllegalArgumentException.class,
                 () -> shoppingListService.shareList(listId, ownerEmail, ownerEmail));
     }
 
@@ -682,17 +677,17 @@ class ShoppingListServiceTest {
         String ownerEmail = "owner@example.com";
         String unknownEmail = "unknown@example.com";
         UUID listId = UUID.randomUUID();
-        
+
         Users owner = new Users(ownerEmail, "pass", "Owner", "User");
         owner.setId(1);
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(unknownEmail)).thenReturn(Optional.empty());
-        
-        assertThrows(ListUserNotFoundException.class, 
+
+        assertThrows(ListUserNotFoundException.class,
                 () -> shoppingListService.shareList(listId, unknownEmail, ownerEmail));
     }
 
@@ -703,137 +698,19 @@ class ShoppingListServiceTest {
         owner.setId(1);
         Users collaborator = new Users(collabEmail, "pass", "Collab", "User");
         collaborator.setId(2);
-        
+
         UUID listId = UUID.randomUUID();
         ShoppingList list = new ShoppingList();
         list.setId(listId);
         list.setUser(owner);
         list.getCollaborators().add(new ListCollaborator(list, collaborator, ListRole.EDITOR));
-        
+
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        
+
         ShoppingListDTO result = shoppingListService.getListById(listId, collabEmail);
-        
+
         assertEquals(listId, result.getId());
         assertEquals("EDITOR", result.getCurrentUserRole());
-    }
-
-    @Test
-    void finishShopping_shouldSetFinalStoreAndReturnDTO() {
-        String userEmail = "ana@example.com";
-        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
-        user.setId(1);
-        UUID listId = UUID.randomUUID();
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(user);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        ShoppingListDTO result = shoppingListService.finishShopping(listId, "Kaufland", userEmail);
-
-        assertEquals("Kaufland", result.getFinalStore());
-        verify(shoppingListRepository).save(list);
-    }
-
-    @Test
-    void finishShopping_shouldRecordStorePricesForCheckedCatalogItems() {
-        String userEmail = "ana@example.com";
-        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
-        user.setId(1);
-        UUID listId = UUID.randomUUID();
-
-        ProductCatalog catalogProduct = new ProductCatalog();
-        catalogProduct.setId(UUID.randomUUID());
-
-        Item checkedCatalogItem = new Item();
-        checkedCatalogItem.setId(UUID.randomUUID());
-        checkedCatalogItem.setChecked(true);
-        checkedCatalogItem.setCatalogItem(catalogProduct);
-        checkedCatalogItem.setPrice(new BigDecimal("12.50"));
-
-        Item uncheckedCatalogItem = new Item();
-        uncheckedCatalogItem.setId(UUID.randomUUID());
-        uncheckedCatalogItem.setChecked(false);
-        uncheckedCatalogItem.setCatalogItem(catalogProduct);
-        uncheckedCatalogItem.setPrice(new BigDecimal("9.99"));
-
-        Item checkedWithoutCatalog = new Item();
-        checkedWithoutCatalog.setId(UUID.randomUUID());
-        checkedWithoutCatalog.setChecked(true);
-        checkedWithoutCatalog.setPrice(new BigDecimal("7.50"));
-
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(user);
-        list.getItems().add(checkedCatalogItem);
-        list.getItems().add(uncheckedCatalogItem);
-        list.getItems().add(checkedWithoutCatalog);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        ShoppingListDTO result = shoppingListService.finishShopping(listId, "Mega", userEmail);
-
-        assertEquals("Mega", result.getFinalStore());
-        verify(storePriceService).recordStorePrice(catalogProduct, "Mega", new BigDecimal("12.50"));
-    }
-
-    @Test
-    void finishShopping_shouldSkipStorePricesForCheckedCatalogItemsWithoutPrice() {
-        String userEmail = "ana@example.com";
-        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
-        user.setId(1);
-        UUID listId = UUID.randomUUID();
-
-        ProductCatalog catalogProduct = new ProductCatalog();
-        catalogProduct.setId(UUID.randomUUID());
-
-        Item checkedCatalogItem = new Item();
-        checkedCatalogItem.setId(UUID.randomUUID());
-        checkedCatalogItem.setChecked(true);
-        checkedCatalogItem.setCatalogItem(catalogProduct);
-        checkedCatalogItem.setPrice(null);
-
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(user);
-        list.getItems().add(checkedCatalogItem);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        shoppingListService.finishShopping(listId, "Mega", userEmail);
-
-        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
-    }
-
-    @Test
-    void finishShopping_shouldTrimStoreName() {
-        String userEmail = "ana@example.com";
-        Users user = new Users(userEmail, "secret", "Ana", "Ionescu");
-        user.setId(1);
-        UUID listId = UUID.randomUUID();
-        ShoppingList list = new ShoppingList();
-        list.setId(listId);
-        list.setUser(user);
-
-        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-        when(shoppingListRepository.save(any(ShoppingList.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        ShoppingListDTO result = shoppingListService.finishShopping(listId, "  Kaufland  ", userEmail);
-
-        assertEquals("Kaufland", result.getFinalStore());
-    }
-
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {"   "})
-    void finishShopping_shouldThrowWhenStoreNameIsInvalid(String storeName) {
-        UUID listId = UUID.randomUUID();
-        assertThrows(IllegalArgumentException.class,
-            () -> shoppingListService.finishShopping(listId, storeName, "ana@example.com"));
     }
 
     @Test

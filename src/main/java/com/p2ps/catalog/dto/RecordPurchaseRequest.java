@@ -4,10 +4,11 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Data
 public class RecordPurchaseRequest {
-    private String storeName;
+    private UUID storeId;
 
     private String genericName;
     

@@ -12,7 +12,8 @@ public class ShoppingListDTO {
     private String title;
     private ListCategory category;
     private String subcategory;
-    private String finalStore;
+    private UUID finalStoreId;
+    private String finalStoreName;
     private List<ItemDTO> items;
     private Integer ownerId;
     private List<CollaboratorDTO> collaborators;
@@ -20,4 +21,12 @@ public class ShoppingListDTO {
     private String ownerName;
     private String ownerEmail;
     private String userId;
+
+    public String getFinalStore() {
+        return finalStoreName;
+    }
+
+    public void setFinalStore(String finalStore) {
+        this.finalStoreName = finalStore;
+    }
 }

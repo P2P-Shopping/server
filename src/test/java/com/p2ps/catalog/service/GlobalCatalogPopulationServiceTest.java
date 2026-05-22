@@ -38,9 +38,6 @@ class GlobalCatalogPopulationServiceTest {
     @Mock
     private CatalogItemStandardizationService catalogItemStandardizationService;
 
-    @Mock
-    private StorePriceService storePriceService;
-
     private GlobalCatalogPopulationService service;
 
     @BeforeEach
@@ -50,8 +47,7 @@ class GlobalCatalogPopulationServiceTest {
                 userProductHistoryRepository,
                 productCatalogRepository,
                 catalogItemStandardizationService,
-                transactionTemplate,
-                storePriceService
+                transactionTemplate
         );
     }
 
@@ -144,42 +140,6 @@ class GlobalCatalogPopulationServiceTest {
     }
 
     @Test
-    void populateFromPopularUnknownProductsShouldRecordStorePriceForValidCandidateMetadata() {
-        ProductCatalog existingCatalog = new ProductCatalog();
-        existingCatalog.setId(UUID.randomUUID());
-        UserProductHistoryRepository.PopularUnknownProduct candidate =
-                candidate("cola", 3, "Coca Cola", "Bauturi", new BigDecimal("5.50"), "Mega");
-
-        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
-        when(productCatalogRepository.searchByKeywordStrict("cola")).thenReturn(List.of(existingCatalog));
-        when(userProductHistoryRepository.linkUnknownHistoryToCatalog("cola", existingCatalog)).thenReturn(1);
-
-        int result = service.populateFromPopularUnknownProducts(3);
-
-        assertThat(result).isEqualTo(1);
-        verify(storePriceService).recordStorePrice(existingCatalog, "Mega", new BigDecimal("5.50"));
-    }
-
-    @Test
-    void populateFromPopularUnknownProductsShouldSkipStorePriceForBlankStoreOrNegativePrice() {
-        ProductCatalog existingCatalog = new ProductCatalog();
-        existingCatalog.setId(UUID.randomUUID());
-        UserProductHistoryRepository.PopularUnknownProduct blankStore =
-                candidate("cola", 3, null, null, new BigDecimal("5.50"), "   ");
-        UserProductHistoryRepository.PopularUnknownProduct negativePrice =
-                candidate("suc", 3, null, null, new BigDecimal("-1.00"), "Mega");
-
-        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(blankStore, negativePrice));
-        when(productCatalogRepository.searchByKeywordStrict(any())).thenReturn(List.of(existingCatalog));
-        when(userProductHistoryRepository.linkUnknownHistoryToCatalog(any(), any(ProductCatalog.class))).thenReturn(1);
-
-        int result = service.populateFromPopularUnknownProducts(3);
-
-        assertThat(result).isEqualTo(2);
-        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
-    }
-
-    @Test
     void populateFromPopularUnknownProductsShouldSkipBlankCandidateNamesAndContinue() {
         UserProductHistoryRepository.PopularUnknownProduct broken = candidate("   ", 3);
         UserProductHistoryRepository.PopularUnknownProduct good = candidate("lapte", 4);
@@ -197,7 +157,7 @@ class GlobalCatalogPopulationServiceTest {
     }
 
     private UserProductHistoryRepository.PopularUnknownProduct candidate(String customName, long distinctUsers) {
-        return candidate(customName, distinctUsers, null, null, null, null);
+        return candidate(customName, distinctUsers, null, null, null);
     }
 
     private UserProductHistoryRepository.PopularUnknownProduct candidate(
@@ -205,8 +165,7 @@ class GlobalCatalogPopulationServiceTest {
             long distinctUsers,
             String brand,
             String category,
-            BigDecimal price,
-            String storeName) {
+            BigDecimal price) {
         return new UserProductHistoryRepository.PopularUnknownProduct() {
             @Override
             public String getCustomName() {
@@ -231,11 +190,6 @@ class GlobalCatalogPopulationServiceTest {
             @Override
             public BigDecimal getPrice() {
                 return price;
-            }
-
-            @Override
-            public String getStoreName() {
-                return storeName;
             }
         };
     }
