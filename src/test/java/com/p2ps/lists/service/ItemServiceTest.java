@@ -1557,4 +1557,92 @@ class ItemServiceTest {
         assertThatThrownBy(() -> itemService.processReceiptItem(itemId, BigDecimal.ONE, "Mega", "other@example.com"))
                 .isInstanceOf(ListAccessDeniedException.class);
     }
+
+    // ==========================================
+    // TELEMETRY CAPTURE TESTS
+    // ==========================================
+
+    @Test
+    void testRecordTelemetry_withFinalStoreAndGeofenceMatch() {
+        mockList.setFinalStore("Lidl");
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+        request.setLat(47.123);
+        request.setLng(27.456);
+        request.setAccuracyMeters(15.0);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Mock store_geofences query
+        java.util.Map<String, Object> mockRow = new java.util.HashMap<>();
+        mockRow.put("store_id", "lidl-store-uuid");
+        mockRow.put("lat", 47.1);
+        mockRow.put("lng", 27.4);
+        when(jdbcTemplate.queryForList(anyString(), eq("Lidl"))).thenReturn(List.of(mockRow));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withFinalStoreAndNoGeofenceMatch() {
+        mockList.setFinalStore("Unknown Shop");
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        when(jdbcTemplate.queryForList(anyString(), eq("Unknown Shop"))).thenReturn(List.of());
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withNoFinalStoreButClientCoordsMatchingGeofence() {
+        mockList.setFinalStore(null);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+        request.setLat(47.123);
+        request.setLng(27.456);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Geofence match based on coords
+        java.util.Map<String, Object> mockGeofenceRow = new java.util.HashMap<>();
+        mockGeofenceRow.put("store_id", "matched-store-uuid");
+        mockGeofenceRow.put("name", "Matched Store");
+        when(jdbcTemplate.queryForList(anyString(), eq(27.456), eq(47.123))).thenReturn(List.of(mockGeofenceRow));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withNoFinalStoreAndNoGeofenceMatch() {
+        mockList.setFinalStore(null);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
 }
