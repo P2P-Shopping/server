@@ -347,7 +347,7 @@ class ShoppingListControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNoContent());
 
-        verify(shoppingListService).shareList(listId, "collab@example.com", "owner@example.com");
+        verify(shoppingListService).shareList(listId, "collab@example.com", "owner@example.com", "EDITOR");
     }
 
     @Test

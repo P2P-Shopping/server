@@ -496,8 +496,17 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
-        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+        ShoppingList list = item.getShoppingList();
+        boolean canModify = list.canBeModifiedBy(userEmail);
+        boolean canCheck = list.canCheckItems(userEmail);
+
+        if (!canModify && !canCheck) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
+        }
+
+        if (!canModify) {
+            // User is a GUEST. Verify they only change isChecked
+            validateGuestAccess(item, request);
         }
 
         applyUpdatableFields(item, request);
@@ -543,6 +552,35 @@ public class ItemService {
             recordTelemetry(item, request.getLat(), request.getLng(), request.getAccuracyMeters());
         }
     }
+
+    private void validateGuestAccess(Item item, ItemRequest request) {
+        if (isFieldChanged(request.getName(), item.getName(), (req, cur) -> !req.trim().equals(cur))
+                || isFieldChanged(request.getBrand(), item.getBrand())
+                || isFieldChanged(request.getQuantity(), item.getQuantity())
+                || isPriceChanged(request.getPrice(), item.getPrice())
+                || isFieldChanged(request.getCategory(), item.getCategory())
+                || isRecurrentChanged(request.getIsRecurrent(), item.isRecurrent())
+                || isFieldChanged(request.getPositionIndex(), item.getPositionIndex())) {
+            throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
+        }
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue) {
+        return newValue != null && !newValue.equals(currentValue);
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue, java.util.function.BiFunction<T, T, Boolean> comparer) {
+        return newValue != null && comparer.apply(newValue, currentValue);
+    }
+
+    private boolean isPriceChanged(java.math.BigDecimal newValue, java.math.BigDecimal currentValue) {
+        return newValue != null && (currentValue == null || newValue.compareTo(currentValue) != 0);
+    }
+
+    private boolean isRecurrentChanged(Boolean newValue, boolean currentValue) {
+        return newValue != null && newValue != currentValue;
+    }
+
 
     @Transactional
     public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {
