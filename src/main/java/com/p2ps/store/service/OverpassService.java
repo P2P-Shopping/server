@@ -11,9 +11,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,9 +39,12 @@ public class OverpassService {
                     "[out:json];way(around:%d, %.6f, %.6f)[building];out geom;",
                     SEARCH_RADIUS_METERS, latitude, longitude
             );
-            String url = OVERPASS_URL + "?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+            URI uri = UriComponentsBuilder.fromUriString(OVERPASS_URL)
+                    .queryParam("data", query)
+                    .build()
+                    .toUri();
 
-            String response = restTemplate.getForObject(url, String.class);
+            String response = restTemplate.getForObject(uri, String.class);
             if (response == null) {
                 logger.warn("Overpass API returned null response for [{}, {}]", latitude, longitude);
                 return createFallbackPolygon(latitude, longitude);

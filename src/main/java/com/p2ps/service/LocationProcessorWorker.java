@@ -168,7 +168,7 @@ public class LocationProcessorWorker {
         
         try {
             String sql = """
-                INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count)
+                INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated)
                 WITH FilteredPings AS (
                     SELECT item_id, store_id, location_point, accuracy_m
                     FROM raw_user_pings
@@ -199,7 +199,8 @@ public class LocationProcessorWorker {
                     item_id,
                     estimated_loc_point,
                     confidence_score,
-                    ping_count
+                    ping_count,
+                    NOW()
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC
                 ON CONFLICT (store_id, item_id) DO UPDATE SET
