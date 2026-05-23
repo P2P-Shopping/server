@@ -240,7 +240,9 @@ public class TelemetryRawPingImportJob {
         """,
                 internalStoreId,
                 telemetryRecord.getStoreId(),
-                "Imported Store " + telemetryRecord.getStoreId(),
+                telemetryRecord.getStoreName() != null && !telemetryRecord.getStoreName().isBlank()
+                        ? telemetryRecord.getStoreName()
+                        : "Imported Store " + telemetryRecord.getStoreId(),
                 telemetryRecord.getLng(),
                 telemetryRecord.getLat(),
                 telemetryRecord.getLng(),
@@ -286,7 +288,9 @@ public class TelemetryRawPingImportJob {
         """,
                 internalItemId,
                 telemetryRecord.getItemId(),
-                "Imported Item " + telemetryRecord.getItemId(),
+                telemetryRecord.getItemName() != null && !telemetryRecord.getItemName().isBlank()
+                        ? telemetryRecord.getItemName()
+                        : "Imported Item " + telemetryRecord.getItemId(),
                 itemTimestamp,
                 itemTimestamp,
                 SYSTEM_LIST_ID);

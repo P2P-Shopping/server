@@ -459,6 +459,8 @@ class ShoppingListServiceTest {
         item.setChecked(false);
         item.setPrice(new BigDecimal("1.5"));
         item.setQuantity("2");
+        item.setClaimedBy("collab@example.com");
+        item.setClaimedAt(123456789L);
 
 
         list.setItems(List.of(item));
@@ -474,6 +476,8 @@ class ShoppingListServiceTest {
         assertEquals(1, result.getItems().size());
         assertEquals("Milk", result.getItems().get(0).getName());
         assertEquals(new BigDecimal("1.5"), result.getItems().get(0).getPrice());
+        assertEquals("collab@example.com", result.getItems().get(0).getClaimedBy());
+        assertEquals(123456789L, result.getItems().get(0).getClaimedAt());
     }
     @Test
     void shareListShouldCreatePendingInvitationWhenCalledByOwner() {
@@ -491,12 +495,13 @@ class ShoppingListServiceTest {
         list.setUser(owner);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(ownerEmail)).thenReturn(Optional.of(owner));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.empty());
-
-        shoppingListService.shareList(listId, collabEmail, ownerEmail);
-
+        
+        shoppingListService.shareList(listId, collabEmail, ownerEmail, null);
+        
         assertTrue(list.getCollaborators().isEmpty());
         verify(invitationRepository).save(any(ListInvitation.class));
         verify(shoppingListRepository, never()).save(list);
@@ -525,11 +530,12 @@ class ShoppingListServiceTest {
         declinedInvitation.setStatus(InvitationStatus.DECLINED);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(ownerEmail)).thenReturn(Optional.of(owner));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.of(declinedInvitation));
 
-        shoppingListService.shareList(listId, collabEmail, ownerEmail);
+        shoppingListService.shareList(listId, collabEmail, ownerEmail, null);
 
         assertEquals(InvitationStatus.PENDING, declinedInvitation.getStatus());
         verify(invitationRepository).save(declinedInvitation);
@@ -558,12 +564,13 @@ class ShoppingListServiceTest {
         acceptedInvitation.setStatus(InvitationStatus.ACCEPTED);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(ownerEmail)).thenReturn(Optional.of(owner));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.of(acceptedInvitation));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail, null));
 
         assertEquals("User has already accepted an invitation for this list", ex.getMessage());
         verify(invitationRepository, never()).save(any(ListInvitation.class));
@@ -591,12 +598,13 @@ class ShoppingListServiceTest {
         pendingInvitation.setStatus(InvitationStatus.PENDING);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(ownerEmail)).thenReturn(Optional.of(owner));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.of(pendingInvitation));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail, null));
 
         assertEquals("Invitation already pending for this user", ex.getMessage());
         verify(invitationRepository, never()).save(any(ListInvitation.class));
@@ -608,7 +616,7 @@ class ShoppingListServiceTest {
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.empty());
 
         assertThrows(ShoppingListNotFoundException.class,
-                () -> shoppingListService.shareList(listId, "collab@example.com", "owner@example.com"));
+                () -> shoppingListService.shareList(listId, "collab@example.com", "owner@example.com", null));
     }
 
     @Test
@@ -631,7 +639,7 @@ class ShoppingListServiceTest {
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail));
+                () -> shoppingListService.shareList(listId, collabEmail, ownerEmail, null));
 
         assertEquals("User is already a collaborator on this list", ex.getMessage());
         verify(invitationRepository, never()).save(any(ListInvitation.class));
@@ -650,9 +658,9 @@ class ShoppingListServiceTest {
         list.setUser(owner);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-
-        assertThrows(ListAccessDeniedException.class,
-                () -> shoppingListService.shareList(listId, "some@email.com", otherEmail));
+        
+        assertThrows(ListAccessDeniedException.class, 
+                () -> shoppingListService.shareList(listId, "some@email.com", otherEmail, null));
     }
 
     @Test
@@ -667,9 +675,9 @@ class ShoppingListServiceTest {
         list.setUser(owner);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> shoppingListService.shareList(listId, ownerEmail, ownerEmail));
+        
+        assertThrows(IllegalArgumentException.class, 
+                () -> shoppingListService.shareList(listId, ownerEmail, ownerEmail, null));
     }
 
     @Test
@@ -686,9 +694,9 @@ class ShoppingListServiceTest {
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
         when(userRepository.findByEmail(unknownEmail)).thenReturn(Optional.empty());
-
-        assertThrows(ListUserNotFoundException.class,
-                () -> shoppingListService.shareList(listId, unknownEmail, ownerEmail));
+        
+        assertThrows(ListUserNotFoundException.class, 
+                () -> shoppingListService.shareList(listId, unknownEmail, ownerEmail, null));
     }
 
     @Test
@@ -1384,12 +1392,13 @@ class ShoppingListServiceTest {
         list.setUser(owner);
 
         when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+        when(userRepository.findByEmail(ownerEmail)).thenReturn(Optional.of(owner));
         when(userRepository.findByEmail(collabEmail)).thenReturn(Optional.of(collaborator));
         when(invitationRepository.findByShoppingListIdAndInviteeId(listId, 2))
                 .thenReturn(Optional.empty());
         when(invitationRepository.save(any(ListInvitation.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        shoppingListService.shareList(listId, collabEmail, ownerEmail);
+        shoppingListService.shareList(listId, collabEmail, ownerEmail, null);
 
         verify(invitationRepository).save(any(ListInvitation.class));
     }
@@ -1448,5 +1457,65 @@ class ShoppingListServiceTest {
 
         assertEquals(listId, result.getId());
         assertEquals(ListCategory.FREQUENT, result.getCategory());
+    }
+
+    @Test
+    void updateCollaboratorRole_AllowsAdminSelfDemotionIfOtherAdminsExist() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        String requesterEmail = "admin1@example.com";
+
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+
+        Users admin1User = new Users(requesterEmail, "pass", "Admin1", "User");
+        admin1User.setId(userId);
+
+        Users admin2User = new Users("admin2@example.com", "pass", "Admin2", "User");
+        admin2User.setId(3);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListCollaborator c1 = new ListCollaborator(list, admin1User, ListRole.ADMIN);
+        ListCollaborator c2 = new ListCollaborator(list, admin2User, ListRole.ADMIN);
+        list.getCollaborators().add(c1);
+        list.getCollaborators().add(c2);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        shoppingListService.updateCollaboratorRole(listId, userId, "EDITOR", requesterEmail);
+
+        assertEquals(ListRole.EDITOR, c1.getRole());
+        verify(listCollaboratorRepository).save(c1);
+    }
+
+    @Test
+    void updateCollaboratorRole_ThrowsAccessDeniedOnSelfDemotionIfSoleAdmin() {
+        UUID listId = UUID.randomUUID();
+        Integer userId = 2;
+        String requesterEmail = "admin1@example.com";
+
+        Users owner = new Users("owner@example.com", "pass", "Owner", "User");
+        owner.setId(1);
+
+        Users admin1User = new Users(requesterEmail, "pass", "Admin1", "User");
+        admin1User.setId(userId);
+
+        ShoppingList list = new ShoppingList();
+        list.setId(listId);
+        list.setUser(owner);
+
+        ListCollaborator c1 = new ListCollaborator(list, admin1User, ListRole.ADMIN);
+        list.getCollaborators().add(c1);
+
+        when(shoppingListRepository.findById(listId)).thenReturn(Optional.of(list));
+
+        assertThrows(ListAccessDeniedException.class,
+                () -> shoppingListService.updateCollaboratorRole(listId, userId, "EDITOR", requesterEmail));
+
+        assertEquals(ListRole.ADMIN, c1.getRole());
+        verify(listCollaboratorRepository, never()).save(any());
     }
 }

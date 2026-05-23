@@ -34,6 +34,10 @@ public class ListInvitation {
     @Column(name = "status", nullable = false, length = 20)
     private InvitationStatus status = InvitationStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 20)
+    private ListRole role = ListRole.EDITOR;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

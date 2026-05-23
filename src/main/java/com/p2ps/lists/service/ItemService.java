@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.p2ps.telemetry.repository.TelemetryRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -62,6 +64,8 @@ public class ItemService {
     private final AiService aiService;
     private final StorePriceService storePriceService;
     private final ShoppingSessionService shoppingSessionService;
+    private final TelemetryRepository telemetryRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     private final ItemService self;
 
@@ -72,6 +76,8 @@ public class ItemService {
                        AiService aiService,
                        StorePriceService storePriceService,
                        ShoppingSessionService shoppingSessionService,
+                       TelemetryRepository telemetryRepository,
+                       JdbcTemplate jdbcTemplate,
                        @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
@@ -80,6 +86,8 @@ public class ItemService {
         this.aiService = aiService;
         this.storePriceService = storePriceService;
         this.shoppingSessionService = shoppingSessionService;
+        this.telemetryRepository = telemetryRepository;
+        this.jdbcTemplate = jdbcTemplate;
         this.self = self;
     }
 
@@ -501,8 +509,17 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
-        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+        ShoppingList list = item.getShoppingList();
+        boolean canModify = list.canBeModifiedBy(userEmail);
+        boolean canCheck = list.canCheckItems(userEmail);
+
+        if (!canModify && !canCheck) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
+        }
+
+        if (!canModify) {
+            // User is a GUEST. Verify they only change isChecked
+            validateGuestAccess(item, request);
         }
 
         applyUpdatableFields(item, request);
@@ -545,8 +562,38 @@ public class ItemService {
         item.setChecked(request.getIsChecked());
         if (item.isChecked() && !wasChecked) {
             saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            recordTelemetry(item, request.getLat(), request.getLng(), request.getAccuracyMeters());
         }
     }
+
+    private void validateGuestAccess(Item item, ItemRequest request) {
+        if (isFieldChanged(request.getName(), item.getName(), (req, cur) -> !req.trim().equals(cur))
+                || isFieldChanged(request.getBrand(), item.getBrand())
+                || isFieldChanged(request.getQuantity(), item.getQuantity())
+                || isPriceChanged(request.getPrice(), item.getPrice())
+                || isFieldChanged(request.getCategory(), item.getCategory())
+                || isRecurrentChanged(request.getIsRecurrent(), item.isRecurrent())
+                || isFieldChanged(request.getPositionIndex(), item.getPositionIndex())) {
+            throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
+        }
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue) {
+        return newValue != null && !newValue.equals(currentValue);
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue, java.util.function.BiFunction<T, T, Boolean> comparer) {
+        return newValue != null && comparer.apply(newValue, currentValue);
+    }
+
+    private boolean isPriceChanged(java.math.BigDecimal newValue, java.math.BigDecimal currentValue) {
+        return newValue != null && (currentValue == null || newValue.compareTo(currentValue) != 0);
+    }
+
+    private boolean isRecurrentChanged(Boolean newValue, boolean currentValue) {
+        return newValue != null && newValue != currentValue;
+    }
+
 
     @Transactional
     public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {
@@ -560,6 +607,7 @@ public class ItemService {
 
         if (checked && !wasChecked) {
             saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            recordTelemetry(item, null, null, null);
         }
 
         return mapToDTO(itemRepository.save(item));
@@ -575,6 +623,7 @@ public class ItemService {
             item.setChecked(payload.getChecked());
             if (item.isChecked() && !wasChecked) {
                 saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+                recordTelemetry(item, payload.getLat(), payload.getLng(), payload.getAccuracyMeters());
             }
         }
 
@@ -826,6 +875,7 @@ public class ItemService {
         } else {
             applyExplicitDetails(history, context);
         }
+
         ProductCatalog finalCatalogItem = resolveHistoryCatalogItem(item, context.catalogItem(), historyName, history.getBrand(), user);
 
         if (finalCatalogItem != null) {
@@ -973,6 +1023,102 @@ public class ItemService {
         String genericNameLower = catalog.getGenericName() != null ? catalog.getGenericName().toLowerCase() : "";
         return namesOverlap(itemNameLower, genericNameLower)
                 || namesOverlap(itemNameLower, specificNameLower);
+    }
+
+    private void recordTelemetry(Item item, Double clientLat, Double clientLng, Double clientAccuracy) {
+        try {
+            if (item == null || item.getShoppingList() == null) {
+                logger.warn("Skipping checkoff telemetry because the item or shopping list is null!");
+                return;
+            }
+            com.p2ps.store.model.StoreGeofence finalStoreGeofence = item.getShoppingList().getFinalStore();
+            String storeName = finalStoreGeofence != null ? finalStoreGeofence.getName() : null;
+            String storeId = null;
+            Double lat = clientLat;
+            Double lng = clientLng;
+            Double accuracy = clientAccuracy != null ? clientAccuracy : 10.0;
+
+            logger.debug("Processing checkoff telemetry for item ID: {} in list ID: {} (finalStore: '{}'). Received client coords: lat=[REDACTED], lng=[REDACTED]", 
+                        item.getId(), item.getShoppingList().getId(), storeName);
+
+            if (storeName == null || storeName.isBlank()) {
+                // FALLBACK: If list's store is null but client provided active coordinates,
+                // see if they are currently physically inside any of the geofences in Postgres!
+                if (lat != null && lng != null) {
+                    try {
+                        String sql = "SELECT store_id::text, name " +
+                                     "FROM store_geofences " +
+                                     "WHERE ST_Contains(boundary_polygon, ST_SetSRID(ST_MakePoint(?, ?), 4326)) LIMIT 1";
+                        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, lng, lat);
+                        if (!rows.isEmpty()) {
+                            Map<String, Object> row = rows.get(0);
+                            storeId = (String) row.get("store_id");
+                            storeName = (String) row.get("name");
+                            logger.debug("Matched coordinates to geofence store '{}' (ID: {})", storeName, storeId);
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to query store geofences by coordinates ([REDACTED], [REDACTED])", e);
+                    }
+                }
+            }
+
+            if (storeName == null || storeName.isBlank()) {
+                logger.warn("List ID: '{}' does not have a finalStore set, and coordinates do not match any geofence. Recording as 'Unknown Store'.", 
+                            item.getShoppingList().getId());
+                storeName = "Unknown Store";
+                storeId = "unknown-" + item.getShoppingList().getId().toString();
+            }
+
+            // Look up store coordinates and store_id from store_geofences if not already matched
+            if (storeId == null || storeId.startsWith("unknown-")) {
+                try {
+                    String sql = "SELECT store_id::text, " +
+                                 "ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
+                                 "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
+                                 "FROM store_geofences WHERE LOWER(name) = LOWER(?) LIMIT 1";
+                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeName.trim());
+                    if (!rows.isEmpty()) {
+                        Map<String, Object> row = rows.get(0);
+                        storeId = (String) row.get("store_id");
+                        if (lat == null || lng == null) {
+                            lat = ((Number) row.get("lat")).doubleValue();
+                            lng = ((Number) row.get("lng")).doubleValue();
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to retrieve geofence for store: {}", storeName, e);
+                }
+            }
+
+            if (storeId == null) {
+                // Fallback to generated UUID for store id if not exists in geofences
+                storeId = UUID.nameUUIDFromBytes(("store:" + storeName).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+            }
+
+            if (lat == null || lng == null) {
+                logger.warn("No valid coordinates could be resolved for item ID: {} in list ID: {} (store: '{}'). Geocoding/geofence lookup failed.", 
+                            item.getId(), item.getShoppingList().getId(), storeName);
+            }
+
+            com.p2ps.telemetry.model.TelemetryRecord record = new com.p2ps.telemetry.model.TelemetryRecord();
+            record.setDeviceId(item.getShoppingList().getUser().getId().toString());
+            record.setStoreId(storeId);
+            record.setStoreName(storeName);
+            record.setItemId(item.getId().toString());
+            record.setItemName(item.getName());
+            record.setLat(lat);
+            record.setLng(lng);
+            record.setAccuracyMeters(accuracy);
+            record.setStatus(com.p2ps.telemetry.model.PingStatus.ACCEPTED);
+            record.setTimestamp(System.currentTimeMillis());
+            record.setServerReceivedTimestamp(java.time.Instant.now());
+
+            telemetryRepository.save(record);
+            logger.debug("Successfully recorded checkoff telemetry for item ID: {} in store: '{}'", item.getId(), storeName);
+
+        } catch (Exception e) {
+            logger.error("Failed to record checkoff telemetry for item {}", item != null ? item.getId() : null, e);
+        }
     }
 
     private boolean namesOverlap(String itemNameLower, String catalogNameLower) {

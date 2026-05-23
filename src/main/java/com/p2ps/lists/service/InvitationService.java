@@ -55,13 +55,13 @@ public class InvitationService {
         }
 
         ShoppingList list = invitation.getShoppingList();
-        ListCollaborator collaborator = new ListCollaborator(list, invitation.getInvitee(), ListRole.EDITOR);
+        ListCollaborator collaborator = new ListCollaborator(list, invitation.getInvitee(), invitation.getRole());
         list.getCollaborators().add(collaborator);
         shoppingListRepository.save(list);
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitationRepository.save(invitation);
-        messagingTemplate.convertAndSend("/topic/lists/" + list.getId() + "/members", "changed");
+        messagingTemplate.convertAndSend("/topic/list/" + list.getId() + "/members", "changed");
     }
 
     @Transactional

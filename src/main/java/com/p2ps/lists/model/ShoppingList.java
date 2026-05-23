@@ -56,8 +56,24 @@ public class ShoppingList {
 
     public boolean canBeModifiedBy(String email) {
         if (user == null) return false;
-        return user.getEmail().equals(email) || collaborators.stream()
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
+                .anyMatch(c -> c.getUser().getEmail().equals(email) && 
+                               (c.getRole() == ListRole.ADMIN || c.getRole() == ListRole.EDITOR));
+    }
+
+    public boolean canCheckItems(String email) {
+        if (user == null) return false;
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
                 .anyMatch(c -> c.getUser().getEmail().equals(email));
+    }
+
+    public boolean isAdmin(String email) {
+        if (user == null) return false;
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
+                .anyMatch(c -> c.getUser().getEmail().equals(email) && c.getRole() == ListRole.ADMIN);
     }
 
     public Optional<ListCollaborator> getCollaboratorByUserEmail(String email) {

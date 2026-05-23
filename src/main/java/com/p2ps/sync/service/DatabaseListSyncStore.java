@@ -90,6 +90,7 @@ public class DatabaseListSyncStore implements ListSyncStore {
     private ListUpdatePayload handleUpdate(String listId, String itemId, ActionType action, UUID uuid, ListUpdatePayload payload) {
         try {
             ItemDTO updatedItem = itemService.updateItemFromSync(uuid, payload);
+            payload.setContent(objectMapper.writeValueAsString(updatedItem));
             payload.setChecked(updatedItem.isChecked());
             payload.setTimestamp(updatedItem.getLastUpdatedTimestamp());
             payload.setStatus(ListUpdatePayload.STATUS_SUCCESS);

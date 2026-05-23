@@ -122,9 +122,13 @@ public class RoomSubscriptionInterceptor implements ChannelInterceptor {
 
     private String extractListId(String destination) {
         String extractedPath = destination.substring("/topic/list/".length());
-        return extractedPath.endsWith("/presence") ? 
-               extractedPath.substring(0, extractedPath.length() - "/presence".length()) : 
-               extractedPath;
+        if (extractedPath.endsWith("/presence")) {
+            return extractedPath.substring(0, extractedPath.length() - "/presence".length());
+        }
+        if (extractedPath.endsWith("/members")) {
+            return extractedPath.substring(0, extractedPath.length() - "/members".length());
+        }
+        return extractedPath;
     }
 
     private boolean validateUserAccess(String extractedId, String userEmail) {

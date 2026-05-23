@@ -17,6 +17,8 @@ import com.p2ps.lists.exception.ListAccessDeniedException;
 import com.p2ps.lists.exception.ListValidationException;
 import com.p2ps.lists.exception.ShoppingListNotFoundException;
 import com.p2ps.lists.model.Item;
+import com.p2ps.lists.model.ListCollaborator;
+import com.p2ps.lists.model.ListRole;
 import com.p2ps.lists.model.ShoppingList;
 import com.p2ps.lists.model.UserProductHistory;
 import com.p2ps.lists.repo.ItemRepository;
@@ -71,6 +73,12 @@ class ItemServiceTest {
 
     @Mock
     private ShoppingSessionService shoppingSessionService;
+
+    @Mock
+    private com.p2ps.telemetry.repository.TelemetryRepository telemetryRepository;
+
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private ItemService itemService;
@@ -1493,5 +1501,183 @@ class ItemServiceTest {
 
         assertThatThrownBy(() -> itemService.processReceiptItem(itemId, BigDecimal.ONE, "Mega", "other@example.com"))
                 .isInstanceOf(ListAccessDeniedException.class);
+    }
+
+    @Test
+    void claimItem_ShouldUpdateTimestamp() {
+        mockItem.setLastUpdatedTimestamp(1000L);
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        itemService.claimItem(itemId, "alice@test.com");
+
+        assertThat(mockItem.getLastUpdatedTimestamp()).isGreaterThan(1000L);
+    }
+
+    @Test
+    void updateItem_AllowsGuestToToggleCheck() {
+        String guestEmail = "guest@user.com";
+        Users guestUser = new Users();
+        guestUser.setId(2);
+        guestUser.setEmail(guestEmail);
+
+        ListCollaborator collab = new ListCollaborator(mockList, guestUser, ListRole.GUEST);
+        mockList.getCollaborators().add(collab);
+
+        ItemRequest req = new ItemRequest();
+        req.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemDTO result = itemService.updateItem(itemId, req, guestEmail);
+
+        assertThat(result.isChecked()).isTrue();
+        verify(itemRepository).save(mockItem);
+    }
+
+    @Test
+    void updateItem_GuestAttemptsToChangeSpecificFieldsThrowsException() {
+        String guestEmail = "guest@user.com";
+        Users guestUser = new Users();
+        guestUser.setId(2);
+        guestUser.setEmail(guestEmail);
+
+        ListCollaborator collab = new ListCollaborator(mockList, guestUser, ListRole.GUEST);
+        mockList.getCollaborators().add(collab);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+
+        // 1. Name change
+        ItemRequest reqName = new ItemRequest();
+        reqName.setName("New Name");
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqName, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 2. Brand change
+        ItemRequest reqBrand = new ItemRequest();
+        reqBrand.setBrand("New Brand");
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqBrand, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 3. Quantity change
+        ItemRequest reqQty = new ItemRequest();
+        reqQty.setQuantity("10");
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqQty, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 4. Price change
+        ItemRequest reqPrice = new ItemRequest();
+        reqPrice.setPrice(BigDecimal.TEN);
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqPrice, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 5. Category change
+        ItemRequest reqCat = new ItemRequest();
+        reqCat.setCategory("New Category");
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqCat, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 6. Recurrent change
+        ItemRequest reqRec = new ItemRequest();
+        reqRec.setIsRecurrent(true);
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqRec, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+
+        // 7. PositionIndex change
+        ItemRequest reqPos = new ItemRequest();
+        reqPos.setPositionIndex(12.34);
+        assertThatThrownBy(() -> itemService.updateItem(itemId, reqPos, guestEmail))
+                .isInstanceOf(ListAccessDeniedException.class);
+    }
+
+    // ==========================================
+    // TELEMETRY CAPTURE TESTS
+    // ==========================================
+
+    @Test
+    void testRecordTelemetry_withFinalStoreAndGeofenceMatch() {
+        com.p2ps.store.model.StoreGeofence geofence = new com.p2ps.store.model.StoreGeofence();
+        geofence.setName("Lidl");
+        mockList.setFinalStore(geofence);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+        request.setLat(47.123);
+        request.setLng(27.456);
+        request.setAccuracyMeters(15.0);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        java.util.Map<String, Object> mockRow = new java.util.HashMap<>();
+        mockRow.put("store_id", "lidl-store-uuid");
+        mockRow.put("lat", 47.1);
+        mockRow.put("lng", 27.4);
+        when(jdbcTemplate.queryForList(anyString(), eq("Lidl"))).thenReturn(List.of(mockRow));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withFinalStoreAndNoGeofenceMatch() {
+        com.p2ps.store.model.StoreGeofence geofence = new com.p2ps.store.model.StoreGeofence();
+        geofence.setName("Unknown Shop");
+        mockList.setFinalStore(geofence);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        when(jdbcTemplate.queryForList(anyString(), eq("Unknown Shop"))).thenReturn(List.of());
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withNoFinalStoreButClientCoordsMatchingGeofence() {
+        mockList.setFinalStore(null);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+        request.setLat(47.123);
+        request.setLng(27.456);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        java.util.Map<String, Object> mockGeofenceRow = new java.util.HashMap<>();
+        mockGeofenceRow.put("store_id", "matched-store-uuid");
+        mockGeofenceRow.put("name", "Matched Store");
+        when(jdbcTemplate.queryForList(anyString(), eq(27.456), eq(47.123))).thenReturn(List.of(mockGeofenceRow));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
+    }
+
+    @Test
+    void testRecordTelemetry_withNoFinalStoreAndNoGeofenceMatch() {
+        mockList.setFinalStore(null);
+        mockItem.setChecked(false);
+
+        ItemRequest request = new ItemRequest();
+        request.setIsChecked(true);
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(mockItem));
+        when(itemRepository.save(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itemService.updateItem(itemId, request, userEmail);
+
+        verify(telemetryRepository).save(any(com.p2ps.telemetry.model.TelemetryRecord.class));
     }
 }
