@@ -700,7 +700,39 @@ public class ItemService {
 
     @Transactional
     public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String ignoredStoreName, String userEmail) {
-        return processReceiptItem(itemId, receiptPrice, userEmail);
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
+
+        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to modify this item");
+        }
+
+        if (receiptPrice != null) {
+            validatePrice(receiptPrice);
+            item.setPrice(receiptPrice);
+        }
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        item.setChecked(true);
+
+        Item savedItem = itemRepository.save(item);
+
+        ProductCatalog catalogItem = savedItem.getCatalogItem();
+        UUID activeStoreId = shoppingSessionService
+                .getActiveSession(savedItem.getShoppingList().getId(), userEmail)
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
+
+        if (catalogItem != null && receiptPrice != null) {
+            if (activeStoreId != null) {
+                storePriceService.recordStorePrice(catalogItem, activeStoreId, receiptPrice);
+            } else {
+                storePriceService.recordStorePrice(catalogItem, ignoredStoreName, receiptPrice);
+            }
+        }
+        saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
+
+        return mapToDTO(savedItem);
     }
 
     private void validatePrice(BigDecimal price) {
