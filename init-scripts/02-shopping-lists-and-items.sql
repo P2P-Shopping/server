@@ -33,9 +33,9 @@ CREATE TABLE IF NOT EXISTS user_product_history (
 ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS brand VARCHAR(100);
 ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS category VARCHAR(50);
 ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2);
-ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS store_name VARCHAR(255);
 ALTER TABLE user_product_history DROP CONSTRAINT IF EXISTS chk_user_product_history_price_non_negative;
 ALTER TABLE user_product_history ADD CONSTRAINT chk_user_product_history_price_non_negative CHECK (price IS NULL OR price >= 0);
+ALTER TABLE user_product_history ADD COLUMN IF NOT EXISTS store_name VARCHAR(255);
 
 CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_product_history(user_id);
 -- Adaugam index de trigrame pe numele custom pentru a pastra cautarea rapida
@@ -131,4 +131,3 @@ CREATE INDEX IF NOT EXISTS trgm_idx_catalog_brand_unaccent
 
 ALTER TABLE items ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(255);
 ALTER TABLE items ADD COLUMN IF NOT EXISTS claimed_at BIGINT;
-

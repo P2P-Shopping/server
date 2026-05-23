@@ -22,7 +22,10 @@ class ShoppingListTest {
         list.setItems(new ArrayList<>());
         list.setCategory(ListCategory.RECIPE);
         list.setSubcategory("Fruits");
-        list.setFinalStore("Lidl");
+        com.p2ps.store.model.StoreGeofence store = new com.p2ps.store.model.StoreGeofence();
+        store.setId(java.util.UUID.randomUUID());
+        store.setName("Lidl");
+        list.setFinalStore(store);
         list.setCollaborators(new java.util.HashSet<>());
         
         assertThat(list.getId()).isEqualTo(id);
@@ -31,7 +34,7 @@ class ShoppingListTest {
         assertThat(list.getItems()).isEmpty();
         assertThat(list.getCategory()).isEqualTo(ListCategory.RECIPE);
         assertThat(list.getSubcategory()).isEqualTo("Fruits");
-        assertThat(list.getFinalStore()).isEqualTo("Lidl");
+        assertThat(list.getFinalStore().getName()).isEqualTo("Lidl");
         assertThat(list.getCollaborators()).isEmpty();
     }
 

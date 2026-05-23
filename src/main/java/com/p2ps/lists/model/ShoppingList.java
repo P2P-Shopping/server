@@ -1,6 +1,7 @@
 package com.p2ps.lists.model;
 
 import com.p2ps.auth.model.Users;
+import com.p2ps.store.model.StoreGeofence;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,8 +39,9 @@ public class ShoppingList {
     @Column(name = "subcategory", length = 100)
     private String subcategory;
 
-    @Column(name = "final_store", length = 255)
-    private String finalStore;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "final_store_id")
+    private StoreGeofence finalStore;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -54,8 +56,24 @@ public class ShoppingList {
 
     public boolean canBeModifiedBy(String email) {
         if (user == null) return false;
-        return user.getEmail().equals(email) || collaborators.stream()
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
+                .anyMatch(c -> c.getUser().getEmail().equals(email) && 
+                               (c.getRole() == ListRole.ADMIN || c.getRole() == ListRole.EDITOR));
+    }
+
+    public boolean canCheckItems(String email) {
+        if (user == null) return false;
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
                 .anyMatch(c -> c.getUser().getEmail().equals(email));
+    }
+
+    public boolean isAdmin(String email) {
+        if (user == null) return false;
+        if (user.getEmail().equals(email)) return true;
+        return collaborators.stream()
+                .anyMatch(c -> c.getUser().getEmail().equals(email) && c.getRole() == ListRole.ADMIN);
     }
 
     public Optional<ListCollaborator> getCollaboratorByUserEmail(String email) {

@@ -3,6 +3,8 @@ package com.p2ps.catalog.service;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.model.StorePrice;
 import com.p2ps.catalog.repository.StorePriceRepository;
+import com.p2ps.store.model.StoreGeofence;
+import com.p2ps.store.repository.StoreGeofenceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,20 +32,28 @@ class StorePriceServiceTest {
     @Mock
     private StorePriceRepository storePriceRepository;
 
+    @Mock
+    private StoreGeofenceRepository storeGeofenceRepository;
+
     @Test
     void recordStorePriceShouldCreateNewRecordWhenMissing() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T10:15:30Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
+        StoreGeofence store = new StoreGeofence();
+        UUID storeId = UUID.randomUUID();
+        store.setId(storeId);
+        store.setName("Mega");
 
-        when(storePriceRepository.findByCatalogIdAndStoreNameIgnoreCase(catalog.getId(), "Mega")).thenReturn(Optional.empty());
+        when(storeGeofenceRepository.findById(storeId)).thenReturn(Optional.of(store));
+        when(storePriceRepository.findByCatalogIdAndStoreId(catalog.getId(), storeId)).thenReturn(Optional.empty());
         when(storePriceRepository.save(any(StorePrice.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        StorePrice result = service.recordStorePrice(catalog, "Mega", BigDecimal.valueOf(9.99));
+        StorePrice result = service.recordStorePrice(catalog, storeId, BigDecimal.valueOf(9.99));
 
         assertThat(result.getCatalogItem()).isEqualTo(catalog);
-        assertThat(result.getStoreName()).isEqualTo("Mega");
+        assertThat(result.getStore()).isEqualTo(store);
         assertThat(result.getPrice()).isEqualByComparingTo("9.99");
         assertThat(result.getLastUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 5, 18, 10, 15, 30));
     }
@@ -51,36 +61,42 @@ class StorePriceServiceTest {
     @Test
     void recordStorePriceShouldUpdateExistingRecord() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T12:00:00Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
+        StoreGeofence store = new StoreGeofence();
+        UUID storeId = UUID.randomUUID();
+        store.setId(storeId);
+        store.setName("Mega");
         StorePrice existing = new StorePrice();
         existing.setId(UUID.randomUUID());
-        existing.setStoreName("Mega");
+        existing.setStore(store);
         existing.setPrice(BigDecimal.ONE);
 
-        when(storePriceRepository.findByCatalogIdAndStoreNameIgnoreCase(catalog.getId(), "Mega")).thenReturn(Optional.of(existing));
+        when(storeGeofenceRepository.findById(storeId)).thenReturn(Optional.of(store));
+        when(storePriceRepository.findByCatalogIdAndStoreId(catalog.getId(), storeId)).thenReturn(Optional.of(existing));
         when(storePriceRepository.save(existing)).thenReturn(existing);
 
-        StorePrice result = service.recordStorePrice(catalog, "Mega", BigDecimal.valueOf(15.50));
+        StorePrice result = service.recordStorePrice(catalog, storeId, BigDecimal.valueOf(15.50));
 
         assertThat(result).isSameAs(existing);
         assertThat(existing.getCatalogItem()).isEqualTo(catalog);
+        assertThat(existing.getStore()).isEqualTo(store);
         assertThat(existing.getPrice()).isEqualByComparingTo("15.50");
         assertThat(existing.getLastUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 5, 18, 12, 0));
     }
 
     @Test
     void recordStorePriceShouldSkipIncompleteInput() {
-        StorePriceService service = new StorePriceService(storePriceRepository, Clock.systemUTC());
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC());
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
 
-        assertThat(service.recordStorePrice(null, "Mega", BigDecimal.ONE)).isNull();
-        assertThat(service.recordStorePrice(new ProductCatalog(), "Mega", BigDecimal.ONE)).isNull();
-        assertThat(service.recordStorePrice(catalog, " ", BigDecimal.ONE)).isNull();
-        assertThat(service.recordStorePrice(catalog, "Mega", null)).isNull();
-        assertThat(service.recordStorePrice(catalog, "Mega", BigDecimal.valueOf(-1))).isNull();
+        assertThat(service.recordStorePrice(null, UUID.randomUUID(), BigDecimal.ONE)).isNull();
+        assertThat(service.recordStorePrice(new ProductCatalog(), UUID.randomUUID(), BigDecimal.ONE)).isNull();
+        assertThat(service.recordStorePrice(catalog, (UUID) null, BigDecimal.ONE)).isNull();
+        assertThat(service.recordStorePrice(catalog, UUID.randomUUID(), null)).isNull();
+        assertThat(service.recordStorePrice(catalog, UUID.randomUUID(), BigDecimal.valueOf(-1))).isNull();
 
         verify(storePriceRepository, never()).save(any());
     }
@@ -88,7 +104,7 @@ class StorePriceServiceTest {
     @Test
     void deletePricesOlderThanDaysShouldUseCalculatedCutoff() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T00:00:00Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
 
         service.deletePricesOlderThanDays(30);
 
@@ -99,7 +115,7 @@ class StorePriceServiceTest {
 
     @Test
     void deletePricesOlderThanDaysShouldRejectNegativeRetention() {
-        StorePriceService service = new StorePriceService(storePriceRepository, Clock.systemUTC());
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC());
 
         assertThatThrownBy(() -> service.deletePricesOlderThanDays(-1))
                 .isInstanceOf(IllegalArgumentException.class)
