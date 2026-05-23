@@ -25,6 +25,9 @@ public class TelemetryRecord {
     private String storeId;
 
     private String itemId;
+    private String itemName;
+
+    private String storeName;
 
     private Double lat;
     private Double lng;

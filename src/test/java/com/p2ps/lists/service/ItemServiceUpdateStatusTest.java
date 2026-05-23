@@ -50,6 +50,12 @@ class ItemServiceUpdateStatusTest {
     @Mock
     private CatalogService catalogService;
 
+    @Mock
+    private com.p2ps.telemetry.repository.TelemetryRepository telemetryRepository;
+
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @InjectMocks
     private ItemService itemService;
 

@@ -23,6 +23,9 @@ public class ListUpdatePayload {
     private Long timestamp;
     private String status;
     private String claimedBy;
+    private Double lat;
+    private Double lng;
+    private Double accuracyMeters;
 
     /**
      * Default constructor required for JSON deserialization by Jackson.
@@ -117,5 +120,29 @@ public class ListUpdatePayload {
 
     public void setClaimedBy(String claimedBy) {
         this.claimedBy = claimedBy;
+    }
+
+    public Double getLat() {
+        return lat;
+    }
+
+    public void setLat(Double lat) {
+        this.lat = lat;
+    }
+
+    public Double getLng() {
+        return lng;
+    }
+
+    public void setLng(Double lng) {
+        this.lng = lng;
+    }
+
+    public Double getAccuracyMeters() {
+        return accuracyMeters;
+    }
+
+    public void setAccuracyMeters(Double accuracyMeters) {
+        this.accuracyMeters = accuracyMeters;
     }
 }
