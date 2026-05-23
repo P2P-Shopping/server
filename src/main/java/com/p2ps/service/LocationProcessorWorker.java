@@ -115,6 +115,10 @@ public class LocationProcessorWorker {
             END$$;
         """);
         jdbcTemplate.execute("""
+            ALTER TABLE store_inventory_map
+                ALTER COLUMN map_id SET DEFAULT gen_random_uuid()
+        """);
+        jdbcTemplate.execute("""
             CREATE INDEX IF NOT EXISTS idx_store_inventory_map_location
                 ON store_inventory_map USING GIST (estimated_loc_point)
         """);
@@ -164,7 +168,7 @@ public class LocationProcessorWorker {
         
         try {
             String sql = """
-                INSERT INTO store_inventory_map (store_id, item_id, estimated_loc_point, confidence_score, ping_count)
+                INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count)
                 WITH FilteredPings AS (
                     SELECT item_id, store_id, location_point, accuracy_m
                     FROM raw_user_pings
@@ -190,6 +194,7 @@ public class LocationProcessorWorker {
                     GROUP BY store_id, item_id, cluster_id
                 )
                 SELECT DISTINCT ON (store_id, item_id)
+                    gen_random_uuid(),
                     store_id,
                     item_id,
                     estimated_loc_point,

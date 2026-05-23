@@ -20,6 +20,7 @@ import com.p2ps.shopping.repository.ShoppingSessionRepository;
 import com.p2ps.shopping.repository.StoreCandidateSubmissionRepository;
 import com.p2ps.store.model.StoreGeofence;
 import com.p2ps.store.repository.StoreGeofenceRepository;
+import com.p2ps.store.service.OverpassService;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Polygon;
@@ -46,19 +47,22 @@ public class ShoppingSessionService {
     private final UserRepository userRepository;
     private final StoreGeofenceRepository storeGeofenceRepository;
     private final StorePriceService storePriceService;
+    private final OverpassService overpassService;
 
     public ShoppingSessionService(ShoppingSessionRepository shoppingSessionRepository,
                                   StoreCandidateSubmissionRepository storeCandidateSubmissionRepository,
                                   ShoppingListRepository shoppingListRepository,
                                   UserRepository userRepository,
                                   StoreGeofenceRepository storeGeofenceRepository,
-                                  StorePriceService storePriceService) {
+                                  StorePriceService storePriceService,
+                                  OverpassService overpassService) {
         this.shoppingSessionRepository = shoppingSessionRepository;
         this.storeCandidateSubmissionRepository = storeCandidateSubmissionRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.userRepository = userRepository;
         this.storeGeofenceRepository = storeGeofenceRepository;
         this.storePriceService = storePriceService;
+        this.overpassService = overpassService;
     }
 
     @Transactional
@@ -108,19 +112,12 @@ public class ShoppingSessionService {
                 placeholderStore.setName(submission.getSubmittedName());
 
                 try {
-                    // Create a 50m approximate buffer (0.0005 degrees)
-                    Coordinate coord = new Coordinate(request.getLongitude(), request.getLatitude());
-                    org.locationtech.jts.geom.Geometry buffer = GEOMETRY_FACTORY.createPoint(coord).buffer(0.0005);
-                    buffer.setSRID(4326);
-
-                    if (buffer instanceof Polygon polygon) {
-                        placeholderStore.setBoundaryPolygon(polygon);
-                    } else if (buffer instanceof org.locationtech.jts.geom.MultiPolygon multiPolygon) {
-                        placeholderStore.setBoundaryPolygon((Polygon) multiPolygon.getGeometryN(0));
-                    }
+                    Polygon buildingPolygon = overpassService.fetchBuildingPolygon(
+                            request.getLatitude(), request.getLongitude());
+                    placeholderStore.setBoundaryPolygon(buildingPolygon);
 
                     placeholderStore = storeGeofenceRepository.save(placeholderStore);
-                    logger.info("Placeholder store created with ID: {}", placeholderStore.getId());
+                    logger.info("Placeholder store created with OSM polygon, ID: {}", placeholderStore.getId());
 
                     session.setStore(placeholderStore);
                     submission.setMatchedStore(placeholderStore);

@@ -21,6 +21,7 @@ import com.p2ps.shopping.repository.ShoppingSessionRepository;
 import com.p2ps.shopping.repository.StoreCandidateSubmissionRepository;
 import com.p2ps.store.model.StoreGeofence;
 import com.p2ps.store.repository.StoreGeofenceRepository;
+import com.p2ps.store.service.OverpassService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +62,8 @@ class ShoppingSessionServiceTest {
     private StoreGeofenceRepository storeGeofenceRepository;
     @Mock
     private StorePriceService storePriceService;
+    @Mock
+    private OverpassService overpassService;
 
     @InjectMocks
     private ShoppingSessionService shoppingSessionService;
