@@ -29,7 +29,6 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
         String getBrand();
         String getCategory();
         BigDecimal getPrice();
-        String getStoreName();
     }
 
     @Query(value = """
@@ -62,7 +61,7 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
 
     // 2. Am legat Query-ul corect de numele metodei pe care o așteaptă Service-ul
     @Query("SELECT lower(trim(u.customName)) as customName, COUNT(DISTINCT u.user.id) as userCount, " +
-            "MAX(u.brand) as brand, MAX(u.category) as category, AVG(u.price) as price, MAX(u.storeName) as storeName " +
+            "MAX(u.brand) as brand, MAX(u.category) as category, AVG(u.price) as price " +
             "FROM UserProductHistory u WHERE u.catalogItem IS NULL " +
             "GROUP BY lower(trim(u.customName)) HAVING COUNT(DISTINCT u.user.id) >= :minUsers")
     List<PopularUnknownProduct> findPopularUnknownProducts(@Param("minUsers") int minUsers);

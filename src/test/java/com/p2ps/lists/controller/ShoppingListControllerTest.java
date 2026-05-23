@@ -122,11 +122,9 @@ class ShoppingListControllerTest {
         ShoppingListDTO response = new ShoppingListDTO();
         response.setId(listId);
         response.setTitle("New Title");
-        response.setFinalStore("Lidl");
 
         UpdateListRequest request = new UpdateListRequest();
         request.setTitle("New Title");
-        request.setFinalStore("Lidl");
 
         when(shoppingListService.updateList(eq(listId), any(ShoppingListDTO.class), eq("ana@example.com")))
                 .thenReturn(response);
@@ -134,11 +132,10 @@ class ShoppingListControllerTest {
         mockMvc.perform(patch("/api/lists/{listId}", listId)
                         .principal(new UsernamePasswordAuthenticationToken("ana@example.com", null))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(listId.toString()))
-                .andExpect(jsonPath("$.title").value("New Title"))
-                .andExpect(jsonPath("$.finalStore").value("Lidl"));
+                .andExpect(jsonPath("$.title").value("New Title"));
 
         verify(shoppingListService).updateList(eq(listId), any(ShoppingListDTO.class), eq("ana@example.com"));
     }

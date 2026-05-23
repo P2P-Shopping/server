@@ -20,19 +20,15 @@ public class GlobalCatalogPopulationService {
     private final ProductCatalogRepository productCatalogRepository;
     private final CatalogItemStandardizationService catalogItemStandardizationService;
     private final TransactionTemplate transactionTemplate;
-    private final StorePriceService storePriceService;
-
     public GlobalCatalogPopulationService(
             UserProductHistoryRepository userProductHistoryRepository,
             ProductCatalogRepository productCatalogRepository,
             CatalogItemStandardizationService catalogItemStandardizationService,
-            TransactionTemplate transactionTemplate,
-            StorePriceService storePriceService) {
+            TransactionTemplate transactionTemplate) {
         this.userProductHistoryRepository = userProductHistoryRepository;
         this.productCatalogRepository = productCatalogRepository;
         this.catalogItemStandardizationService = catalogItemStandardizationService;
         this.transactionTemplate = transactionTemplate;
-        this.storePriceService = storePriceService;
     }
 
     public int populateFromPopularUnknownProducts(int minDistinctUsers) {
@@ -59,10 +55,6 @@ public class GlobalCatalogPopulationService {
         String normalizedRawName = normalizeRequired(candidate.getCustomName());
         ProductCatalog targetCatalog = findExistingCatalogMatch(normalizedRawName)
                 .orElseGet(() -> createCatalogEntry(normalizedRawName, candidate));
-
-        if (isUsableStorePrice(candidate.getStoreName(), candidate.getPrice())) {
-            storePriceService.recordStorePrice(targetCatalog, candidate.getStoreName(), candidate.getPrice());
-        }
 
         return userProductHistoryRepository.linkUnknownHistoryToCatalog(normalizedRawName, targetCatalog) > 0;
     }
@@ -107,12 +99,5 @@ public class GlobalCatalogPopulationService {
             throw new IllegalArgumentException("Candidate product name must not be blank");
         }
         return value.trim();
-    }
-
-    private boolean isUsableStorePrice(String storeName, java.math.BigDecimal price) {
-        return storeName != null
-                && !storeName.trim().isEmpty()
-                && price != null
-                && price.compareTo(java.math.BigDecimal.ZERO) >= 0;
     }
 }

@@ -195,8 +195,8 @@ public class TelemetryRawPingImportJob {
 
     private void ensureSystemImportList() {
         jdbcTemplate.update("""
-            INSERT INTO users (first_name, last_name, email, password, token_version, created_at)
-            VALUES ('Telemetry', 'Import', ?, 'system-user-no-login', 0, NOW())
+            INSERT INTO users (first_name, last_name, email, password, token_version)
+            VALUES ('Telemetry', 'Import', ?, 'system-user-no-login', 0)
             ON CONFLICT (email) DO NOTHING
         """, SYSTEM_USER_EMAIL);
 

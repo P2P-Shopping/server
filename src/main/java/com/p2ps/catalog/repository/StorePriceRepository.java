@@ -18,10 +18,10 @@ public interface StorePriceRepository extends JpaRepository<StorePrice, UUID> {
             select sp
             from StorePrice sp
             where sp.catalogItem.id = :catalogId
-              and lower(sp.storeName) = lower(:storeName)
+              and sp.store.id = :storeId
             """)
-    Optional<StorePrice> findByCatalogIdAndStoreNameIgnoreCase(@Param("catalogId") UUID catalogId,
-                                                               @Param("storeName") String storeName);
+    Optional<StorePrice> findByCatalogIdAndStoreId(@Param("catalogId") UUID catalogId,
+                                                   @Param("storeId") UUID storeId);
 
     @Modifying
     long deleteByLastUpdatedAtBefore(LocalDateTime cutoff);

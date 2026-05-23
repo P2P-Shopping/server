@@ -2,13 +2,14 @@ package com.p2ps.util;
 
 import com.p2ps.lists.exception.ListValidationException;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class QuantityParser {
 
-    // Extract the numeric part
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)?$");
+    // Accept both decimal dot and comma, with or without space before the unit.
+    private static final Pattern QUANTITY_PATTERN = Pattern.compile("^(-?\\d+(?:[\\.,]\\d+)?)\\s*([\\p{L}.]+)?$");
     private static final String WEIGHT = "weight";
     private static final String VOLUME = "volume";
     private static final double MAX_ALLOWED_VALUE = 9999.0;
@@ -33,12 +34,13 @@ public class QuantityParser {
 
         public static Unit fromString(String str) {
             if (str == null || str.isBlank()) return PCS;
-            return switch (str.toLowerCase().trim()) {
-                case "g", "grame", "gr" -> G;
-                case "kg", "kilograme", "kilo" -> KG;
-                case "ml", "mililitri" -> ML;
-                case "l", "litri", "litru" -> L;
-                case "buc", "bucati", "pcs", "piece" -> PCS;
+            String normalized = normalizeUnit(str);
+            return switch (normalized) {
+                case "g", "gram", "grame", "grams", "gr" -> G;
+                case "kg", "kilogram", "kilograme", "kilograms", "kilo" -> KG;
+                case "ml", "milliliter", "milliliters", "mililitru", "mililitri" -> ML;
+                case "l", "liter", "liters", "litru", "litri" -> L;
+                case "buc", "bucata", "bucati", "pcs", "pc", "piece", "pieces" -> PCS;
                 default -> throw new ListValidationException("Unsupported unit of measurement: " + str);
             };
         }
@@ -61,7 +63,7 @@ public class QuantityParser {
             throw new ListValidationException("Quantity format is NOT valid: " + quantityStr);
         }
 
-        double value = Double.parseDouble(matcher.group(1));
+        double value = Double.parseDouble(matcher.group(1).replace(',', '.'));
 
         if (value <= 0) {
             throw new ListValidationException("Quantity must be a positive number.");
@@ -115,5 +117,19 @@ public class QuantityParser {
             return String.format("%d", (long) value);
         }
         return String.format("%s", value).replace(",", ".");
+    }
+
+    private static String normalizeUnit(String value) {
+        return value
+                .trim()
+                .toLowerCase(Locale.ROOT)
+                .replace('ă', 'a')
+                .replace('â', 'a')
+                .replace('î', 'i')
+                .replace('ș', 's')
+                .replace('ş', 's')
+                .replace('ț', 't')
+                .replace('ţ', 't')
+                .replace(".", "");
     }
 }

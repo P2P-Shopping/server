@@ -3,6 +3,7 @@ package com.p2ps.catalog.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import com.p2ps.store.model.StoreGeofence;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,8 +23,9 @@ public class StorePrice {
     @JoinColumn(name = "catalog_id", nullable = false)
     private ProductCatalog catalogItem;
 
-    @Column(name = "store_name", nullable = false, length = 255)
-    private String storeName;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private StoreGeofence store;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;

@@ -94,10 +94,6 @@ public class ShoppingListService {
         if (updateDto.getSubcategory() != null) {
             list.setSubcategory(updateDto.getSubcategory().isEmpty() ? null : updateDto.getSubcategory());
         }
-        if (updateDto.getFinalStore() != null) {
-            list.setFinalStore(updateDto.getFinalStore().isEmpty() ? null : updateDto.getFinalStore());
-        }
-
         ShoppingList savedList = shoppingListRepository.save(list);
         return mapToDTO(savedList, userEmail);
     }
@@ -167,18 +163,6 @@ public class ShoppingListService {
         }
 
         return mapToDTO(shoppingListRepository.save(currentList), userEmail);
-    }
-
-    @Transactional
-    public ShoppingListDTO finishShopping(UUID listId, String storeName, String userEmail) {
-        if (storeName == null || storeName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Store name cannot be empty");
-        }
-
-        ShoppingList list = getListEntityByIdAndUser(listId, userEmail);
-        list.setFinalStore(storeName.trim());
-
-        return mapToDTO(shoppingListRepository.save(list), userEmail);
     }
 
     @Transactional
@@ -480,7 +464,10 @@ public class ShoppingListService {
         dto.setTitle(list.getTitle());
         dto.setCategory(list.getCategory());
         dto.setSubcategory(list.getSubcategory());
-        dto.setFinalStore(list.getFinalStore());
+        if (list.getFinalStore() != null) {
+            dto.setFinalStoreId(list.getFinalStore().getId());
+            dto.setFinalStoreName(list.getFinalStore().getName());
+        }
         if (list.getUser() != null) {
             dto.setUserId(list.getUser().getId() != null ? list.getUser().getId().toString() : null);
             dto.setOwnerEmail(list.getUser().getEmail());
