@@ -101,6 +101,20 @@ public class LocationProcessorWorker {
             )
         """);
         jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conrelid = 'store_inventory_map'::regclass
+                      AND conname = 'store_inventory_map_store_id_item_id_key'
+                ) THEN
+                    ALTER TABLE store_inventory_map
+                        ADD CONSTRAINT store_inventory_map_store_id_item_id_key
+                        UNIQUE (store_id, item_id);
+                END IF;
+            END$$;
+        """);
+        jdbcTemplate.execute("""
             CREATE INDEX IF NOT EXISTS idx_store_inventory_map_location
                 ON store_inventory_map USING GIST (estimated_loc_point)
         """);
