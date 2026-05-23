@@ -1063,36 +1063,38 @@ public class ItemService {
             }
 
             if (storeName == null || storeName.isBlank()) {
-                logger.warn("List ID: '{}' does not have a finalStore set, and coordinates do not match any geofence. Recording as 'Unknown Store'.", 
+                logger.warn("List ID: '{}' does not have a finalStore set, and coordinates do not match any geofence. Leaving store and location data as null.", 
                             item.getShoppingList().getId());
-                storeName = "Unknown Store";
-                storeId = "unknown-" + item.getShoppingList().getId().toString();
-            }
-
-            // Look up store coordinates and store_id from store_geofences if not already matched
-            if (storeId == null || storeId.startsWith("unknown-")) {
-                try {
-                    String sql = "SELECT store_id::text, " +
-                                 "ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
-                                 "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
-                                 "FROM store_geofences WHERE LOWER(name) = LOWER(?) LIMIT 1";
-                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeName.trim());
-                    if (!rows.isEmpty()) {
-                        Map<String, Object> row = rows.get(0);
-                        storeId = (String) row.get("store_id");
-                        if (lat == null || lng == null) {
-                            lat = ((Number) row.get("lat")).doubleValue();
-                            lng = ((Number) row.get("lng")).doubleValue();
+                storeName = null;
+                storeId = null;
+                lat = null;
+                lng = null;
+            } else {
+                // Look up store coordinates and store_id from store_geofences if not already matched
+                if (storeId == null) {
+                    try {
+                        String sql = "SELECT store_id::text, " +
+                                     "ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
+                                     "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
+                                     "FROM store_geofences WHERE LOWER(name) = LOWER(?) LIMIT 1";
+                        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeName.trim());
+                        if (!rows.isEmpty()) {
+                            Map<String, Object> row = rows.get(0);
+                            storeId = (String) row.get("store_id");
+                            if (lat == null || lng == null) {
+                                lat = ((Number) row.get("lat")).doubleValue();
+                                lng = ((Number) row.get("lng")).doubleValue();
+                            }
                         }
+                    } catch (Exception e) {
+                        logger.warn("Failed to retrieve geofence for store: {}", storeName, e);
                     }
-                } catch (Exception e) {
-                    logger.warn("Failed to retrieve geofence for store: {}", storeName, e);
                 }
-            }
 
-            if (storeId == null) {
-                // Fallback to generated UUID for store id if not exists in geofences
-                storeId = UUID.nameUUIDFromBytes(("store:" + storeName).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                if (storeId == null) {
+                    // Fallback to generated UUID for store id if not exists in geofences
+                    storeId = UUID.nameUUIDFromBytes(("store:" + storeName).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                }
             }
 
             if (lat == null || lng == null) {
