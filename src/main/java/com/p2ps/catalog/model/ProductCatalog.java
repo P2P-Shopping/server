@@ -32,6 +32,9 @@ public class ProductCatalog {
     @Column(name = "estimated_price", precision = 10, scale = 2)
     private BigDecimal estimatedPrice;
 
+    @Column(name = "default_quantity", length = 50)
+    private String defaultQuantity;
+
     @Column(name = "purchase_count", nullable = false)
     private Integer purchaseCount = 0;
 }

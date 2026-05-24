@@ -89,7 +89,7 @@ class GlobalCatalogPopulationServiceTest {
         when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
         when(productCatalogRepository.searchByKeywordStrict("sana")).thenReturn(List.of());
         when(catalogItemStandardizationService.standardize("sana", null, null, null))
-                .thenReturn(new CatalogStandardizationResult("Sana 3.5%", "Dairy", "Napolact"));
+                .thenReturn(new CatalogStandardizationResult("Sana 3.5%", "Dairy", "Napolact", "500 ml"));
         when(productCatalogRepository.findBySpecificNameAndBrand("Sana 3.5%", "Napolact")).thenReturn(Optional.empty());
         when(productCatalogRepository.save(any(ProductCatalog.class))).thenReturn(savedCatalog);
         when(userProductHistoryRepository.linkUnknownHistoryToCatalog("sana", savedCatalog)).thenReturn(6);
@@ -111,7 +111,7 @@ class GlobalCatalogPopulationServiceTest {
         when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
         when(productCatalogRepository.searchByKeywordStrict("iaurt grecesc")).thenReturn(List.of());
         when(catalogItemStandardizationService.standardize("iaurt grecesc", null, null, null))
-                .thenReturn(new CatalogStandardizationResult("Greek Yogurt", "Dairy", "Olympus"));
+                .thenReturn(new CatalogStandardizationResult("Greek Yogurt", "Dairy", "Olympus", "1 buc"));
         when(productCatalogRepository.findBySpecificNameAndBrand("Greek Yogurt", "Olympus")).thenReturn(Optional.of(existingCatalog));
         when(userProductHistoryRepository.linkUnknownHistoryToCatalog("iaurt grecesc", existingCatalog)).thenReturn(2);
 
@@ -212,3 +212,4 @@ class GlobalCatalogPopulationServiceTest {
         }
     }
 }
+

@@ -80,6 +80,7 @@ public class GlobalCatalogPopulationService {
                     productCatalog.setSpecificName(standardized.cleanName());
                     productCatalog.setBrand(standardized.brand());
                     productCatalog.setCategory(standardized.category());
+                    productCatalog.setDefaultQuantity(standardized.defaultQuantity());
 
                     // Setăm purchase count-ul inițial corect (ex: 3), nu 0!
                     Integer initialCount = candidate.getUserCount() != null ? candidate.getUserCount() : 3;

@@ -30,16 +30,16 @@ class CatalogItemStandardizationServiceTest {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
-                        {"cleanName":"Greek Yogurt","category":"Dairy","brand":"Olympus"}
+                        {"cleanName":"Greek Yogurt","category":"Dairy","brand":"Olympus","defaultQuantity":"1 buc"}
                         """)))
         );
 
-        // Am adăugat null pentru noile câmpuri
         CatalogStandardizationResult result = service.standardize("iaurt grecesc", null, null, null);
 
         assertThat(result.cleanName()).isEqualTo("Greek Yogurt");
         assertThat(result.category()).isEqualTo("Dairy");
         assertThat(result.brand()).isEqualTo("Olympus");
+        assertThat(result.defaultQuantity()).isEqualTo("1 buc");
     }
 
     @Test
@@ -47,21 +47,20 @@ class CatalogItemStandardizationServiceTest {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
-                        {"cleanName":"Tomatoes","category":"Produce","brand":"   "}
+                        {"cleanName":"Tomatoes","category":"Produce","brand":"   ","defaultQuantity":"1 kg"}
                         """)))
         );
 
-        // Am adăugat null pentru noile câmpuri
         CatalogStandardizationResult result = service.standardize("rosii", null, null, null);
 
         assertThat(result.brand()).isNull();
+        assertThat(result.defaultQuantity()).isEqualTo("1 kg");
     }
 
     @Test
     void standardizeShouldRejectBlankInput() {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
 
-        // Am adăugat null pentru noile câmpuri
         assertThatThrownBy(() -> service.standardize("  ", null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be blank");
@@ -74,7 +73,6 @@ class CatalogItemStandardizationServiceTest {
                 new AiMessage("model", List.of(new AiMessage.TextPart("not-json")))
         );
 
-        // Am adăugat null pentru noile câmpuri
         assertThatThrownBy(() -> service.standardize("lapte", null, null, null))
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("valid JSON object");
@@ -95,17 +93,15 @@ class CatalogItemStandardizationServiceTest {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
-                        {"cleanName":"Milk","category":"Dairy","brand":null}
+                        {"cleanName":"Milk","category":"Dairy","brand":null,"defaultQuantity":"1 L"}
                         """)))
         );
 
-        // Am adăugat null pentru noile câmpuri
         service.standardize("milk", null, null, null);
 
         ArgumentCaptor<List<AiMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(aiClient).generateResponse(captor.capture(), eq(List.of()));
 
-        // Am schimbat hasSize(2) în hasSize(1) pentru că trimitem un singur mesaj combinat acum!
         assertThat(captor.getValue()).hasSize(1);
         assertThat(((AiMessage.TextPart) captor.getValue().get(0).parts().get(0)).text())
                 .contains("Return ONLY one valid JSON object");
@@ -117,7 +113,7 @@ class CatalogItemStandardizationServiceTest {
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
                         Here is the normalized product:
-                        {"cleanName":"Ardei","category":"Fructe și Legume","brand":null}
+                        {"cleanName":"Ardei","category":"Fructe și Legume","brand":null,"defaultQuantity":"1 kg"}
                         """)))
         );
 
@@ -125,6 +121,7 @@ class CatalogItemStandardizationServiceTest {
 
         assertThat(result.cleanName()).isEqualTo("Ardei");
         assertThat(result.category()).isEqualTo("Fructe și Legume");
+        assertThat(result.defaultQuantity()).isEqualTo("1 kg");
     }
 
     @Test
@@ -144,7 +141,7 @@ class CatalogItemStandardizationServiceTest {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
-                        {"cleanName":"Lapte","category":" ","brand":"Zuzu"}
+                        {"cleanName":"Lapte","category":" ","brand":"Zuzu","defaultQuantity":"1 L"}
                         """)))
         );
 
@@ -158,7 +155,7 @@ class CatalogItemStandardizationServiceTest {
         CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
         when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
                 new AiMessage("model", List.of(new AiMessage.TextPart("""
-                        {"cleanName":"Lapte Zuzu 1L","category":"Lactate și Ouă","brand":"Zuzu"}
+                        {"cleanName":"Lapte Zuzu 1L","category":"Lactate și Ouă","brand":"Zuzu","defaultQuantity":"1 L"}
                         """)))
         );
 

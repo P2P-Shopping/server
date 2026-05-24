@@ -119,7 +119,7 @@ public class CatalogService {
                             match.getBrand(),
                             match.getCategory(),
                             match.getPrice(),
-                            "1"
+                            match.getCatalogDefaultQuantity() != null ? match.getCatalogDefaultQuantity() : "1 buc"
                     ));
                 }
             }
@@ -141,7 +141,7 @@ public class CatalogService {
                         catalogMatch.getBrand(),
                         catalogMatch.getCategory(),
                         catalogMatch.getEstimatedPrice(),
-                        "1"
+                        catalogMatch.getDefaultQuantity() != null ? catalogMatch.getDefaultQuantity() : "1 buc"
                 ));
             }
             if (suggestionsMap.size() >= 10) break;

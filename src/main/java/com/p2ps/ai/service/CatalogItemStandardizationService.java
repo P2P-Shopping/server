@@ -15,11 +15,16 @@ public class CatalogItemStandardizationService {
     private static final String SYSTEM_PROMPT = """
     You standardize grocery product names for a Romanian shopping app catalog.
     Return ONLY one valid JSON object with this exact schema:
-    {"cleanName":"string","category":"string","brand":"string or null"}
+    {"cleanName":"string","category":"string","brand":"string or null","defaultQuantity":"string"}
     Rules:
             - cleanName must be a concise, consumer-friendly normalized product name IN ROMANIAN (e.g., if user inputs "ardei", return "Ardei", NOT "Bell peppers").
             - category must be a short grocery category label IN ROMANIAN (choose from: "Fructe și Legume", "Lactate și Ouă", "Carne", "Băcănie", "Dulciuri", "Băuturi", "Îngrijire Personală", "Curățenie", "Altele").
             - brand must be null when the raw input does not clearly imply one.
+            - defaultQuantity must be a string representing the standard measurement for this product.
+              Format: ALWAYS "[number] [unit]", one space, e.g., "1 kg", "500 ml", "1 buc".
+              If input has a quantity (e.g., "Lapte 1.5L"), extract it into defaultQuantity as "1.5 L" and remove it from cleanName.
+              If no quantity is present, generate a logical default (e.g., "1 kg" for flour, "1 L" for oil).
+              Prefer common Romanian unit "buc" for countable single items. If uncertain, use "1 buc".
             - Do not include explanations, markdown formatting (like ```json), or extra keys.
             """;
 
@@ -83,7 +88,8 @@ public class CatalogItemStandardizationService {
             return new CatalogStandardizationResult(
                     requireText(parsed.cleanName(), "cleanName"),
                     requireText(parsed.category(), "category"),
-                    normalizeNullable(parsed.brand())
+                    normalizeNullable(parsed.brand()),
+                    requireText(parsed.defaultQuantity(), "defaultQuantity")
             );
         } catch (AiProcessingException exception) {
             throw exception;

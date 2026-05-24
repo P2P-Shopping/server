@@ -1,0 +1,1 @@
+ALTER TABLE p2p_product_catalog ADD COLUMN IF NOT EXISTS default_quantity VARCHAR(50);
