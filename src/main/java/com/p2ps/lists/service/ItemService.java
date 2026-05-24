@@ -607,7 +607,25 @@ public class ItemService {
 
         if (checked && !wasChecked) {
             saveToHistory(item, item.getShoppingList().getUser(), item.getName());
-            recordTelemetry(item, null, null, null);
+            Double lat = null;
+            Double lng = null;
+            com.p2ps.store.model.StoreGeofence finalStore = item.getShoppingList().getFinalStore();
+            if (finalStore != null) {
+                try {
+                    String sql = "SELECT ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
+                                 "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
+                                 "FROM store_geofences WHERE store_id = ? LIMIT 1";
+                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, finalStore.getId());
+                    if (!rows.isEmpty()) {
+                        Map<String, Object> row = rows.get(0);
+                        lat = ((Number) row.get("lat")).doubleValue();
+                        lng = ((Number) row.get("lng")).doubleValue();
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not resolve store centroid for telemetry fallback", e);
+                }
+            }
+            recordTelemetry(item, lat, lng, lat != null ? 10.0 : null);
         }
 
         return mapToDTO(itemRepository.save(item));

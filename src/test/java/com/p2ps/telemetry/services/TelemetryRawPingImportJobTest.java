@@ -232,19 +232,19 @@ class TelemetryRawPingImportJobTest {
     }
 
     @Test
-    void isImportable_shouldReturnFalseForNullLat() {
+    void isImportable_shouldAcceptNullLat_withStoreCentroidFallback() {
         TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
         telemetryRecord.setLat(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
-        assertThat(result).isFalse();
+        assertThat(result).isTrue();
     }
 
     @Test
-    void isImportable_shouldReturnFalseForNullLng() {
+    void isImportable_shouldAcceptNullLng_withStoreCentroidFallback() {
         TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
         telemetryRecord.setLng(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
-        assertThat(result).isFalse();
+        assertThat(result).isTrue();
     }
 
     @Test

@@ -20,6 +20,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,19 +37,24 @@ public class GlobalExceptionHandler {
     // Logger used to record internal errors secretly on the server
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private static HttpHeaders jsonHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return headers;
+    }
+
     @ExceptionHandler(UserAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleUserAlreadyExists(UserAlreadyExistsException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
                 "Registration Failed",
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT); // 409 Conflict
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.CONFLICT);
     }
 
     // Prinde erorile de la @Valid (ex: parola prea scurta)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
-        // Extragem primul mesaj de eroare definit in DTO
         String errorMessage = ex.getBindingResult().getAllErrors().stream()
                 .findFirst()
                 .map(DefaultMessageSourceResolvable::getDefaultMessage)
@@ -56,7 +64,7 @@ public class GlobalExceptionHandler {
                 VALIDATION_ERROR,
                 errorMessage
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST); // 400 Bad Request
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ListValidationException.class)
@@ -65,7 +73,7 @@ public class GlobalExceptionHandler {
                 VALIDATION_ERROR,
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler({ItemNotFoundException.class, ShoppingListNotFoundException.class, InvitationNotFoundException.class})
@@ -74,7 +82,7 @@ public class GlobalExceptionHandler {
                 "Resource Not Found",
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(ListAccessDeniedException.class)
@@ -83,7 +91,7 @@ public class GlobalExceptionHandler {
                 "Forbidden",
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(ListUserNotFoundException.class)
@@ -92,7 +100,7 @@ public class GlobalExceptionHandler {
                 "User Not Found",
                 ex.getMessage()
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -100,6 +108,7 @@ public class GlobalExceptionHandler {
         logger.warn("Upload rejected because file exceeds size limit: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONTENT_TOO_LARGE)
+                .headers(jsonHeaders())
                 .body(Map.of(
                         ERR_STR, "File Too Large",
                         MSG_STR, "Maximum allowed file size is 5MB"
@@ -111,6 +120,7 @@ public class GlobalExceptionHandler {
         logger.warn("Missing multipart request part: {}", ex.getRequestPartName());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
+                .headers(jsonHeaders())
                 .body(Map.of(
                         ERR_STR, "Bad Request",
                         MSG_STR, "Missing file part"
@@ -128,7 +138,7 @@ public class GlobalExceptionHandler {
                 VALIDATION_ERROR,
                 details
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AiProcessingException.class)
@@ -142,40 +152,38 @@ public class GlobalExceptionHandler {
             errorResponse.put("retryAfterSeconds", String.valueOf(ex.getRetryAfterSeconds()));
         }
 
-        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
+        return ResponseEntity.status(ex.getStatus()).headers(jsonHeaders()).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
-        // avoid NPE when tests (or callers) pass null
         if (ex == null) {
             ErrorResponse error = new ErrorResponse(
                     "Internal Server Error",
                     "An unexpected error occurred."
             );
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(jsonHeaders()).body(error);
         }
 
-        //Log the full error internally (for the backend team to see)
         logger.error("Unhandled exception occurred:", ex);
 
-        //Return a safe, generic message to the frontend (hiding server secrets)
         ErrorResponse errorResponse = new ErrorResponse(
                 "Internal Server Error",
                 "An unexpected error occurred."
         );
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(errorResponse, jsonHeaders(), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
     public ResponseEntity<Map<String, String>> handleAuthenticationError(Exception ex) {
         logger.warn("Authentication failed: {}", ex.getMessage());
         return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED) // Trimitem 401 în loc de 500
+                .status(HttpStatus.UNAUTHORIZED)
+                .headers(jsonHeaders())
                 .body(Map.of(
                         ERR_STR, "Unauthorized",
-                        MSG_STR, "Invalid email or password" // Mesaj generic, sigur
+                        MSG_STR, "Invalid email or password"
                 ));
     }
 
