@@ -119,7 +119,7 @@ public class CatalogService {
                             match.getBrand(),
                             match.getCategory(),
                             match.getPrice(),
-                            match.getCatalogDefaultQuantity() != null ? match.getCatalogDefaultQuantity() : "1 buc"
+                            normalizeQuantity(match.getCatalogDefaultQuantity())
                     ));
                 }
             }
@@ -141,10 +141,17 @@ public class CatalogService {
                         catalogMatch.getBrand(),
                         catalogMatch.getCategory(),
                         catalogMatch.getEstimatedPrice(),
-                        catalogMatch.getDefaultQuantity() != null ? catalogMatch.getDefaultQuantity() : "1 buc"
+                        normalizeQuantity(catalogMatch.getDefaultQuantity())
                 ));
             }
             if (suggestionsMap.size() >= 10) break;
         }
+    }
+
+    private String normalizeQuantity(String quantity) {
+        if (quantity == null || quantity.trim().isEmpty()) {
+            return "1 buc";
+        }
+        return quantity.trim();
     }
 }

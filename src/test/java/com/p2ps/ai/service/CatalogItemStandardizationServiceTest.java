@@ -168,4 +168,33 @@ class CatalogItemStandardizationServiceTest {
         assertThat(prompt).contains("Hint - User provided category: Lactate și Ouă");
         assertThat(prompt).contains("Hint - User provided price: 8.99");
     }
-}
+
+    @Test
+    void standardizeShouldThrowWhenDefaultQuantityIsTooLong() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        String longQuantity = "a".repeat(51);
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart(String.format("""
+                        {"cleanName":"Product","category":"Produce","brand":null,"defaultQuantity":"%s"}       
+                        """, longQuantity))))
+        );
+
+        assertThatThrownBy(() -> service.standardize("product", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("too long (max 50 chars)");
+    }
+
+    @Test
+    void standardizeShouldThrowWhenDefaultQuantityIsMissing() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("""
+                        {"cleanName":"Product","category":"Produce","brand":null,"defaultQuantity":"  "}
+                        """)))
+        );
+
+        assertThatThrownBy(() -> service.standardize("product", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("missing field: defaultQuantity");
+    }
+    }

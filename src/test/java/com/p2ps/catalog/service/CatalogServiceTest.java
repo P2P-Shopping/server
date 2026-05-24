@@ -276,4 +276,49 @@ class CatalogServiceTest {
         assertEquals(1, results.size(), "Should return global results if user doesn't exist");
         assertEquals("Produs Global", results.get(0).name());
     }
+
+    @Test
+    void suggestProductsShouldUseFallbackForBlankQuantity() {
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        ProductCatalog p = new ProductCatalog();
+        p.setSpecificName("Produs Fara Cantitate");
+        p.setDefaultQuantity("  "); // Blank quantity
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
+
+        assertEquals(1, results.size());
+        assertEquals("1 buc", results.get(0).quantity());
+    }
+
+    @Test
+    void suggestProductsShouldUseFallbackForNullQuantity() {
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        ProductCatalog p = new ProductCatalog();
+        p.setSpecificName("Produs Null Cantitate");
+        p.setDefaultQuantity(null);
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
+
+        assertEquals(1, results.size());
+        assertEquals("1 buc", results.get(0).quantity());
+    }
+
+    @Test
+    void suggestProductsShouldTrimValidQuantity() {
+        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        ProductCatalog p = new ProductCatalog();
+        p.setSpecificName("Produs Trim Quantity");
+        p.setDefaultQuantity("  1 L  ");
+        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
+
+        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
+
+        assertEquals(1, results.size());
+        assertEquals("1 L", results.get(0).quantity());
+    }
 }

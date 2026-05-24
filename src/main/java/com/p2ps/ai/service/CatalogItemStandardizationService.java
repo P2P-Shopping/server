@@ -89,7 +89,7 @@ public class CatalogItemStandardizationService {
                     requireText(parsed.cleanName(), "cleanName"),
                     requireText(parsed.category(), "category"),
                     normalizeNullable(parsed.brand()),
-                    requireText(parsed.defaultQuantity(), "defaultQuantity")
+                    requireValidatedQuantity(parsed.defaultQuantity())
             );
         } catch (AiProcessingException exception) {
             throw exception;
@@ -105,6 +105,17 @@ public class CatalogItemStandardizationService {
             throw new AiProcessingException("AI response did not contain a valid JSON object.");
         }
         return rawResponse.substring(start, end + 1);
+    }
+
+    private String requireValidatedQuantity(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new AiProcessingException("AI catalog standardization response is missing field: defaultQuantity");
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() > 50) {
+            throw new AiProcessingException("AI catalog standardization response field 'defaultQuantity' is too long (max 50 chars): " + trimmed);
+        }
+        return trimmed;
     }
 
     private String requireText(String value, String fieldName) {
