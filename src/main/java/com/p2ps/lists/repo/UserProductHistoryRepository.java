@@ -17,6 +17,7 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
         UUID getCatalogId();
         String getCatalogGenericName();
         String getCatalogSpecificName();
+        String getCatalogDefaultQuantity();
         String getBrand();
         String getCategory();
         BigDecimal getPrice();
@@ -37,6 +38,7 @@ public interface UserProductHistoryRepository extends JpaRepository<UserProductH
                 c.id AS catalogId,
                 c.generic_name AS catalogGenericName,
                 c.specific_name AS catalogSpecificName,
+                c.default_quantity AS catalogDefaultQuantity,
                 c.brand AS brand,
                 c.category AS category,
                 c.estimated_price AS price
