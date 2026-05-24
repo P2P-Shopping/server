@@ -16,6 +16,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +94,7 @@ class AiServiceTest {
                 .thenReturn(finalizedResponse);
         // Updated mock to findOptimalStores which returns a List
         when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(List.of(new StoreMatchResult("store-1", "Mega", 1, 120.0)));
+                .thenReturn(List.of(new StoreMatchResult("store-1", "Mega", 1, 120.0, new BigDecimal("12.50"), 1)));
 
         String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
@@ -141,7 +142,7 @@ class AiServiceTest {
                 .thenReturn(finalResponse);
         // Updated mock to findOptimalStores which returns a List
         when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(List.of(new StoreMatchResult("store-2", "Store A", 1, 240.0)));
+                .thenReturn(List.of(new StoreMatchResult("store-2", "Store A", 1, 240.0, new BigDecimal("14.20"), 1)));
 
         String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 

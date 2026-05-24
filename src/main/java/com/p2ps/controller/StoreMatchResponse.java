@@ -5,7 +5,10 @@ public record StoreMatchResponse(
         String storeName,
         int matchedItems,
         double distanceMeters,
-        long matchPercentage
+        long matchPercentage,
+        java.math.BigDecimal totalEstimatedPrice,
+        int pricedItems,
+        long priceCoveragePercentage
 ) {
 }
 
