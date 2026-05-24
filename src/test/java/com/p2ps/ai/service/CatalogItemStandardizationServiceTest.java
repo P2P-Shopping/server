@@ -197,4 +197,18 @@ class CatalogItemStandardizationServiceTest {
                 .isInstanceOf(AiProcessingException.class)
                 .hasMessageContaining("missing field: defaultQuantity");
     }
+
+    @Test
+    void standardizeShouldThrowWhenDefaultQuantityHasInvalidFormat() {
+        CatalogItemStandardizationService service = new CatalogItemStandardizationService(aiClient, new ObjectMapper());
+        when(aiClient.generateResponse(any(), eq(List.of()))).thenReturn(
+                new AiMessage("model", List.of(new AiMessage.TextPart("""
+                        {"cleanName":"Product","category":"Produce","brand":null,"defaultQuantity":"hello world"}
+                        """)))
+        );
+
+        assertThatThrownBy(() -> service.standardize("product", null, null, null))
+                .isInstanceOf(AiProcessingException.class)
+                .hasMessageContaining("invalid format");
     }
+}

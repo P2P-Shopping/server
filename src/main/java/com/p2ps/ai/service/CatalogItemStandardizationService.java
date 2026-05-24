@@ -107,6 +107,9 @@ public class CatalogItemStandardizationService {
         return rawResponse.substring(start, end + 1);
     }
 
+    private static final java.util.regex.Pattern QUANTITY_PATTERN =
+            java.util.regex.Pattern.compile("^\\d+(\\.\\d+)?\\s+\\S+$");
+
     private String requireValidatedQuantity(String value) {
         if (value == null || value.trim().isEmpty()) {
             throw new AiProcessingException("AI catalog standardization response is missing field: defaultQuantity");
@@ -114,6 +117,9 @@ public class CatalogItemStandardizationService {
         String trimmed = value.trim();
         if (trimmed.length() > 50) {
             throw new AiProcessingException("AI catalog standardization response field 'defaultQuantity' is too long (max 50 chars): " + trimmed);
+        }
+        if (!QUANTITY_PATTERN.matcher(trimmed).matches()) {
+            throw new AiProcessingException("AI catalog standardization response field 'defaultQuantity' has invalid format (expected '[number] [unit]', e.g. '1 kg'): " + trimmed);
         }
         return trimmed;
     }
