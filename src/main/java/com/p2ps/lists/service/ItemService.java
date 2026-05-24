@@ -1063,12 +1063,27 @@ public class ItemService {
             }
 
             if (storeName == null || storeName.isBlank()) {
-                logger.warn("List ID: '{}' does not have a finalStore set, and coordinates do not match any geofence. Leaving store and location data as null.", 
+                if (lat != null && lng != null) {
+                    // New/unknown store: client has coordinates but no geofence matched.
+                    // Generate a stable synthetic storeId from rounded coordinates so
+                    // nearby pings cluster to the same auto-provisioned store.
+                    // TelemetryRawPingImportJob.ensureStore() will auto-create the geofence.
+                    long roundedLat = Math.round(lat * 1000.0);
+                    long roundedLng = Math.round(lng * 1000.0);
+                    storeId = UUID.nameUUIDFromBytes(
+                            ("store:geo:" + roundedLat + ":" + roundedLng)
+                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                    storeName = "Auto-detected Store";
+                    logger.info("List ID: '{}' has no finalStore and coordinates don't match any geofence. "
+                                    + "Using auto-provisioned store (storeId={}) at rounded coords ({}, {}).",
+                            item.getShoppingList().getId(), storeId, roundedLat, roundedLng);
+                } else {
+                    logger.warn("List ID: '{}' does not have a finalStore set, and no client coordinates provided. "
+                                    + "Telemetry will be recorded without location data.",
                             item.getShoppingList().getId());
-                storeName = null;
-                storeId = null;
-                lat = null;
-                lng = null;
+                    storeName = null;
+                    storeId = null;
+                }
             } else {
                 // Look up store coordinates and store_id from store_geofences if not already matched
                 if (storeId == null) {
