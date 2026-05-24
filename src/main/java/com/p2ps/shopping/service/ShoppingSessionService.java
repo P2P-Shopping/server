@@ -113,7 +113,8 @@ public class ShoppingSessionService {
 
                 try {
                     Polygon buildingPolygon = overpassService.fetchBuildingPolygon(
-                            request.getLatitude(), request.getLongitude());
+                            request.getLatitude(), request.getLongitude(),
+                            submission.getSubmittedName(), submission.getSubmittedAddress());
                     placeholderStore.setBoundaryPolygon(buildingPolygon);
 
                     placeholderStore = storeGeofenceRepository.save(placeholderStore);
