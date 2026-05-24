@@ -37,11 +37,11 @@ public class CatalogService {
 
     @Transactional
     public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price) {
-        return self.recordPurchase(genericName, specificName, brand, category, price, null);
+        return self.recordPurchase(genericName, specificName, brand, category, price, (UUID) null);
     }
 
     @Transactional
-    public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price, String storeName) {
+    public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price, UUID storeId) {
         if (specificName == null || specificName.isBlank()) {
             return null; // Cannot catalog without a specific name
         }
@@ -58,8 +58,13 @@ public class CatalogService {
         // Dupa ce operatia atomica s-a incheiat, cautam produsul pentru a-l returna controller-ului
         ProductCatalog recordedProduct = catalogRepository.findBySpecificNameAndBrand(specificName, brand)
                 .orElseThrow(() -> new IllegalStateException("Product should have been created by upsert but was not found."));
-        storePriceService.recordStorePrice(recordedProduct, storeName, price);
+        storePriceService.recordStorePrice(recordedProduct, storeId, price);
         return recordedProduct;
+    }
+
+    @Transactional
+    public ProductCatalog recordPurchase(String genericName, String specificName, String brand, String category, BigDecimal price, String ignoredStoreName) {
+        return self.recordPurchase(genericName, specificName, brand, category, price, (UUID) null);
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +119,7 @@ public class CatalogService {
                             match.getBrand(),
                             match.getCategory(),
                             match.getPrice(),
-                            "1"
+                            normalizeQuantity(match.getCatalogDefaultQuantity())
                     ));
                 }
             }
@@ -136,10 +141,17 @@ public class CatalogService {
                         catalogMatch.getBrand(),
                         catalogMatch.getCategory(),
                         catalogMatch.getEstimatedPrice(),
-                        "1"
+                        normalizeQuantity(catalogMatch.getDefaultQuantity())
                 ));
             }
             if (suggestionsMap.size() >= 10) break;
         }
+    }
+
+    private String normalizeQuantity(String quantity) {
+        if (quantity == null || quantity.trim().isEmpty()) {
+            return "1 buc";
+        }
+        return quantity.trim();
     }
 }

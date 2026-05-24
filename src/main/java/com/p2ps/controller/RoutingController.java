@@ -124,7 +124,10 @@ public class RoutingController {
                         result.storeName(),
                         result.matchedItems(),
                         result.distanceMeters(),
-                        calculateMatchPercentage(result.matchedItems(), requestedCount)
+                        calculateMatchPercentage(result.matchedItems(), requestedCount),
+                        result.totalEstimatedPrice(),
+                        result.pricedItems(),
+                        calculateMatchPercentage(result.pricedItems(), requestedCount)
                 ))
                 .toList();
 

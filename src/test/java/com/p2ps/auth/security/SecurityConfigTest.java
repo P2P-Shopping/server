@@ -10,27 +10,24 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.configurers.SessionManagementConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import java.util.List;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SecurityConfigTest {
 
+    private final JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
+    private final CorsConfigurationSource corsSource = mock(CorsConfigurationSource.class);
+    private final SecurityConfig config = new SecurityConfig(jwtAuthFilter, corsSource);
+
     @Test
     void passwordEncoder_ReturnsBCryptPasswordEncoder() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
-
         PasswordEncoder encoder = config.passwordEncoder();
 
         assertNotNull(encoder);
@@ -39,12 +36,10 @@ class SecurityConfigTest {
 
     @Test
     void authenticationManager_ReturnsProviderManagerWithDaoProvider() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
         PasswordEncoder passwordEncoder = config.passwordEncoder();
         UserService userService = mock(UserService.class);
 
-        AuthenticationManager manager = config.authenticationManager(mock(org.springframework.security.config.annotation.web.builders.HttpSecurity.class), passwordEncoder, userService);
+        AuthenticationManager manager = config.authenticationManager(mock(HttpSecurity.class), passwordEncoder, userService);
 
         assertNotNull(manager);
         assertInstanceOf(ProviderManager.class, manager);
@@ -55,63 +50,14 @@ class SecurityConfigTest {
     }
 
     @Test
-    void corsConfigurationSource_ConfiguredCorrectly() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
-
-        CorsConfigurationSource source = config.corsConfigurationSource();
-
-        assertNotNull(source);
-        assertInstanceOf(UrlBasedCorsConfigurationSource.class, source);
-
-        CorsConfiguration corsConfig = ((UrlBasedCorsConfigurationSource) source).getCorsConfiguration(new MockHttpServletRequest("/api/test"));
-
-        assertNotNull(corsConfig);
-        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
-        assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"), corsConfig.getAllowedMethods());
-        assertEquals(List.of("Authorization", "Content-Type", "Accept", "X-Return-Token"), corsConfig.getAllowedHeaders());
-        assertTrue(corsConfig.getAllowCredentials());
-    }
-
-    @Test
-    void corsConfigurationSource_DisallowsWildcardWithCredentials() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
-        org.springframework.test.util.ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173, *");
-
-        CorsConfiguration corsConfig = ((UrlBasedCorsConfigurationSource) config.corsConfigurationSource())
-                .getCorsConfiguration(new MockHttpServletRequest("/api/test"));
-
-        assertNotNull(corsConfig);
-        // * should be filtered out
-        assertEquals(List.of("http://localhost:5173"), corsConfig.getAllowedOrigins());
-    }
-
-    @Test
-    void corsConfigurationSource_TrimsAndIgnoresEmptyOrigins() {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
-        org.springframework.test.util.ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173, https://example.com, ");
-
-        CorsConfiguration corsConfig = ((UrlBasedCorsConfigurationSource) config.corsConfigurationSource())
-                .getCorsConfiguration(new MockHttpServletRequest("/api/test"));
-
-        assertNotNull(corsConfig);
-        assertEquals(List.of("http://localhost:5173", "https://example.com"), corsConfig.getAllowedOrigins());
-    }
-
-    @Test
     void securityFilterChain_DisablesCsrfAndKeepsStatelessSecurity() throws Exception {
-        JwtAuthFilter jwtAuthFilter = mock(JwtAuthFilter.class);
-        SecurityConfig config = new SecurityConfig(jwtAuthFilter);
-
         HttpSecurity http = mock(HttpSecurity.class);
         when(http.csrf(any())).thenReturn(http);
         when(http.cors(any())).thenReturn(http);
         when(http.exceptionHandling(any())).thenReturn(http);
         when(http.authorizeHttpRequests(any())).thenReturn(http);
         when(http.sessionManagement(any())).thenReturn(http);
-        when(http.addFilterBefore(any(), eq(org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class))).thenReturn(http);
+        when(http.addFilterBefore(any(), eq(UsernamePasswordAuthenticationFilter.class))).thenReturn(http);
         DefaultSecurityFilterChain filterChain = mock(DefaultSecurityFilterChain.class);
         when(http.build()).thenReturn(filterChain);
 
@@ -119,8 +65,8 @@ class SecurityConfigTest {
 
         assertSame(filterChain, chain);
         verify(http).csrf(any());
+        verify(http).cors(any());
 
-        // verify session management is configured to be STATELESS
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Customizer> sessionCaptor = ArgumentCaptor.forClass(Customizer.class);
         verify(http).sessionManagement(sessionCaptor.capture());
@@ -130,14 +76,6 @@ class SecurityConfigTest {
         sessionCustomizer.customize(sessionConfigurer);
         verify(sessionConfigurer).sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
-        // verify JwtAuthFilter registered before UsernamePasswordAuthenticationFilter
         verify(http).addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-    }
-
-    private static class MockHttpServletRequest extends org.springframework.mock.web.MockHttpServletRequest {
-        public MockHttpServletRequest(String pathInfo) {
-            setRequestURI(pathInfo);
-            setServletPath(pathInfo);
-        }
     }
 }

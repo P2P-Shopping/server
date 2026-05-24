@@ -24,6 +24,53 @@ CREATE UNIQUE INDEX idx_store_geofences_external_store_id
     ON store_geofences (external_store_id)
     WHERE external_store_id IS NOT NULL;
 
+ALTER TABLE store_prices
+    DROP CONSTRAINT IF EXISTS fk_store_prices_store;
+ALTER TABLE store_prices
+    ADD CONSTRAINT fk_store_prices_store
+    FOREIGN KEY (store_id) REFERENCES store_geofences(store_id) ON DELETE CASCADE;
+
+ALTER TABLE shopping_lists
+    DROP COLUMN IF EXISTS final_store;
+ALTER TABLE shopping_lists
+    ADD COLUMN IF NOT EXISTS final_store_id UUID;
+ALTER TABLE shopping_lists
+    DROP CONSTRAINT IF EXISTS fk_shopping_lists_final_store;
+ALTER TABLE shopping_lists
+    ADD CONSTRAINT fk_shopping_lists_final_store
+    FOREIGN KEY (final_store_id) REFERENCES store_geofences(store_id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS store_candidate_submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    submitted_name VARCHAR(255) NOT NULL,
+    normalized_name VARCHAR(255) NOT NULL,
+    submitted_address VARCHAR(255),
+    submission_notes VARCHAR(500),
+    submitted_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_list_id UUID NOT NULL REFERENCES shopping_lists(id) ON DELETE CASCADE,
+    matched_store_id UUID REFERENCES store_geofences(store_id) ON DELETE SET NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_candidate_submissions_normalized_name
+    ON store_candidate_submissions (normalized_name);
+
+CREATE TABLE IF NOT EXISTS shopping_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shopping_list_id UUID NOT NULL REFERENCES shopping_lists(id) ON DELETE CASCADE,
+    started_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    store_id UUID REFERENCES store_geofences(store_id) ON DELETE SET NULL,
+    store_candidate_submission_id UUID REFERENCES store_candidate_submissions(id) ON DELETE SET NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_shopping_sessions_list_status
+    ON shopping_sessions (shopping_list_id, status);
+
 -- ============================================================
 -- RAW_USER_PINGS (datele brute trimise de utilizatori)
 -- ============================================================

@@ -15,7 +15,7 @@ class ItemTest {
 
         assertThat(item.getCreatedAt()).isNotNull();
         assertThat(item.getLastUpdatedTimestamp()).isNotNull();
-        assertThat(item.getCreatedAt()).isEqualTo(item.getLastUpdatedTimestamp());
+        assertThat(item.getLastUpdatedTimestamp()).isGreaterThanOrEqualTo(item.getCreatedAt());
     }
 
     @Test

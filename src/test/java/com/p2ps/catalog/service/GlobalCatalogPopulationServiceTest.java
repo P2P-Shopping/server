@@ -38,9 +38,6 @@ class GlobalCatalogPopulationServiceTest {
     @Mock
     private CatalogItemStandardizationService catalogItemStandardizationService;
 
-    @Mock
-    private StorePriceService storePriceService;
-
     private GlobalCatalogPopulationService service;
 
     @BeforeEach
@@ -50,8 +47,7 @@ class GlobalCatalogPopulationServiceTest {
                 userProductHistoryRepository,
                 productCatalogRepository,
                 catalogItemStandardizationService,
-                transactionTemplate,
-                storePriceService
+                transactionTemplate
         );
     }
 
@@ -93,7 +89,7 @@ class GlobalCatalogPopulationServiceTest {
         when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
         when(productCatalogRepository.searchByKeywordStrict("sana")).thenReturn(List.of());
         when(catalogItemStandardizationService.standardize("sana", null, null, null))
-                .thenReturn(new CatalogStandardizationResult("Sana 3.5%", "Dairy", "Napolact"));
+                .thenReturn(new CatalogStandardizationResult("Sana 3.5%", "Dairy", "Napolact", "500 ml"));
         when(productCatalogRepository.findBySpecificNameAndBrand("Sana 3.5%", "Napolact")).thenReturn(Optional.empty());
         when(productCatalogRepository.save(any(ProductCatalog.class))).thenReturn(savedCatalog);
         when(userProductHistoryRepository.linkUnknownHistoryToCatalog("sana", savedCatalog)).thenReturn(6);
@@ -115,7 +111,7 @@ class GlobalCatalogPopulationServiceTest {
         when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
         when(productCatalogRepository.searchByKeywordStrict("iaurt grecesc")).thenReturn(List.of());
         when(catalogItemStandardizationService.standardize("iaurt grecesc", null, null, null))
-                .thenReturn(new CatalogStandardizationResult("Greek Yogurt", "Dairy", "Olympus"));
+                .thenReturn(new CatalogStandardizationResult("Greek Yogurt", "Dairy", "Olympus", "1 buc"));
         when(productCatalogRepository.findBySpecificNameAndBrand("Greek Yogurt", "Olympus")).thenReturn(Optional.of(existingCatalog));
         when(userProductHistoryRepository.linkUnknownHistoryToCatalog("iaurt grecesc", existingCatalog)).thenReturn(2);
 
@@ -144,42 +140,6 @@ class GlobalCatalogPopulationServiceTest {
     }
 
     @Test
-    void populateFromPopularUnknownProductsShouldRecordStorePriceForValidCandidateMetadata() {
-        ProductCatalog existingCatalog = new ProductCatalog();
-        existingCatalog.setId(UUID.randomUUID());
-        UserProductHistoryRepository.PopularUnknownProduct candidate =
-                candidate("cola", 3, "Coca Cola", "Bauturi", new BigDecimal("5.50"), "Mega");
-
-        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(candidate));
-        when(productCatalogRepository.searchByKeywordStrict("cola")).thenReturn(List.of(existingCatalog));
-        when(userProductHistoryRepository.linkUnknownHistoryToCatalog("cola", existingCatalog)).thenReturn(1);
-
-        int result = service.populateFromPopularUnknownProducts(3);
-
-        assertThat(result).isEqualTo(1);
-        verify(storePriceService).recordStorePrice(existingCatalog, "Mega", new BigDecimal("5.50"));
-    }
-
-    @Test
-    void populateFromPopularUnknownProductsShouldSkipStorePriceForBlankStoreOrNegativePrice() {
-        ProductCatalog existingCatalog = new ProductCatalog();
-        existingCatalog.setId(UUID.randomUUID());
-        UserProductHistoryRepository.PopularUnknownProduct blankStore =
-                candidate("cola", 3, null, null, new BigDecimal("5.50"), "   ");
-        UserProductHistoryRepository.PopularUnknownProduct negativePrice =
-                candidate("suc", 3, null, null, new BigDecimal("-1.00"), "Mega");
-
-        when(userProductHistoryRepository.findPopularUnknownProducts(3)).thenReturn(List.of(blankStore, negativePrice));
-        when(productCatalogRepository.searchByKeywordStrict(any())).thenReturn(List.of(existingCatalog));
-        when(userProductHistoryRepository.linkUnknownHistoryToCatalog(any(), any(ProductCatalog.class))).thenReturn(1);
-
-        int result = service.populateFromPopularUnknownProducts(3);
-
-        assertThat(result).isEqualTo(2);
-        verify(storePriceService, never()).recordStorePrice(any(), any(), any());
-    }
-
-    @Test
     void populateFromPopularUnknownProductsShouldSkipBlankCandidateNamesAndContinue() {
         UserProductHistoryRepository.PopularUnknownProduct broken = candidate("   ", 3);
         UserProductHistoryRepository.PopularUnknownProduct good = candidate("lapte", 4);
@@ -197,7 +157,7 @@ class GlobalCatalogPopulationServiceTest {
     }
 
     private UserProductHistoryRepository.PopularUnknownProduct candidate(String customName, long distinctUsers) {
-        return candidate(customName, distinctUsers, null, null, null, null);
+        return candidate(customName, distinctUsers, null, null, null);
     }
 
     private UserProductHistoryRepository.PopularUnknownProduct candidate(
@@ -205,8 +165,7 @@ class GlobalCatalogPopulationServiceTest {
             long distinctUsers,
             String brand,
             String category,
-            BigDecimal price,
-            String storeName) {
+            BigDecimal price) {
         return new UserProductHistoryRepository.PopularUnknownProduct() {
             @Override
             public String getCustomName() {
@@ -232,11 +191,6 @@ class GlobalCatalogPopulationServiceTest {
             public BigDecimal getPrice() {
                 return price;
             }
-
-            @Override
-            public String getStoreName() {
-                return storeName;
-            }
         };
     }
 
@@ -258,3 +212,4 @@ class GlobalCatalogPopulationServiceTest {
         }
     }
 }
+

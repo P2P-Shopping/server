@@ -8,5 +8,4 @@ public class UpdateListRequest {
     private String title;
     private ListCategory category;
     private String subcategory;
-    private String finalStore;
 }

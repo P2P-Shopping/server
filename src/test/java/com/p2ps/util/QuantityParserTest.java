@@ -16,6 +16,13 @@ class QuantityParserTest {
         assertThat(QuantityParser.parse("1.5 kg").value()).isEqualTo(1.5);
         assertThat(QuantityParser.parse("1.5 kg").unit()).isEqualTo(QuantityParser.Unit.KG);
 
+        assertThat(QuantityParser.parse("1,5 KG").value()).isEqualTo(1.5);
+        assertThat(QuantityParser.parse("1,5 KG").unit()).isEqualTo(QuantityParser.Unit.KG);
+
+        assertThat(QuantityParser.parse("750 grame").unit()).isEqualTo(QuantityParser.Unit.G);
+        assertThat(QuantityParser.parse("2 litri").unit()).isEqualTo(QuantityParser.Unit.L);
+        assertThat(QuantityParser.parse("3 bucăți").unit()).isEqualTo(QuantityParser.Unit.PCS);
+
         assertThat(QuantityParser.parse("10 buc").value()).isEqualTo(10.0);
         assertThat(QuantityParser.parse("10 buc").unit()).isEqualTo(QuantityParser.Unit.PCS);
     }
@@ -55,6 +62,12 @@ class QuantityParserTest {
         assertThat(QuantityParser.addQuantities("500 g", "600 g")).isEqualTo("1.1 kg");
 
         assertThat(QuantityParser.addQuantities("1.2 kg", "300 g")).isEqualTo("1.5 kg");
+
+        assertThat(QuantityParser.addQuantities("200 g", "1 kg")).isEqualTo("1.2 kg");
+
+        assertThat(QuantityParser.addQuantities("200 grame", "1 kilogram")).isEqualTo("1.2 kg");
+
+        assertThat(QuantityParser.addQuantities("0,5 l", "250 ml")).isEqualTo("750 ml");
 
         assertThat(QuantityParser.addQuantities("500 ml", "1.5 l")).isEqualTo("2 l");
 

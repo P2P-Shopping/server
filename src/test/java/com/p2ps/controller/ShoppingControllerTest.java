@@ -6,26 +6,33 @@ import com.p2ps.ai.service.AiOrchestrationService;
 import com.p2ps.auth.model.Users;
 import com.p2ps.auth.repository.UserRepository;
 import com.p2ps.catalog.model.ProductCatalog;
-import com.p2ps.lists.dto.ShoppingListDTO;
 import com.p2ps.lists.service.ItemService;
 import com.p2ps.lists.service.ShoppingListService;
-import org.junit.jupiter.api.BeforeEach;
+import com.p2ps.shopping.dto.ShoppingSessionDTO;
+import com.p2ps.shopping.dto.StartShoppingRequest;
+import com.p2ps.shopping.model.ShoppingSessionStatus;
+import com.p2ps.shopping.service.ShoppingSessionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,219 +40,138 @@ import static org.mockito.Mockito.when;
 class ShoppingControllerTest {
 
     @Mock
-    private ShoppingListService shoppingListService;
-
+    private ShoppingSessionService shoppingSessionService;
     @Mock
     private AiOrchestrationService aiOrchestrationService;
-
     @Mock
     private ItemService itemService;
-
+    @Mock
+    private ShoppingListService shoppingListService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private Authentication authentication;
 
     @InjectMocks
     private ShoppingController shoppingController;
 
-    private UUID listId;
-    private String userEmail;
-    private ShoppingListDTO shoppingListDTO;
-    private Users user;
+    @Test
+    void startShopping_delegatesToService() {
+        String email = "user@example.com";
+        StartShoppingRequest request = new StartShoppingRequest();
+        request.setListId(UUID.randomUUID());
 
-    @BeforeEach
-    void setUp() {
-        listId = UUID.randomUUID();
-        userEmail = "test@example.com";
-        shoppingListDTO = new ShoppingListDTO();
-        shoppingListDTO.setId(listId);
-        user = new Users();
+        ShoppingSessionDTO dto = new ShoppingSessionDTO();
+        dto.setSessionId(UUID.randomUUID());
+        dto.setStatus(ShoppingSessionStatus.ACTIVE);
+
+        when(authentication.getName()).thenReturn(email);
+        when(shoppingSessionService.startShopping(request, email)).thenReturn(dto);
+
+        ResponseEntity<ShoppingSessionDTO> response = shoppingController.startShopping(request, authentication);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(dto, response.getBody());
+    }
+
+    @Test
+    void getActiveSession_whenPresent_returns200() {
+        UUID listId = UUID.randomUUID();
+        String email = "user@example.com";
+        ShoppingSessionDTO dto = new ShoppingSessionDTO();
+        dto.setSessionId(UUID.randomUUID());
+
+        when(authentication.getName()).thenReturn(email);
+        when(shoppingSessionService.getActiveSession(listId, email)).thenReturn(Optional.of(dto));
+
+        ResponseEntity<ShoppingSessionDTO> response = shoppingController.getActiveSession(listId, authentication);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(dto, response.getBody());
+    }
+
+    @Test
+    void getActiveSession_whenMissing_returns204() {
+        UUID listId = UUID.randomUUID();
+        String email = "user@example.com";
+
+        when(authentication.getName()).thenReturn(email);
+        when(shoppingSessionService.getActiveSession(listId, email)).thenReturn(Optional.empty());
+
+        ResponseEntity<ShoppingSessionDTO> response = shoppingController.getActiveSession(listId, authentication);
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        assertNull(response.getBody());
+    }
+
+    @Test
+    void finishShopping_withReceipt_processesItemsAndFinishesSession() {
+        UUID listId = UUID.randomUUID();
+        String email = "user@example.com";
+        MockMultipartFile receipt = new MockMultipartFile("receipt", "receipt.jpg", "image/jpeg", new byte[]{1, 2});
+
+        Users user = new Users(email, "pass", "Test", "User");
         user.setId(1);
-        user.setEmail(userEmail);
 
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        org.mockito.Mockito.lenient().when(authentication.getName()).thenReturn(userEmail);
-        SecurityContext securityContext = org.mockito.Mockito.mock(SecurityContext.class);
-        org.mockito.Mockito.lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
-        SecurityContextHolder.setContext(securityContext);
-    }
+        ShoppingSessionDTO active = new ShoppingSessionDTO();
+        active.setStoreName("Mega");
 
-    @Test
-    void finishShopping_withoutReceipt_shouldCallFinishShoppingOnly() {
-        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
-                .thenReturn(shoppingListDTO);
+        ParsedItemResponse itemWithName = new ParsedItemResponse();
+        itemWithName.setSpecificName("Lapte Zuzu");
+        itemWithName.setPrice(new BigDecimal("9.99"));
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        var response = shoppingController.finishShopping(
-                "Kaufland",
-                listId,
-                null,
-                authentication
-        );
-
-        assertEquals(200, response.getStatusCode().value());
-        assertEquals(listId, response.getBody().getId());
-        verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService, org.mockito.Mockito.never()).generateShoppingItems(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void finishShopping_withEmptyReceipt_shouldTreatAsNoReceipt() {
-        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
-                .thenReturn(shoppingListDTO);
-
-        MockMultipartFile emptyReceipt = new MockMultipartFile(
-                "receipt",
-                "receipt.jpg",
-                "image/jpeg",
-                new byte[0]
-        );
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        var response = shoppingController.finishShopping(
-                "Kaufland",
-                listId,
-                emptyReceipt,
-                authentication
-        );
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-    }
-
-    @Test
-    void finishShopping_withReceipt_shouldProcessReceipt() {
-        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
-                .thenReturn(shoppingListDTO);
+        ParsedItemResponse itemWithoutName = new ParsedItemResponse();
+        itemWithoutName.setSpecificName(" ");
+        itemWithoutName.setGenericName(" ");
 
         AiGenerationResponse aiResponse = new AiGenerationResponse();
-        ParsedItemResponse item = new ParsedItemResponse();
-        item.setGenericName("Milk");
-        item.setSpecificName("Fresh Milk");
-        item.setBrand("BrandX");
-        item.setCategory("Dairy");
-        item.setPrice(new BigDecimal("2.50"));
-        aiResponse.setItems(java.util.List.of(item));
+        aiResponse.setItems(List.of(itemWithName, itemWithoutName));
 
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
-                .thenReturn(aiResponse);
-        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
+        ProductCatalog catalog = new ProductCatalog();
+        catalog.setId(UUID.randomUUID());
 
-        ProductCatalog catalogProduct = new ProductCatalog();
-        when(itemService.recordReceiptItem(any(), any(), any()))
-                .thenReturn(new ItemService.ReceiptProcessingResult(false, catalogProduct));
+        ShoppingSessionDTO finished = new ShoppingSessionDTO();
+        finished.setSessionId(UUID.randomUUID());
+        finished.setStatus(ShoppingSessionStatus.FINISHED);
+        finished.setStoreName("Mega");
 
-        MockMultipartFile receipt = new MockMultipartFile(
-                "receipt",
-                "receipt.jpg",
-                "image/jpeg",
-                "fake-image-content".getBytes()
-        );
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        var response = shoppingController.finishShopping(
-                "Kaufland",
-                listId,
-                receipt,
-                authentication
-        );
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), any());
-        verify(itemService).recordReceiptItem(any(), eq("Kaufland"), eq(user));
-        verify(shoppingListService).markReceiptItemPurchased(eq(listId), any(), eq(catalogProduct), eq(userEmail));
-    }
-
-    @Test
-    void finishShopping_withReceiptAndNullSpecificName_shouldSkipItem() {
-        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
-                .thenReturn(shoppingListDTO);
-
-        AiGenerationResponse aiResponse = new AiGenerationResponse();
-        ParsedItemResponse item = new ParsedItemResponse();
-        item.setGenericName(null);
-        item.setSpecificName(null);
-        aiResponse.setItems(java.util.List.of(item));
-
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
-                .thenReturn(aiResponse);
-        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
-
-        MockMultipartFile receipt = new MockMultipartFile(
-                "receipt",
-                "receipt.jpg",
-                "image/jpeg",
-                "fake-image-content".getBytes()
-        );
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        var response = shoppingController.finishShopping(
-                "Kaufland",
-                listId,
-                receipt,
-                authentication
-        );
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(shoppingListService).finishShopping(listId, "Kaufland", userEmail);
-        verify(aiOrchestrationService).generateShoppingItems(any(), any(), any(), any(), any());
-        verify(itemService).recordReceiptItem(any(), any(), any());
-        verify(shoppingListService, org.mockito.Mockito.never())
-                .markReceiptItemPurchased(any(), any(), any(), any());
-    }
-
-    @Test
-    void finishShopping_withReceiptJunkItem_shouldIgnoreIt() {
-        when(shoppingListService.finishShopping(listId, "Kaufland", userEmail))
-                .thenReturn(shoppingListDTO);
-
-        AiGenerationResponse aiResponse = new AiGenerationResponse();
-        ParsedItemResponse item = new ParsedItemResponse();
-        item.setGenericName("Sacosa");
-        item.setPrice(new BigDecimal("1.50"));
-        aiResponse.setItems(java.util.List.of(item));
-
-        when(aiOrchestrationService.generateShoppingItems(any(), any(), any(), any(), any()))
-                .thenReturn(aiResponse);
-        when(userRepository.findByEmail(userEmail)).thenReturn(java.util.Optional.of(user));
-        when(itemService.recordReceiptItem(any(), any(), any()))
+        when(authentication.getName()).thenReturn(email);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(shoppingSessionService.getActiveSession(listId, email)).thenReturn(Optional.of(active));
+        when(aiOrchestrationService.generateShoppingItems(any(), any(), eq(null), eq(null), eq(email))).thenReturn(aiResponse);
+        when(itemService.recordReceiptItem(itemWithName, listId, user))
+                .thenReturn(new ItemService.ReceiptProcessingResult(false, catalog));
+        when(itemService.recordReceiptItem(itemWithoutName, listId, user))
                 .thenReturn(ItemService.ReceiptProcessingResult.createIgnored());
+        when(shoppingSessionService.finishShopping(listId, email)).thenReturn(finished);
 
-        MockMultipartFile receipt = new MockMultipartFile(
-                "receipt",
-                "receipt.jpg",
-                "image/jpeg",
-                "fake-image-content".getBytes()
-        );
+        ResponseEntity<ShoppingSessionDTO> response = shoppingController.finishShopping(listId, receipt, authentication);
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        var response = shoppingController.finishShopping(
-                "Kaufland",
-                listId,
-                receipt,
-                authentication
-        );
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(itemService).recordReceiptItem(any(), eq("Kaufland"), eq(user));
-        verify(shoppingListService, org.mockito.Mockito.never()).markReceiptItemPurchased(any(), any(), any(), any());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(finished, response.getBody());
+        verify(shoppingListService).markReceiptItemPurchased(listId, itemWithName, catalog, email);
+        verify(shoppingListService, never()).markReceiptItemPurchased(listId, itemWithoutName, null, email);
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource(value = {
-        "primary, fallback, primary",
-        "'', fallback, fallback",
-        "null, '', null"
-    }, nullValues = {"null"})
-    void firstNonBlank_parameterized(String primary, String fallback, String expected) throws Exception {
-        java.lang.reflect.Method method = ShoppingController.class.getDeclaredMethod("firstNonBlank", String.class, String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(shoppingController, primary, fallback);
-        assertEquals(expected, result);
+    @Test
+    void finishShopping_withEmptyReceipt_skipsAiPipeline() {
+        UUID listId = UUID.randomUUID();
+        String email = "user@example.com";
+        MockMultipartFile emptyReceipt = new MockMultipartFile("receipt", "receipt.jpg", "image/jpeg", new byte[]{});
+
+        ShoppingSessionDTO finished = new ShoppingSessionDTO();
+        finished.setSessionId(UUID.randomUUID());
+        finished.setStatus(ShoppingSessionStatus.FINISHED);
+
+        when(authentication.getName()).thenReturn(email);
+        when(shoppingSessionService.finishShopping(listId, email)).thenReturn(finished);
+
+        ResponseEntity<ShoppingSessionDTO> response = shoppingController.finishShopping(listId, emptyReceipt, authentication);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        verify(userRepository, never()).findByEmail(any());
+        verify(aiOrchestrationService, never()).generateShoppingItems(any(), any(), any(), any(), any());
+        verify(itemService, never()).recordReceiptItem(any(), any(UUID.class), any(Users.class));
     }
 }

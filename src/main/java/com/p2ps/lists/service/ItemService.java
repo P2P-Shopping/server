@@ -8,6 +8,7 @@ import com.p2ps.auth.model.Users;
 import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.catalog.service.StorePriceService;
+import com.p2ps.shopping.service.ShoppingSessionService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;
 import com.p2ps.lists.exception.ItemNotFoundException;
@@ -26,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.p2ps.telemetry.repository.TelemetryRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -60,6 +63,9 @@ public class ItemService {
     private final ProductCatalogRepository catalogRepository;
     private final AiService aiService;
     private final StorePriceService storePriceService;
+    private final ShoppingSessionService shoppingSessionService;
+    private final TelemetryRepository telemetryRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     private final ItemService self;
 
@@ -69,6 +75,9 @@ public class ItemService {
                        ProductCatalogRepository catalogRepository,
                        AiService aiService,
                        StorePriceService storePriceService,
+                       ShoppingSessionService shoppingSessionService,
+                       TelemetryRepository telemetryRepository,
+                       JdbcTemplate jdbcTemplate,
                        @Lazy ItemService self) {
         this.itemRepository = itemRepository;
         this.shoppingListRepository = shoppingListRepository;
@@ -76,11 +85,14 @@ public class ItemService {
         this.catalogRepository = catalogRepository;
         this.aiService = aiService;
         this.storePriceService = storePriceService;
+        this.shoppingSessionService = shoppingSessionService;
+        this.telemetryRepository = telemetryRepository;
+        this.jdbcTemplate = jdbcTemplate;
         this.self = self;
     }
 
     @Transactional
-    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, String storeName, Users user) {
+    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, UUID listId, Users user) {
         if (item == null || isReceiptJunkItem(item)) {
             return ReceiptProcessingResult.createIgnored();
         }
@@ -92,16 +104,20 @@ public class ItemService {
 
         BigDecimal validPrice = sanitizeNonNegativePrice(item.getPrice());
         ProductCatalog catalogMatch = resolveCatalogMatch(item, user);
+        UUID activeStoreId = listId == null ? null : shoppingSessionService
+                .getActiveSession(listId, user.getEmail())
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
 
-        if (catalogMatch != null && validPrice != null) {
-            storePriceService.recordStorePrice(catalogMatch, storeName, validPrice);
+        if (catalogMatch != null && validPrice != null && activeStoreId != null) {
+            storePriceService.recordStorePrice(catalogMatch, activeStoreId, validPrice);
         }
 
         saveToHistory(
                 null,
                 user,
                 specificName,
-                storeName,
                 item.getBrand(),
                 item.getCategory(),
                 validPrice,
@@ -109,6 +125,11 @@ public class ItemService {
         );
 
         return new ReceiptProcessingResult(false, catalogMatch);
+    }
+
+    @Transactional
+    public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, String ignoredStoreName, Users user) {
+        return recordReceiptItem(item, (UUID) null, user);
     }
 
     public record ReceiptProcessingResult(boolean ignored, ProductCatalog catalogMatch) {
@@ -283,7 +304,7 @@ public class ItemService {
 
         try {
             Item savedItem = itemRepository.save(item);
-            saveToHistory(savedItem, list.getUser(), normalizedItemName, list.getFinalStore());
+            saveToHistory(savedItem, list.getUser(), normalizedItemName);
             return mapToDTO(savedItem);
         } catch (org.springframework.dao.DataIntegrityViolationException _) {
             return self.addItemToList(listId, request, userEmail);
@@ -470,7 +491,7 @@ public class ItemService {
         newItem.setLastUpdatedTimestamp(System.currentTimeMillis());
         newItem.setCreatedAt(System.currentTimeMillis());
         attachRoutableExternalItemId(newItem);
-        saveToHistory(newItem, list.getUser(), normalizedItemName, list.getFinalStore());
+        saveToHistory(newItem, list.getUser(), normalizedItemName);
         return newItem;
     }
 
@@ -488,8 +509,17 @@ public class ItemService {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
-        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+        ShoppingList list = item.getShoppingList();
+        boolean canModify = list.canBeModifiedBy(userEmail);
+        boolean canCheck = list.canCheckItems(userEmail);
+
+        if (!canModify && !canCheck) {
             throw new ListAccessDeniedException("You do not have permission to edit this item");
+        }
+
+        if (!canModify) {
+            // User is a GUEST. Verify they only change isChecked
+            validateGuestAccess(item, request);
         }
 
         applyUpdatableFields(item, request);
@@ -531,9 +561,39 @@ public class ItemService {
         boolean wasChecked = item.isChecked();
         item.setChecked(request.getIsChecked());
         if (item.isChecked() && !wasChecked) {
-            saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            recordTelemetry(item, request.getLat(), request.getLng(), request.getAccuracyMeters());
         }
     }
+
+    private void validateGuestAccess(Item item, ItemRequest request) {
+        if (isFieldChanged(request.getName(), item.getName(), (req, cur) -> !req.trim().equals(cur))
+                || isFieldChanged(request.getBrand(), item.getBrand())
+                || isFieldChanged(request.getQuantity(), item.getQuantity())
+                || isPriceChanged(request.getPrice(), item.getPrice())
+                || isFieldChanged(request.getCategory(), item.getCategory())
+                || isRecurrentChanged(request.getIsRecurrent(), item.isRecurrent())
+                || isFieldChanged(request.getPositionIndex(), item.getPositionIndex())) {
+            throw new ListAccessDeniedException("GUEST users can only check or uncheck items");
+        }
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue) {
+        return newValue != null && !newValue.equals(currentValue);
+    }
+
+    private <T> boolean isFieldChanged(T newValue, T currentValue, java.util.function.BiFunction<T, T, Boolean> comparer) {
+        return newValue != null && comparer.apply(newValue, currentValue);
+    }
+
+    private boolean isPriceChanged(java.math.BigDecimal newValue, java.math.BigDecimal currentValue) {
+        return newValue != null && (currentValue == null || newValue.compareTo(currentValue) != 0);
+    }
+
+    private boolean isRecurrentChanged(Boolean newValue, boolean currentValue) {
+        return newValue != null && newValue != currentValue;
+    }
+
 
     @Transactional
     public ItemDTO updateItemStatus(UUID itemId, boolean checked, Long clientTimestamp) {
@@ -546,7 +606,8 @@ public class ItemService {
         item.setLastUpdatedTimestamp(System.currentTimeMillis());
 
         if (checked && !wasChecked) {
-            saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+            saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+            recordTelemetry(item, null, null, null);
         }
 
         return mapToDTO(itemRepository.save(item));
@@ -561,7 +622,8 @@ public class ItemService {
             boolean wasChecked = item.isChecked();
             item.setChecked(payload.getChecked());
             if (item.isChecked() && !wasChecked) {
-                saveToHistory(item, item.getShoppingList().getUser(), item.getName(), item.getShoppingList().getFinalStore());
+                saveToHistory(item, item.getShoppingList().getUser(), item.getName());
+                recordTelemetry(item, payload.getLat(), payload.getLng(), payload.getAccuracyMeters());
             }
         }
 
@@ -649,7 +711,7 @@ public class ItemService {
     }
 
     @Transactional
-    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String storeName, String userEmail) {
+    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String userEmail) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
 
@@ -667,15 +729,57 @@ public class ItemService {
         Item savedItem = itemRepository.save(item);
 
         ProductCatalog catalogItem = savedItem.getCatalogItem();
+        UUID activeStoreId = shoppingSessionService
+                .getActiveSession(savedItem.getShoppingList().getId(), userEmail)
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
 
         if (catalogItem == null) {
-            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName(), storeName);
+            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
         } else {
-            if (storeName != null && !storeName.isBlank() && receiptPrice != null) {
-                storePriceService.recordStorePrice(catalogItem, storeName, receiptPrice);
+            if (activeStoreId != null && receiptPrice != null) {
+                storePriceService.recordStorePrice(catalogItem, activeStoreId, receiptPrice);
             }
-            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName(), storeName);
+            saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
         }
+
+        return mapToDTO(savedItem);
+    }
+
+    @Transactional
+    public ItemDTO processReceiptItem(UUID itemId, BigDecimal receiptPrice, String ignoredStoreName, String userEmail) {
+        Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException(ITEM_NOT_FOUND));
+
+        if (!item.getShoppingList().canBeModifiedBy(userEmail)) {
+            throw new ListAccessDeniedException("You do not have permission to modify this item");
+        }
+
+        if (receiptPrice != null) {
+            validatePrice(receiptPrice);
+            item.setPrice(receiptPrice);
+        }
+        item.setLastUpdatedTimestamp(System.currentTimeMillis());
+        item.setChecked(true);
+
+        Item savedItem = itemRepository.save(item);
+
+        ProductCatalog catalogItem = savedItem.getCatalogItem();
+        UUID activeStoreId = shoppingSessionService
+                .getActiveSession(savedItem.getShoppingList().getId(), userEmail)
+                .filter(session -> session.isOfficialStore() && session.getStoreId() != null)
+                .map(session -> session.getStoreId())
+                .orElse(null);
+
+        if (catalogItem != null && receiptPrice != null) {
+            if (activeStoreId != null) {
+                storePriceService.recordStorePrice(catalogItem, activeStoreId, receiptPrice);
+            } else {
+                storePriceService.recordStorePrice(catalogItem, ignoredStoreName, receiptPrice);
+            }
+        }
+        saveToHistory(savedItem, savedItem.getShoppingList().getUser(), savedItem.getName());
 
         return mapToDTO(savedItem);
     }
@@ -737,20 +841,19 @@ public class ItemService {
         return com.p2ps.util.QuantityParser.addQuantities(oldQ, newQ);
     }
 
-    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName, String storeName) {
-        saveToHistory(item, user, new HistoryContext(rawName, storeName, null, null, null, null));
+    void saveToHistory(Item item, com.p2ps.auth.model.Users user, String rawName) {
+        saveToHistory(item, user, new HistoryContext(rawName, null, null, null, null));
     }
 
     void saveToHistory(
             Item item,
             com.p2ps.auth.model.Users user,
             String rawName,
-            String storeName,
             String brand,
             String category,
             BigDecimal price,
             ProductCatalog catalogItem) {
-        saveToHistory(item, user, new HistoryContext(rawName, storeName, brand, category, price, catalogItem));
+        saveToHistory(item, user, new HistoryContext(rawName, brand, category, price, catalogItem));
     }
 
     private void saveToHistory(Item item, com.p2ps.auth.model.Users user, HistoryContext context) {
@@ -772,8 +875,6 @@ public class ItemService {
         } else {
             applyExplicitDetails(history, context);
         }
-
-        applyStoreName(history, context.storeName());
 
         ProductCatalog finalCatalogItem = resolveHistoryCatalogItem(item, context.catalogItem(), historyName, history.getBrand(), user);
 
@@ -812,10 +913,6 @@ public class ItemService {
         applyPositivePrice(history, context.price());
     }
 
-    private void applyStoreName(UserProductHistory history, String storeName) {
-        applyTextIfPresent(history::setStoreName, storeName);
-    }
-
     private ProductCatalog resolveHistoryCatalogItem(
             Item item,
             ProductCatalog catalogItem,
@@ -846,7 +943,6 @@ public class ItemService {
 
     private record HistoryContext(
             String rawName,
-            String storeName,
             String brand,
             String category,
             BigDecimal price,
@@ -927,6 +1023,119 @@ public class ItemService {
         String genericNameLower = catalog.getGenericName() != null ? catalog.getGenericName().toLowerCase() : "";
         return namesOverlap(itemNameLower, genericNameLower)
                 || namesOverlap(itemNameLower, specificNameLower);
+    }
+
+    private void recordTelemetry(Item item, Double clientLat, Double clientLng, Double clientAccuracy) {
+        try {
+            if (item == null || item.getShoppingList() == null) {
+                logger.warn("Skipping checkoff telemetry because the item or shopping list is null!");
+                return;
+            }
+            com.p2ps.store.model.StoreGeofence finalStoreGeofence = item.getShoppingList().getFinalStore();
+            String storeName = finalStoreGeofence != null ? finalStoreGeofence.getName() : null;
+            String storeId = null;
+            Double lat = clientLat;
+            Double lng = clientLng;
+            Double accuracy = clientAccuracy != null ? clientAccuracy : 10.0;
+
+            logger.debug("Processing checkoff telemetry for item ID: {} in list ID: {} (finalStore: '{}'). Received client coords: lat=[REDACTED], lng=[REDACTED]", 
+                        item.getId(), item.getShoppingList().getId(), storeName);
+
+            if (storeName == null || storeName.isBlank()) {
+                // FALLBACK: If list's store is null but client provided active coordinates,
+                // see if they are currently physically inside any of the geofences in Postgres!
+                if (lat != null && lng != null) {
+                    try {
+                        String sql = "SELECT store_id::text, name " +
+                                     "FROM store_geofences " +
+                                     "WHERE ST_Contains(boundary_polygon, ST_SetSRID(ST_MakePoint(?, ?), 4326)) LIMIT 1";
+                        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, lng, lat);
+                        if (!rows.isEmpty()) {
+                            Map<String, Object> row = rows.get(0);
+                            storeId = (String) row.get("store_id");
+                            storeName = (String) row.get("name");
+                            logger.debug("Matched coordinates to geofence store '{}' (ID: {})", storeName, storeId);
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to query store geofences by coordinates ([REDACTED], [REDACTED])", e);
+                    }
+                }
+            }
+
+            if (storeName == null || storeName.isBlank()) {
+                if (lat != null && lng != null) {
+                    // New/unknown store: client has coordinates but no geofence matched.
+                    // Generate a stable synthetic storeId from rounded coordinates so
+                    // nearby pings cluster to the same auto-provisioned store.
+                    // TelemetryRawPingImportJob.ensureStore() will auto-create the geofence.
+                    long roundedLat = Math.round(lat * 1000.0);
+                    long roundedLng = Math.round(lng * 1000.0);
+                    storeId = UUID.nameUUIDFromBytes(
+                            ("store:geo:" + roundedLat + ":" + roundedLng)
+                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                    storeName = "Auto-detected Store";
+                    logger.info("List ID: '{}' has no finalStore and coordinates don't match any geofence. "
+                                    + "Using auto-provisioned store (storeId={}) at rounded coords ({}, {}).",
+                            item.getShoppingList().getId(), storeId, roundedLat, roundedLng);
+                } else {
+                    logger.warn("List ID: '{}' does not have a finalStore set, and no client coordinates provided. "
+                                    + "Telemetry will be recorded without location data.",
+                            item.getShoppingList().getId());
+                    storeName = null;
+                    storeId = null;
+                }
+            } else {
+                // Look up store coordinates and store_id from store_geofences if not already matched
+                if (storeId == null) {
+                    try {
+                        String sql = "SELECT store_id::text, " +
+                                     "ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
+                                     "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
+                                     "FROM store_geofences WHERE LOWER(name) = LOWER(?) LIMIT 1";
+                        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, storeName.trim());
+                        if (!rows.isEmpty()) {
+                            Map<String, Object> row = rows.get(0);
+                            storeId = (String) row.get("store_id");
+                            if (lat == null || lng == null) {
+                                lat = ((Number) row.get("lat")).doubleValue();
+                                lng = ((Number) row.get("lng")).doubleValue();
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to retrieve geofence for store: {}", storeName, e);
+                    }
+                }
+
+                if (storeId == null) {
+                    // Fallback to generated UUID for store id if not exists in geofences
+                    storeId = UUID.nameUUIDFromBytes(("store:" + storeName).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                }
+            }
+
+            if (lat == null || lng == null) {
+                logger.warn("No valid coordinates could be resolved for item ID: {} in list ID: {} (store: '{}'). Geocoding/geofence lookup failed.", 
+                            item.getId(), item.getShoppingList().getId(), storeName);
+            }
+
+            com.p2ps.telemetry.model.TelemetryRecord record = new com.p2ps.telemetry.model.TelemetryRecord();
+            record.setDeviceId(item.getShoppingList().getUser().getId().toString());
+            record.setStoreId(storeId);
+            record.setStoreName(storeName);
+            record.setItemId(item.getId().toString());
+            record.setItemName(item.getName());
+            record.setLat(lat);
+            record.setLng(lng);
+            record.setAccuracyMeters(accuracy);
+            record.setStatus(com.p2ps.telemetry.model.PingStatus.ACCEPTED);
+            record.setTimestamp(System.currentTimeMillis());
+            record.setServerReceivedTimestamp(java.time.Instant.now());
+
+            telemetryRepository.save(record);
+            logger.debug("Successfully recorded checkoff telemetry for item ID: {} in store: '{}'", item.getId(), storeName);
+
+        } catch (Exception e) {
+            logger.error("Failed to record checkoff telemetry for item {}", item != null ? item.getId() : null, e);
+        }
     }
 
     private boolean namesOverlap(String itemNameLower, String catalogNameLower) {

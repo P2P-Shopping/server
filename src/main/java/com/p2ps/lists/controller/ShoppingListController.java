@@ -44,7 +44,6 @@ public class ShoppingListController {
         updateDto.setTitle(request.getTitle());
         updateDto.setCategory(request.getCategory());
         updateDto.setSubcategory(request.getSubcategory());
-        updateDto.setFinalStore(request.getFinalStore());
         ShoppingListDTO updatedList = shoppingListService.updateList(listId, updateDto, userEmail);
         return ResponseEntity.ok(updatedList);
     }
@@ -79,7 +78,18 @@ public class ShoppingListController {
             @PathVariable UUID listId,
             @Valid @RequestBody ShareListRequest request,
             Authentication authentication) {
-        shoppingListService.shareList(listId, request.getEmail(), authentication.getName());
+        shoppingListService.shareList(listId, request.getEmail(), authentication.getName(), request.getRole());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{listId}/collaborators/{userId}/role")
+    public ResponseEntity<Void> updateCollaboratorRole(
+            @PathVariable UUID listId,
+            @PathVariable Integer userId,
+            @RequestBody java.util.Map<String, String> payload,
+            Authentication authentication) {
+        String role = payload.get("role");
+        shoppingListService.updateCollaboratorRole(listId, userId, role, authentication.getName());
         return ResponseEntity.noContent().build();
     }
 
