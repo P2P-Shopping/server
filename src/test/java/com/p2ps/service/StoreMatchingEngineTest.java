@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
 import java.sql.ResultSet;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -85,6 +86,8 @@ class StoreMatchingEngineTest {
         assertEquals("Supermarket Central", firstStore.storeName());
         assertEquals(3, firstStore.matchedItems());
         assertEquals(1200.5, firstStore.distanceMeters());
+        assertEquals(new BigDecimal("59.90"), firstStore.totalEstimatedPrice());
+        assertEquals(3, firstStore.pricedItems());
         assertEquals(storeId2, actualStores.get(1).storeId());
         assertEquals(storeId3, actualStores.get(2).storeId());
 
@@ -193,6 +196,8 @@ class StoreMatchingEngineTest {
         when(rs.getString("name")).thenReturn(storeName);
         when(rs.getInt("matched_items")).thenReturn(matchedItems);
         when(rs.getDouble("distance_m")).thenReturn(distanceMeters);
+        when(rs.getBigDecimal("total_estimated_price")).thenReturn(new BigDecimal("59.90"));
+        when(rs.getInt("priced_items")).thenReturn(matchedItems);
         return rs;
     }
 }

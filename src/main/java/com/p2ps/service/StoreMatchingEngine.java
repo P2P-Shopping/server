@@ -67,7 +67,8 @@ public class StoreMatchingEngine {
                 -- 1. Produse rafinate deja (din store_inventory_map)
                 SELECT
                     sim.store_id,
-                    COALESCE(ri.id, sim.item_id) AS requested_item_id
+                    COALESCE(ri.id, sim.item_id) AS requested_item_id,
+                    located_item.catalog_id AS matched_catalog_id
                 FROM store_inventory_map sim
                 JOIN items located_item ON located_item.id = sim.item_id
                 LEFT JOIN requested_items ri
@@ -106,7 +107,8 @@ public class StoreMatchingEngine {
                 -- 2. Produse care au doar telemetrie brută (raw_user_pings) - FALLBACK
                 SELECT
                     rup.store_id,
-                    COALESCE(ri.id, rup.item_id) AS requested_item_id
+                    COALESCE(ri.id, rup.item_id) AS requested_item_id,
+                    located_item.catalog_id AS matched_catalog_id
                 FROM raw_user_pings rup
                 JOIN items located_item ON located_item.id = rup.item_id
                 LEFT JOIN requested_items ri
@@ -128,23 +130,50 @@ public class StoreMatchingEngine {
                       OR located_item.catalog_id IN (:itemIds)
                       OR rup.item_id IN (:itemIds)
                   )
+            ),
+            matched_with_prices AS (
+                SELECT
+                    mi.store_id,
+                    mi.requested_item_id,
+                    MIN(sp.price) AS matched_price
+                FROM matched_inventory mi
+                LEFT JOIN store_prices sp
+                    ON sp.store_id = mi.store_id
+                   AND sp.catalog_id = mi.matched_catalog_id
+                GROUP BY mi.store_id, mi.requested_item_id
+            ),
+            store_price_aggregate AS (
+                SELECT
+                    store_id,
+                    SUM(matched_price) AS total_estimated_price,
+                    COUNT(*) FILTER (WHERE matched_price IS NOT NULL) AS priced_items
+                FROM matched_with_prices
+                GROUP BY store_id
             )
             SELECT
                 sg.store_id::text AS store_id,
                 sg.name,
                 ST_Distance(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance_m,
-                COUNT(DISTINCT mi.requested_item_id) AS matched_items
+                COUNT(DISTINCT mi.requested_item_id) AS matched_items,
+                spa.total_estimated_price AS total_estimated_price,
+                COALESCE(spa.priced_items, 0) AS priced_items
             FROM store_geofences sg
             LEFT JOIN matched_inventory mi
                 ON sg.store_id = mi.store_id
+            LEFT JOIN store_price_aggregate spa
+                ON sg.store_id = spa.store_id
             WHERE
                 -- Pasul 1: Pre-filtrare rapidă folosind indexul pe geometrie
                 ST_DWithin(sg.boundary_polygon, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :radiusDegrees)
                 -- Pasul 2: Filtrare exactă pe geografie (metrică)
                 AND ST_DWithin(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
-            GROUP BY sg.store_id, sg.name, sg.boundary_polygon
+            GROUP BY sg.store_id, sg.name, sg.boundary_polygon, spa.total_estimated_price, spa.priced_items
             HAVING COUNT(DISTINCT mi.requested_item_id) > 0
-            ORDER BY matched_items DESC, distance_m
+            ORDER BY
+                matched_items DESC,
+                COALESCE(spa.priced_items, 0) DESC,
+                spa.total_estimated_price ASC NULLS LAST,
+                distance_m
             LIMIT 3
         """;
 
@@ -165,7 +194,9 @@ public class StoreMatchingEngine {
                         rs.getString("store_id"),
                         rs.getString("name"),
                         rs.getInt("matched_items"),
-                        rs.getDouble("distance_m")
+                        rs.getDouble("distance_m"),
+                        rs.getBigDecimal("total_estimated_price"),
+                        rs.getInt("priced_items")
                 )
         );
 
@@ -219,5 +250,12 @@ public class StoreMatchingEngine {
         return new ArrayList<>(resolvedIds);
     }
 
-    public record StoreMatchResult(String storeId, String storeName, int matchedItems, double distanceMeters) {}
+    public record StoreMatchResult(
+            String storeId,
+            String storeName,
+            int matchedItems,
+            double distanceMeters,
+            java.math.BigDecimal totalEstimatedPrice,
+            int pricedItems
+    ) {}
 }

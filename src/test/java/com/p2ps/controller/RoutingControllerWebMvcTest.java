@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Duration;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -90,7 +91,7 @@ class RoutingControllerWebMvcTest {
         String storeId = UUID.randomUUID().toString();
 
         when(storeMatchingEngine.findOptimalStores(eq(47.15), eq(27.58), eq(5000.0), any(), any()))
-                .thenReturn(List.of(new StoreMatchingEngine.StoreMatchResult(storeId, "Store A", 1, 800.0)));
+                .thenReturn(List.of(new StoreMatchingEngine.StoreMatchResult(storeId, "Store A", 1, 800.0, new BigDecimal("12.30"), 1)));
 
         StoreMatchRequest request = new StoreMatchRequest();
         request.setUserLat(47.15);
@@ -103,7 +104,9 @@ class RoutingControllerWebMvcTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].storeId").value(storeId))
-                .andExpect(jsonPath("$[0].matchPercentage").value(50));
+                .andExpect(jsonPath("$[0].matchPercentage").value(50))
+                .andExpect(jsonPath("$[0].priceCoveragePercentage").value(50))
+                .andExpect(jsonPath("$[0].totalEstimatedPrice").value(12.30));
     }
 }
 
