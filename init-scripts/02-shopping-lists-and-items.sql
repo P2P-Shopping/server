@@ -52,13 +52,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS unq_product_catalog_name_brand
 CREATE TABLE IF NOT EXISTS store_prices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     catalog_id UUID NOT NULL REFERENCES p2p_product_catalog(id) ON DELETE CASCADE,
-    store_name VARCHAR(255) NOT NULL,
+    store_id UUID NOT NULL,
     price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
     last_updated_at TIMESTAMP NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS unq_store_prices_catalog_store
-    ON store_prices(catalog_id, lower(store_name));
+    ON store_prices(catalog_id, store_id);
 CREATE INDEX IF NOT EXISTS idx_store_prices_last_updated_at
     ON store_prices(last_updated_at);
 
