@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,8 +117,8 @@ class RoutingControllerTest {
         request.setItemIds(List.of(UUID.randomUUID(), UUID.randomUUID()));
 
         List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
-                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0),
-                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0)
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0, new BigDecimal("35.40"), 3),
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0, new BigDecimal("39.90"), 2)
         );
         when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
                 .thenReturn(matches);
@@ -129,6 +130,8 @@ class RoutingControllerTest {
         assertEquals(2, response.getBody().size());
         assertEquals(matches.getFirst().storeId(), response.getBody().getFirst().storeId());
         assertEquals(100, response.getBody().getFirst().matchPercentage());
+        assertEquals(100, response.getBody().getFirst().priceCoveragePercentage());
+        assertEquals(new BigDecimal("35.40"), response.getBody().getFirst().totalEstimatedPrice());
     }
 
     @Test
@@ -290,7 +293,7 @@ class RoutingControllerTest {
         request.setItemNames(List.of("Apple", "Milk"));
 
         List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
-            new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store C", 4, 500.0)
+            new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store C", 4, 500.0, new BigDecimal("99.99"), 3)
         );
         when(storeMatchingEngine.findOptimalStores(anyDouble(), anyDouble(), anyDouble(), anyList(), anyList()))
                 .thenReturn(matches);
