@@ -358,7 +358,17 @@ class TelemetryRawPingImportJobTest {
     void shouldFallbackToLocalMongoWhenPrimaryFails() {
         TelemetryRecord accepted = record(PingStatus.ACCEPTED);
 
-        ReflectionTestUtils.setField(importJob, "fallbackMongoTemplate", fallbackMongoTemplate);
+        java.util.concurrent.atomic.AtomicReference<MongoTemplate> fallbackRef =
+                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
+                        ReflectionTestUtils.getField(importJob, "fallbackMongoTemplate");
+        assert fallbackRef != null;
+        fallbackRef.set(fallbackMongoTemplate);
+
+        java.util.concurrent.atomic.AtomicReference<MongoTemplate> activeRef =
+                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
+                        ReflectionTestUtils.getField(importJob, "activeMongoTemplate");
+        assert activeRef != null;
+        activeRef.set(mongoTemplate);
 
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
                 .thenReturn(List.of());
@@ -380,7 +390,17 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void shouldReturnEmptyWhenBothPrimaryAndFallbackFail() {
-        ReflectionTestUtils.setField(importJob, "fallbackMongoTemplate", fallbackMongoTemplate);
+        java.util.concurrent.atomic.AtomicReference<MongoTemplate> fallbackRef =
+                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
+                        ReflectionTestUtils.getField(importJob, "fallbackMongoTemplate");
+        assert fallbackRef != null;
+        fallbackRef.set(fallbackMongoTemplate);
+
+        java.util.concurrent.atomic.AtomicReference<MongoTemplate> activeRef =
+                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
+                        ReflectionTestUtils.getField(importJob, "activeMongoTemplate");
+        assert activeRef != null;
+        activeRef.set(mongoTemplate);
 
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
                 .thenReturn(List.of());

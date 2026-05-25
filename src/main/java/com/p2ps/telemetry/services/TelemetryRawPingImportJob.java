@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 @ConditionalOnProperty(name = "telemetry.raw-ping-import.enabled", havingValue = "true", matchIfMissing = true)
@@ -63,14 +64,14 @@ public class TelemetryRawPingImportJob {
     private String fallbackMongoUri;
 
     private volatile Boolean postgresDetected;
-    private volatile MongoTemplate activeMongoTemplate;
-    private volatile MongoTemplate fallbackMongoTemplate;
+    private final AtomicReference<MongoTemplate> activeMongoTemplate;
+    private final AtomicReference<MongoTemplate> fallbackMongoTemplate = new AtomicReference<>();
 
     public TelemetryRawPingImportJob(MongoTemplate mongoTemplate, JdbcTemplate jdbcTemplate, DataSource dataSource) {
         this.mongoTemplate = mongoTemplate;
         this.jdbcTemplate = jdbcTemplate;
         this.dataSource = dataSource;
-        this.activeMongoTemplate = mongoTemplate;
+        this.activeMongoTemplate = new AtomicReference<>(mongoTemplate);
     }
 
     @PostConstruct
@@ -206,20 +207,22 @@ public class TelemetryRawPingImportJob {
         query.with(Sort.by(Sort.Direction.ASC, "_id"))
                 .limit(Math.max(1, batchSize));
 
+        MongoTemplate current = activeMongoTemplate.get();
         try {
-            List<TelemetryRecord> records = activeMongoTemplate.find(query, TelemetryRecord.class);
-            if (activeMongoTemplate != mongoTemplate && !records.isEmpty()) {
+            List<TelemetryRecord> records = current.find(query, TelemetryRecord.class);
+            if (current != mongoTemplate && !records.isEmpty()) {
                 log.info("[TELEMETRY_IMPORT] Successfully fetched {} records from fallback (local) MongoDB.",
                         records.size());
             }
             return records;
         } catch (Exception e) {
-            if (activeMongoTemplate == mongoTemplate) {
+            if (current == mongoTemplate) {
                 log.warn("[TELEMETRY_IMPORT] Primary MongoDB unreachable, falling back to local MongoDB: {}",
                         e.getMessage());
-                activeMongoTemplate = getOrCreateFallbackMongoTemplate();
+                MongoTemplate fallback = getOrCreateFallbackMongoTemplate();
+                activeMongoTemplate.compareAndSet(current, fallback);
                 try {
-                    return activeMongoTemplate.find(query, TelemetryRecord.class);
+                    return fallback.find(query, TelemetryRecord.class);
                 } catch (Exception fallbackEx) {
                     log.error("[TELEMETRY_IMPORT] Fallback MongoDB also unreachable: {}", fallbackEx.getMessage());
                     return List.of();
@@ -230,9 +233,10 @@ public class TelemetryRawPingImportJob {
         }
     }
 
-    private synchronized MongoTemplate getOrCreateFallbackMongoTemplate() {
-        if (fallbackMongoTemplate != null) {
-            return fallbackMongoTemplate;
+    private MongoTemplate getOrCreateFallbackMongoTemplate() {
+        MongoTemplate existing = fallbackMongoTemplate.get();
+        if (existing != null) {
+            return existing;
         }
         ConnectionString connectionString = new ConnectionString(fallbackMongoUri);
         MongoClientSettings settings = MongoClientSettings.builder()
@@ -243,9 +247,10 @@ public class TelemetryRawPingImportJob {
         MongoClient client = MongoClients.create(settings);
         SimpleMongoClientDatabaseFactory factory = new SimpleMongoClientDatabaseFactory(client,
                 connectionString.getDatabase());
-        fallbackMongoTemplate = new MongoTemplate(factory);
+        MongoTemplate created = new MongoTemplate(factory);
+        fallbackMongoTemplate.compareAndSet(null, created);
         log.info("[TELEMETRY_IMPORT] Created fallback MongoTemplate for local MongoDB: {}", fallbackMongoUri);
-        return fallbackMongoTemplate;
+        return fallbackMongoTemplate.get();
     }
 
     private void ensureSystemImportList() {
