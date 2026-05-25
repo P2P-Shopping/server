@@ -46,7 +46,7 @@ class TelemetryRawPingImportJobTest {
 
     @BeforeEach
     void setUp() {
-        importJob = new TelemetryRawPingImportJob(mongoTemplate, fallbackMongoTemplate, jdbcTemplate, dataSource);
+        importJob = new TelemetryRawPingImportJob(mongoTemplate, jdbcTemplate, dataSource);
         ReflectionTestUtils.setField(importJob, "schedulingEnabled", true);
         ReflectionTestUtils.setField(importJob, "importEnabled", true);
         ReflectionTestUtils.setField(importJob, "batchSize", 500);
@@ -171,7 +171,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void initialize_shouldSkipSchemaSetupWhenSchemaNotPresent() {
-        TelemetryRawPingImportJob newJob = new TelemetryRawPingImportJob(mongoTemplate, fallbackMongoTemplate, jdbcTemplate, dataSource);
+        TelemetryRawPingImportJob newJob = new TelemetryRawPingImportJob(mongoTemplate, jdbcTemplate, dataSource);
         ReflectionTestUtils.setField(newJob, "schedulingEnabled", true);
         ReflectionTestUtils.setField(newJob, "importEnabled", true);
         ReflectionTestUtils.setField(newJob, "batchSize", 500);
@@ -358,13 +358,12 @@ class TelemetryRawPingImportJobTest {
     void shouldFallbackToLocalMongoWhenPrimaryFails() {
         TelemetryRecord accepted = record(PingStatus.ACCEPTED);
 
+        ReflectionTestUtils.setField(importJob, "fallbackMongoTemplate", fallbackMongoTemplate);
+
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
                 .thenReturn(List.of());
         when(mongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoCommandException(
-                        new org.bson.BsonDocument("ok", new org.bson.BsonInt32(0))
-                                .append("errmsg", new org.bson.BsonString("connection refused")),
-                        new com.mongodb.ServerAddress()));
+                .thenThrow(new com.mongodb.MongoException("connection refused"));
         when(fallbackMongoTemplate.find(any(), eq(TelemetryRecord.class)))
                 .thenReturn(List.of(accepted));
 
@@ -381,18 +380,14 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void shouldReturnEmptyWhenBothPrimaryAndFallbackFail() {
+        ReflectionTestUtils.setField(importJob, "fallbackMongoTemplate", fallbackMongoTemplate);
+
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
                 .thenReturn(List.of());
         when(mongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoCommandException(
-                        new org.bson.BsonDocument("ok", new org.bson.BsonInt32(0))
-                                .append("errmsg", new org.bson.BsonString("connection refused")),
-                        new com.mongodb.ServerAddress()));
+                .thenThrow(new com.mongodb.MongoException("connection refused"));
         when(fallbackMongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoCommandException(
-                        new org.bson.BsonDocument("ok", new org.bson.BsonInt32(0))
-                                .append("errmsg", new org.bson.BsonString("connection refused")),
-                        new com.mongodb.ServerAddress()));
+                .thenThrow(new com.mongodb.MongoException("connection refused"));
 
         importJob.importNewTelemetryRecords();
 
