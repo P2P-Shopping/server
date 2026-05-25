@@ -23,6 +23,9 @@ public class StoreGeofence {
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
+    @Column(name = "address", length = 500)
+    private String address;
+
     @Column(name = "boundary_polygon", nullable = false, columnDefinition = "geometry(Polygon, 4326)")
     private Polygon boundaryPolygon;
 }

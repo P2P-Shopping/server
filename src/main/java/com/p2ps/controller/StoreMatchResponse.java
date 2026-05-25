@@ -3,6 +3,7 @@ package com.p2ps.controller;
 public record StoreMatchResponse(
         String storeId,
         String storeName,
+        String address,
         int matchedItems,
         double distanceMeters,
         long matchPercentage,

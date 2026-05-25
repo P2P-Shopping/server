@@ -117,8 +117,8 @@ class RoutingControllerTest {
         request.setItemIds(List.of(UUID.randomUUID(), UUID.randomUUID()));
 
         List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
-                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", 3, 1200.0, new BigDecimal("35.40"), 3),
-                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", 2, 1800.0, new BigDecimal("39.90"), 2)
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store A", "Str. Lalelelor 3", 3, 1200.0, new BigDecimal("35.40"), 3),
+                new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store B", "Str. Rozelor 7", 2, 1800.0, new BigDecimal("39.90"), 2)
         );
         when(storeMatchingEngine.findOptimalStores(47.15, 27.58, 5000, request.getItemIds(), request.getItemNames()))
                 .thenReturn(matches);
@@ -293,7 +293,7 @@ class RoutingControllerTest {
         request.setItemNames(List.of("Apple", "Milk"));
 
         List<StoreMatchingEngine.StoreMatchResult> matches = List.of(
-            new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store C", 4, 500.0, new BigDecimal("99.99"), 3)
+            new StoreMatchingEngine.StoreMatchResult(UUID.randomUUID().toString(), "Store C", "Str. Principala 1", 4, 500.0, new BigDecimal("99.99"), 3)
         );
         when(storeMatchingEngine.findOptimalStores(anyDouble(), anyDouble(), anyDouble(), anyList(), anyList()))
                 .thenReturn(matches);

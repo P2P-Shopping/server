@@ -106,6 +106,7 @@ public class ShoppingSessionService {
                 StoreGeofence placeholderStore = new StoreGeofence();
                 placeholderStore.setId(UUID.randomUUID());
                 placeholderStore.setName(submission.getSubmittedName());
+                placeholderStore.setAddress(submission.getSubmittedAddress());
 
                 try {
                     Polygon buildingPolygon = overpassService.fetchBuildingPolygon(
@@ -209,6 +210,7 @@ public class ShoppingSessionService {
             dto.setOfficialStore(true);
             dto.setStoreId(session.getStore().getId());
             dto.setStoreName(session.getStore().getName());
+            dto.setStoreAddress(session.getStore().getAddress());
         } else if (session.getStoreCandidateSubmission() != null) {
             dto.setOfficialStore(false);
             dto.setStoreCandidateSubmissionId(session.getStoreCandidateSubmission().getId());

@@ -122,6 +122,7 @@ public class RoutingController {
                 .map(result -> new StoreMatchResponse(
                         result.storeId(),
                         result.storeName(),
+                        result.address(),
                         result.matchedItems(),
                         result.distanceMeters(),
                         calculateMatchPercentage(result.matchedItems(), requestedCount),
