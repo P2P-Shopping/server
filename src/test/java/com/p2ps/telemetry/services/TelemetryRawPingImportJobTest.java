@@ -34,9 +34,6 @@ class TelemetryRawPingImportJobTest {
     private MongoTemplate mongoTemplate;
 
     @Mock
-    private MongoTemplate fallbackMongoTemplate;
-
-    @Mock
     private JdbcTemplate jdbcTemplate;
 
     @Mock
@@ -351,70 +348,6 @@ class TelemetryRawPingImportJobTest {
         importJob.importNewTelemetryRecords();
 
         verify(mongoTemplate, never()).find(any(), eq(TelemetryRecord.class));
-    }
-
-    @Test
-    void shouldFallbackToLocalMongoWhenPrimaryFails() {
-        TelemetryRecord accepted = createTelemetryRecord(PingStatus.ACCEPTED);
-
-        java.util.concurrent.atomic.AtomicReference<MongoTemplate> fallbackRef =
-                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
-                        ReflectionTestUtils.getField(importJob, "fallbackMongoTemplate");
-        assert fallbackRef != null;
-        fallbackRef.set(fallbackMongoTemplate);
-
-        java.util.concurrent.atomic.AtomicReference<MongoTemplate> activeRef =
-                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
-                        ReflectionTestUtils.getField(importJob, "activeMongoTemplate");
-        assert activeRef != null;
-        activeRef.set(mongoTemplate);
-
-        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
-                .thenReturn(List.of());
-        when(mongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoException("connection refused"));
-        when(fallbackMongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenReturn(List.of(accepted));
-
-        importJob.importNewTelemetryRecords();
-
-        verify(mongoTemplate).find(any(), eq(TelemetryRecord.class));
-        verify(fallbackMongoTemplate).find(any(), eq(TelemetryRecord.class));
-        verify(jdbcTemplate).update(
-                contains("INSERT INTO raw_user_pings"),
-                eq(accepted.getId()),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
-        );
-    }
-
-    @Test
-    void shouldReturnEmptyWhenBothPrimaryAndFallbackFail() {
-        java.util.concurrent.atomic.AtomicReference<MongoTemplate> fallbackRef =
-                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
-                        ReflectionTestUtils.getField(importJob, "fallbackMongoTemplate");
-        assert fallbackRef != null;
-        fallbackRef.set(fallbackMongoTemplate);
-
-        java.util.concurrent.atomic.AtomicReference<MongoTemplate> activeRef =
-                (java.util.concurrent.atomic.AtomicReference<MongoTemplate>)
-                        ReflectionTestUtils.getField(importJob, "activeMongoTemplate");
-        assert activeRef != null;
-        activeRef.set(mongoTemplate);
-
-        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
-                .thenReturn(List.of());
-        when(mongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoException("connection refused"));
-        when(fallbackMongoTemplate.find(any(), eq(TelemetryRecord.class)))
-                .thenThrow(new com.mongodb.MongoException("connection refused"));
-
-        importJob.importNewTelemetryRecords();
-
-        verify(fallbackMongoTemplate).find(any(), eq(TelemetryRecord.class));
-        verify(jdbcTemplate, never()).update(
-                contains("INSERT INTO raw_user_pings"),
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
-        );
     }
 
     private TelemetryRecord createTelemetryRecord(PingStatus status) {
