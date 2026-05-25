@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UserService implements UserDetailsService {
 
+    private static final String USER_NOT_FOUND_PREFIX = "User not found with email: ";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -36,7 +38,7 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
 
 
         return User.builder()
@@ -73,7 +75,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public Users updateProfile(String email, String firstName, String lastName) {
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
         if (firstName != null && !firstName.isBlank()) {
             user.setFirstName(firstName);
         }
@@ -86,7 +88,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public Users updateProfilePicture(String email, byte[] picture, String contentType) {
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
         user.setProfilePicture(picture);
         user.setProfilePictureContentType(contentType);
         return userRepository.save(user);

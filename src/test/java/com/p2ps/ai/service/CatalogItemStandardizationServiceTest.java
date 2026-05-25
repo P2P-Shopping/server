@@ -164,9 +164,10 @@ class CatalogItemStandardizationServiceTest {
         ArgumentCaptor<List<AiMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(aiClient).generateResponse(captor.capture(), eq(List.of()));
         String prompt = ((AiMessage.TextPart) captor.getValue().get(0).parts().get(0)).text();
-        assertThat(prompt).contains("Hint - User provided brand: Zuzu");
-        assertThat(prompt).contains("Hint - User provided category: Lactate și Ouă");
-        assertThat(prompt).contains("Hint - User provided price: 8.99");
+        assertThat(prompt)
+                .contains("Hint - User provided brand: Zuzu")
+                .contains("Hint - User provided category: Lactate și Ouă")
+                .contains("Hint - User provided price: 8.99");
     }
 
     @Test

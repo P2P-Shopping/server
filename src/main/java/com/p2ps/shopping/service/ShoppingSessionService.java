@@ -21,10 +21,7 @@ import com.p2ps.shopping.repository.StoreCandidateSubmissionRepository;
 import com.p2ps.store.model.StoreGeofence;
 import com.p2ps.store.repository.StoreGeofenceRepository;
 import com.p2ps.store.service.OverpassService;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Polygon;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,7 +37,6 @@ public class ShoppingSessionService {
 
     private static final Logger logger = LoggerFactory.getLogger(ShoppingSessionService.class);
     private static final String SHOPPING_LIST_NOT_FOUND = "Shopping list not found";
-    private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
     private final ShoppingSessionRepository shoppingSessionRepository;
     private final StoreCandidateSubmissionRepository storeCandidateSubmissionRepository;
     private final ShoppingListRepository shoppingListRepository;

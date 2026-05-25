@@ -38,7 +38,7 @@ class StorePriceServiceTest {
     @Test
     void recordStorePriceShouldCreateNewRecordWhenMissing() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T10:15:30Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock, null);
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
         StoreGeofence store = new StoreGeofence();
@@ -61,7 +61,7 @@ class StorePriceServiceTest {
     @Test
     void recordStorePriceShouldUpdateExistingRecord() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T12:00:00Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock, null);
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
         StoreGeofence store = new StoreGeofence();
@@ -88,7 +88,7 @@ class StorePriceServiceTest {
 
     @Test
     void recordStorePriceShouldSkipIncompleteInput() {
-        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC());
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC(), null);
         ProductCatalog catalog = new ProductCatalog();
         catalog.setId(UUID.randomUUID());
 
@@ -104,7 +104,7 @@ class StorePriceServiceTest {
     @Test
     void deletePricesOlderThanDaysShouldUseCalculatedCutoff() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-05-18T00:00:00Z"), ZoneOffset.UTC);
-        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock);
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, fixedClock, null);
 
         service.deletePricesOlderThanDays(30);
 
@@ -115,7 +115,7 @@ class StorePriceServiceTest {
 
     @Test
     void deletePricesOlderThanDaysShouldRejectNegativeRetention() {
-        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC());
+        StorePriceService service = new StorePriceService(storePriceRepository, storeGeofenceRepository, Clock.systemUTC(), null);
 
         assertThatThrownBy(() -> service.deletePricesOlderThanDays(-1))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -129,7 +129,7 @@ public class ItemService {
 
     @Transactional
     public ReceiptProcessingResult recordReceiptItem(ParsedItemResponse item, String ignoredStoreName, Users user) {
-        return recordReceiptItem(item, (UUID) null, user);
+        return self.recordReceiptItem(item, (UUID) null, user);
     }
 
     public record ReceiptProcessingResult(boolean ignored, ProductCatalog catalogMatch) {

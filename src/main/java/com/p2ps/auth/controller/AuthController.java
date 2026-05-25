@@ -32,6 +32,8 @@ import java.util.Map;
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+    private static final String KEY_MESSAGE = "message";
+    private static final String KEY_ERROR = "error";
 
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
@@ -77,7 +79,7 @@ public class AuthController {
                 request.getFirstName(),
                 request.getLastName()
         );
-        return ResponseEntity.ok(Map.of("message", "User registered successfully!"));
+        return ResponseEntity.ok(Map.of(KEY_MESSAGE, "User registered successfully!"));
     }
 
     @PostMapping("/login")
@@ -100,7 +102,7 @@ public class AuthController {
                     if ("true".equalsIgnoreCase(returnToken)) {
                         data.put("token", token);
                     }
-                    data.put("message", "Login successful");
+                    data.put(KEY_MESSAGE, "Login successful");
                     return ResponseEntity.ok()
                             .header(HttpHeaders.SET_COOKIE, cookie.toString())
                             .body(data);
@@ -108,7 +110,7 @@ public class AuthController {
                 .orElseGet(() -> {
                     logger.error("User authenticated successfully but record is missing in database.");
                     Map<String, Object> errorBody = new HashMap<>();
-                    errorBody.put("error", "User record missing after authentication");
+                    errorBody.put(KEY_ERROR, "User record missing after authentication");
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .body(errorBody);
                 });
@@ -139,7 +141,7 @@ public class AuthController {
         } catch (Exception e) {
             logger.error("Failed to update profile", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to update profile"));
+                    .body(Map.of(KEY_ERROR, "Failed to update profile"));
         }
     }
 
@@ -150,23 +152,23 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
+            return ResponseEntity.badRequest().body(Map.of(KEY_ERROR, "File is empty"));
         }
         String contentType = file.getContentType();
         if (contentType == null || (!contentType.equals("image/jpeg") && !contentType.equals("image/png"))) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                    .body(Map.of("error", "Only JPEG and PNG are allowed"));
+                    .body(Map.of(KEY_ERROR, "Only JPEG and PNG are allowed"));
         }
         try {
             Users updated = userService.updateProfilePicture(auth.getName(), file.getBytes(), contentType);
             return ResponseEntity.ok(Map.of(
-                    "message", "Profile picture updated successfully",
+                    KEY_MESSAGE, "Profile picture updated successfully",
                     "hasProfilePicture", true
             ));
         } catch (IOException e) {
             logger.error("Failed to read profile picture", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to upload profile picture"));
+                    .body(Map.of(KEY_ERROR, "Failed to upload profile picture"));
         }
     }
 
