@@ -1060,8 +1060,37 @@ public class ItemService {
                         item.getId(), item.getShoppingList().getId(), storeName);
 
             if (storeName == null || storeName.isBlank()) {
-                // FALLBACK: If list's store is null but client provided active coordinates,
-                // see if they are currently physically inside any of the geofences in Postgres!
+                // finalStore is only set at finishShopping(); during an active session
+                // it is still null.  Look up the active session's store so that pings
+                // during shopping are attributed to the correct store.
+                try {
+                    UUID listId = item.getShoppingList().getId();
+                    String sessionSql = "SELECT s.store_id::text, g.name " +
+                                        "FROM shopping_sessions s " +
+                                        "LEFT JOIN store_geofences g ON g.store_id = s.store_id " +
+                                        "WHERE s.shopping_list_id = ? " +
+                                        "  AND s.status = 'ACTIVE' " +
+                                        "  AND s.store_id IS NOT NULL " +
+                                        "ORDER BY s.started_at DESC LIMIT 1";
+                    List<Map<String, Object>> sessionRows = jdbcTemplate.queryForList(sessionSql, listId);
+                    if (!sessionRows.isEmpty()) {
+                        Map<String, Object> row = sessionRows.get(0);
+                        storeId = (String) row.get("store_id");
+                        storeName = (String) row.get("name");
+                        if (storeName == null || storeName.isBlank()) {
+                            storeName = "Active Session Store";
+                        }
+                        logger.debug("Resolved active session store '{}' (ID: {}) for list ID: {}", storeName, storeId, listId);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to query active shopping session for list ID: {}", item.getShoppingList().getId(), e);
+                }
+            }
+
+            if (storeName == null || storeName.isBlank()) {
+                // FALLBACK: No finalStore and no active session store.
+                // If client provided active coordinates, see if they are currently
+                // physically inside any of the geofences in Postgres!
                 if (lat != null && lng != null) {
                     try {
                         String sql = "SELECT store_id::text, name " +
@@ -1081,27 +1110,11 @@ public class ItemService {
             }
 
             if (storeName == null || storeName.isBlank()) {
-                if (lat != null && lng != null) {
-                    // New/unknown store: client has coordinates but no geofence matched.
-                    // Generate a stable synthetic storeId from rounded coordinates so
-                    // nearby pings cluster to the same auto-provisioned store.
-                    // TelemetryRawPingImportJob.ensureStore() will auto-create the geofence.
-                    long roundedLat = Math.round(lat * 1000.0);
-                    long roundedLng = Math.round(lng * 1000.0);
-                    storeId = UUID.nameUUIDFromBytes(
-                            ("store:geo:" + roundedLat + ":" + roundedLng)
-                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
-                    storeName = "Auto-detected Store";
-                    logger.info("List ID: '{}' has no finalStore and coordinates don't match any geofence. "
-                                    + "Using auto-provisioned store (storeId={}) at rounded coords ({}, {}).",
-                            item.getShoppingList().getId(), storeId, roundedLat, roundedLng);
-                } else {
-                    logger.warn("List ID: '{}' does not have a finalStore set, and no client coordinates provided. "
-                                    + "Telemetry will be recorded without location data.",
-                            item.getShoppingList().getId());
-                    storeName = null;
-                    storeId = null;
-                }
+                logger.warn("List ID: '{}' has no finalStore, no active session store, and no geofence match. "
+                                + "Telemetry will be recorded without location data.",
+                        item.getShoppingList().getId());
+                storeName = null;
+                storeId = null;
             } else {
                 // Look up store coordinates and store_id from store_geofences if not already matched
                 if (storeId == null) {
