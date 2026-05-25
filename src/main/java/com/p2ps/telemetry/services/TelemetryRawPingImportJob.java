@@ -2,9 +2,9 @@ package com.p2ps.telemetry.services;
 
 import com.p2ps.telemetry.model.PingStatus;
 import com.p2ps.telemetry.model.TelemetryRecord;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
@@ -30,7 +30,6 @@ import java.util.UUID;
 @Component
 @ConditionalOnProperty(name = "telemetry.raw-ping-import.enabled", havingValue = "true", matchIfMissing = true)
 @DependsOn("locationProcessorWorker")
-@RequiredArgsConstructor
 @Slf4j
 public class TelemetryRawPingImportJob {
 
@@ -40,6 +39,7 @@ public class TelemetryRawPingImportJob {
     private static final String SYSTEM_LIST_ID = "00000000-0000-0000-0000-000000000001";
 
     private final MongoTemplate mongoTemplate;
+    private final MongoTemplate fallbackMongoTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
 
@@ -56,6 +56,19 @@ public class TelemetryRawPingImportJob {
     private boolean autoProvisionDimensions;
 
     private volatile Boolean postgresDetected;
+    private volatile MongoTemplate activeMongoTemplate;
+
+    public TelemetryRawPingImportJob(
+            MongoTemplate mongoTemplate,
+            @Qualifier("fallbackMongoTemplate") MongoTemplate fallbackMongoTemplate,
+            JdbcTemplate jdbcTemplate,
+            DataSource dataSource) {
+        this.mongoTemplate = mongoTemplate;
+        this.fallbackMongoTemplate = fallbackMongoTemplate;
+        this.jdbcTemplate = jdbcTemplate;
+        this.dataSource = dataSource;
+        this.activeMongoTemplate = mongoTemplate;
+    }
 
     @PostConstruct
     public void initialize() {
@@ -190,7 +203,28 @@ public class TelemetryRawPingImportJob {
         query.with(Sort.by(Sort.Direction.ASC, "_id"))
                 .limit(Math.max(1, batchSize));
 
-        return mongoTemplate.find(query, TelemetryRecord.class);
+        try {
+            List<TelemetryRecord> records = activeMongoTemplate.find(query, TelemetryRecord.class);
+            if (activeMongoTemplate == fallbackMongoTemplate && !records.isEmpty()) {
+                log.info("[TELEMETRY_IMPORT] Successfully fetched {} records from fallback (local) MongoDB.",
+                        records.size());
+            }
+            return records;
+        } catch (Exception e) {
+            if (activeMongoTemplate == mongoTemplate) {
+                log.warn("[TELEMETRY_IMPORT] Primary MongoDB unreachable, falling back to local MongoDB: {}",
+                        e.getMessage());
+                activeMongoTemplate = fallbackMongoTemplate;
+                try {
+                    return activeMongoTemplate.find(query, TelemetryRecord.class);
+                } catch (Exception fallbackEx) {
+                    log.error("[TELEMETRY_IMPORT] Fallback MongoDB also unreachable: {}", fallbackEx.getMessage());
+                    return List.of();
+                }
+            }
+            log.error("[TELEMETRY_IMPORT] MongoDB query failed: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private void ensureSystemImportList() {
