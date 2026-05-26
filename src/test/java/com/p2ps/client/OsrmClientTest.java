@@ -3,10 +3,11 @@ package com.p2ps.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -20,22 +21,22 @@ class OsrmClientTest {
     void setUp() {
         restTemplate = mock(RestTemplate.class);
         client = new OsrmClient(restTemplate, new ObjectMapper());
-        ReflectionTestUtils.setField(client, "osrmBaseUrl", "http://mock-osrm");
+        ReflectionTestUtils.setField(client, "routingBaseUrl", "https://api.openrouteservice.org");
+        ReflectionTestUtils.setField(client, "routingApiKey", "test-api-key");
     }
 
     @Test
     void getEstimate_shouldReturnEstimateWithPolylineOnOkResponse() {
         String json = """
             {
-              "code": "Ok",
               "routes": [{
-                "distance": 850.5,
-                "duration": 612.3,
+                "summary": { "distance": 850.5, "duration": 612.3 },
                 "geometry": "abcdefghij_polyline"
               }]
             }
             """;
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
 
         OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
@@ -49,11 +50,11 @@ class OsrmClientTest {
     void getEstimate_shouldReturnNullPolylineWhenGeometryMissing() {
         String json = """
             {
-              "code": "Ok",
-              "routes": [{ "distance": 850.5, "duration": 612.3 }]
+              "routes": [{ "summary": { "distance": 850.5, "duration": 612.3 } }]
             }
             """;
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
 
         OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
@@ -62,19 +63,10 @@ class OsrmClientTest {
     }
 
     @Test
-    void getEstimate_shouldReturnNullWhenOsrmCodeIsNotOk() {
-        String json = "{\"code\": \"NoRoute\", \"routes\": []}";
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
-
-        OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "car");
-
-        assertNull(result);
-    }
-
-    @Test
     void getEstimate_shouldReturnNullWhenRoutesArrayIsEmpty() {
-        String json = "{\"code\": \"Ok\", \"routes\": []}";
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
+        String json = "{\"routes\": []}";
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
 
         OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
@@ -83,7 +75,7 @@ class OsrmClientTest {
 
     @Test
     void getEstimate_shouldReturnNullWhenRestTemplateThrows() {
-        when(restTemplate.getForObject(anyString(), eq(String.class)))
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
                 .thenThrow(new RuntimeException("Connection refused"));
 
         OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "car");
@@ -93,7 +85,8 @@ class OsrmClientTest {
 
     @Test
     void getEstimate_shouldReturnNullWhenResponseIsInvalidJson() {
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("not json");
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn("not json");
 
         OsrmClient.TransportEstimate result = client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
@@ -101,22 +94,55 @@ class OsrmClientTest {
     }
 
     @Test
-    void getEstimate_shouldUseFullOverviewInUrl() {
+    void getEstimate_shouldUseCorrectProfileInUrl() {
         String json = """
         {
-          "code": "Ok",
-          "routes": [{ "distance": 100.0, "duration": 60.0, "geometry": "xyz" }]
+          "routes": [{ "summary": { "distance": 100.0, "duration": 60.0 }, "geometry": "xyz" }]
         }
         """;
-        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(json);
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
 
         client.getEstimate(47.15, 27.58, 47.16, 27.59, "foot");
 
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<HttpEntity<String>> bodyCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForObject(anyString(), bodyCaptor.capture(), eq(String.class));
+
+        HttpEntity<String> captured = bodyCaptor.getValue();
+        assertTrue(captured.getHeaders().getFirst("Authorization").contains("test-api-key"));
+    }
+
+    @Test
+    void getEstimate_shouldMapWalkingProfileToORS() {
+        String json = """
+        {
+          "routes": [{ "summary": { "distance": 100.0, "duration": 60.0 }, "geometry": "xyz" }]
+        }
+        """;
         ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(restTemplate).getForObject(urlCaptor.capture(), eq(String.class));
-        String capturedUrl = urlCaptor.getValue();
-        assertTrue(capturedUrl.contains("overview=full"));
-        assertTrue(capturedUrl.contains("geometries=polyline"));
+        when(restTemplate.postForObject(urlCaptor.capture(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
+
+        client.getEstimate(47.15, 27.58, 47.16, 27.59, "walking");
+
+        assertTrue(urlCaptor.getValue().contains("foot-walking"));
+    }
+
+    @Test
+    void getEstimate_shouldMapDrivingProfileToORS() {
+        String json = """
+        {
+          "routes": [{ "summary": { "distance": 100.0, "duration": 60.0 }, "geometry": "xyz" }]
+        }
+        """;
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        when(restTemplate.postForObject(urlCaptor.capture(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(json);
+
+        client.getEstimate(47.15, 27.58, 47.16, 27.59, "driving");
+
+        assertTrue(urlCaptor.getValue().contains("driving-car"));
     }
 
     @Test

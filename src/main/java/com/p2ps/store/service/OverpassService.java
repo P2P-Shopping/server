@@ -22,7 +22,7 @@ public class OverpassService {
 
     private static final Logger logger = LoggerFactory.getLogger(OverpassService.class);
     private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
-    private static final String OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+    private static final String OVERPASS_URL = "https://overpass.private.coffee/api/interpreter";
     private static final int SEARCH_RADIUS_METERS = 150;
 
     private final RestTemplate restTemplate;
