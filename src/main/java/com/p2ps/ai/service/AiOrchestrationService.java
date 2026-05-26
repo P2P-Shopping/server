@@ -160,7 +160,8 @@ public class AiOrchestrationService {
     private void normalizeDetectedProducts(AiGenerationResponse response, Users user) {
         // Extragem email-ul în siguranță pentru a preveni NullPointerException
         String email = (user != null) ? user.getEmail() : null;
-        boolean recipeList = "RECIPE".equalsIgnoreCase(response.getListType());
+        String listType = response.getListType();
+        boolean recipeList = listType != null && "RECIPE".equalsIgnoreCase(listType.trim());
 
         for (ParsedItemResponse item : response.getItems()) {
             if (item != null) {
@@ -213,7 +214,7 @@ public class AiOrchestrationService {
             QuantityParser.ParsedQuantity parsedConverted = QuantityParser.parse(converted);
             item.setQuantity(formatQuantityValue(parsedConverted.value()));
             item.setUnit(parsedConverted.unit().symbol());
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             // Keep the AI quantity when parsing or conversion fails.
         }
     }
