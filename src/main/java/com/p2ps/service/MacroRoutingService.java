@@ -59,9 +59,9 @@ public class MacroRoutingService {
         logger.info("Macro-routing: calculating estimates to store entrance");
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "walking"));
         CompletableFuture<OsrmClient.TransportEstimate> drivingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "driving"));
 
         CompletableFuture.allOf(walkingFuture, drivingFuture).join();
 
