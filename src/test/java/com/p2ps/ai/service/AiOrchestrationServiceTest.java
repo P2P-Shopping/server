@@ -265,6 +265,7 @@ class AiOrchestrationServiceTest {
         catalogProduct.setSpecificName("Oua de gaina M");
         catalogProduct.setBrand("Ferma");
         catalogProduct.setCategory("Lactate");
+        catalogProduct.setDefaultQuantity("10 buc");
 
         Users user = new Users("user@test.com", "pass", "Test", "User");
         user.setId(1);
@@ -288,6 +289,128 @@ class AiOrchestrationServiceTest {
         assertThat(response.getItems().get(0).getBrand()).isEqualTo("Ferma");
         assertThat(response.getItems().get(0).getCategory()).isEqualTo("Lactate");
         assertThat(response.getItems().get(0).getCatalogId()).isEqualTo(catalogProduct.getId().toString());
+    }
+
+    @Test
+    void generateShoppingItems_recipe_convertsQuantityUsingUserHistoryCatalogDefaultQuantity() {
+        String validJson = """
+                {
+                  "listType": "RECIPE",
+                  "items": [
+                    {
+                      "genericName": "ou",
+                      "quantity": "2",
+                      "unit": "buc"
+                    }
+                  ]
+                }
+                """;
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("oua");
+        catalogProduct.setSpecificName("Oua de gaina M");
+        catalogProduct.setBrand("Ferma");
+        catalogProduct.setCategory("Lactate");
+        catalogProduct.setDefaultQuantity("10 buc");
+
+        Users user = new Users("user@test.com", "pass", "Test", "User");
+        user.setId(1);
+
+        when(aiService.extractFromMultimodal(null, "text", null, null, "user@test.com")).thenReturn(validJson);
+        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(user));
+        when(productResolutionService.resolveForUser("ou", "user@test.com"))
+                .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
+                        "oua",
+                        "Ferma",
+                        "Lactate",
+                        catalogProduct,
+                        "USER_HISTORY"
+                )));
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, "user@test.com");
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getQuantity()).isEqualTo("2");
+        assertThat(response.getItems().get(0).getUnit()).isEqualTo("buc");
+        assertThat(response.getItems().get(0).getCatalogId()).isEqualTo(catalogProduct.getId().toString());
+    }
+
+    @Test
+    void generateShoppingItems_recipe_convertsQuantityToCatalogDefaultUnitWithoutRoundingUp() {
+        String validJson = """
+                {
+                  "listType": "RECIPE",
+                  "items": [
+                    {
+                      "genericName": "lapte",
+                      "quantity": "500",
+                      "unit": "ml"
+                    }
+                  ]
+                }
+                """;
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("lapte");
+        catalogProduct.setSpecificName("Lapte 1.5%");
+        catalogProduct.setBrand("Zuzu");
+        catalogProduct.setCategory("Lactate");
+        catalogProduct.setDefaultQuantity("1 l");
+
+        when(aiService.extractFromMultimodal(null, "text", null, null, null)).thenReturn(validJson);
+        when(productResolutionService.resolveForUser("lapte", null))
+                .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
+                        "lapte",
+                        "Zuzu",
+                        "Lactate",
+                        catalogProduct,
+                        "GLOBAL_CATALOG"
+                )));
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getQuantity()).isEqualTo("0.5");
+        assertThat(response.getItems().get(0).getUnit()).isEqualTo("l");
+    }
+
+    @Test
+    void generateShoppingItems_nonRecipe_keepsOriginalQuantityEvenWithCatalogDefaultUnit() {
+        String validJson = """
+                {
+                  "listType": "FREQUENT",
+                  "items": [
+                    {
+                      "genericName": "lapte",
+                      "quantity": "500",
+                      "unit": "ml"
+                    }
+                  ]
+                }
+                """;
+        ProductCatalog catalogProduct = new ProductCatalog();
+        catalogProduct.setId(UUID.randomUUID());
+        catalogProduct.setGenericName("lapte");
+        catalogProduct.setSpecificName("Lapte 1.5%");
+        catalogProduct.setBrand("Zuzu");
+        catalogProduct.setCategory("Lactate");
+        catalogProduct.setDefaultQuantity("1 l");
+
+        when(aiService.extractFromMultimodal(null, "text", null, null, null)).thenReturn(validJson);
+        when(productResolutionService.resolveForUser("lapte", null))
+                .thenReturn(Optional.of(new ProductResolutionService.ResolvedProduct(
+                        "lapte",
+                        "Zuzu",
+                        "Lactate",
+                        catalogProduct,
+                        "GLOBAL_CATALOG"
+                )));
+
+        AiGenerationResponse response = svc.generateShoppingItems(null, "text", null, null, null);
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getQuantity()).isEqualTo("500");
+        assertThat(response.getItems().get(0).getUnit()).isEqualTo("ml");
     }
 
     @Test

@@ -73,6 +73,7 @@ public class ProductResolutionService {
                                 catalogProduct.setId(match.getCatalogId());
                                 catalogProduct.setGenericName(match.getCatalogGenericName());
                                 catalogProduct.setSpecificName(match.getCatalogSpecificName());
+                                catalogProduct.setDefaultQuantity(match.getCatalogDefaultQuantity());
                                 catalogProduct.setBrand(match.getBrand());
                                 catalogProduct.setCategory(match.getCategory());
                             }

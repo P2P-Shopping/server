@@ -87,4 +87,18 @@ class QuantityParserTest {
                 .isInstanceOf(ListValidationException.class)
                 .hasMessageContaining("too big to be processed");
     }
+
+    @Test
+    void convertToUnit_sameFamily_convertsToTargetUnitWithoutRoundingUp() {
+        assertThat(QuantityParser.convertToUnit("500 ml", "1 l")).isEqualTo("0.5 l");
+        assertThat(QuantityParser.convertToUnit("1500 g", "1 kg")).isEqualTo("1.5 kg");
+        assertThat(QuantityParser.convertToUnit("2 buc", "10 buc")).isEqualTo("2 buc");
+    }
+
+    @Test
+    void convertToUnit_differentFamilies_throwsException() {
+        assertThatThrownBy(() -> QuantityParser.convertToUnit("500 ml", "1 kg"))
+                .isInstanceOf(ListValidationException.class)
+                .hasMessageContaining("different unit families");
+    }
 }

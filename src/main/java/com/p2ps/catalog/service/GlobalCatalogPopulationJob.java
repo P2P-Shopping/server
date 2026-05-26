@@ -11,14 +11,14 @@ public class GlobalCatalogPopulationJob {
 
     private final GlobalCatalogPopulationService globalCatalogPopulationService;
 
-    @Value("${catalog.population.min-distinct-users:3}")
+    @Value("${catalog.population.min-distinct-users:1}")
     private int minDistinctUsers;
 
     public GlobalCatalogPopulationJob(GlobalCatalogPopulationService globalCatalogPopulationService) {
         this.globalCatalogPopulationService = globalCatalogPopulationService;
     }
 
-    @Scheduled(fixedRate = 100*60000)
+    @Scheduled(fixedRate = 60*3*60000)
     public void populateGlobalCatalog() {
         int processedCount = globalCatalogPopulationService.populateFromPopularUnknownProducts(minDistinctUsers);
         log.info("[GLOBAL_CATALOG_POPULATION] Processed {} popular unknown product groups", processedCount);
