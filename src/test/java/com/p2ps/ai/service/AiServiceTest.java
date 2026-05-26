@@ -94,7 +94,7 @@ class AiServiceTest {
                 .thenReturn(finalizedResponse);
         // Updated mock to findOptimalStores which returns a List
         when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(List.of(new StoreMatchResult("store-1", "Mega", 1, 120.0, new BigDecimal("12.50"), 1)));
+                .thenReturn(List.of(new StoreMatchResult("store-1", "Mega", "Str. Unirii 10", 1, 120.0, new BigDecimal("12.50"), 1)));
 
         String result = aiService.extractFromMultimodal(null, "milk recipe", 45.0, 25.0, TEST_USER_EMAIL);
 
@@ -142,7 +142,7 @@ class AiServiceTest {
                 .thenReturn(finalResponse);
         // Updated mock to findOptimalStores which returns a List
         when(storeMatchingEngine.findOptimalStores(45.0, 25.0, 5000, List.of(itemId)))
-                .thenReturn(List.of(new StoreMatchResult("store-2", "Store A", 1, 240.0, new BigDecimal("14.20"), 1)));
+                .thenReturn(List.of(new StoreMatchResult("store-2", "Store A", "Str. Matei Voievod 5", 1, 240.0, new BigDecimal("14.20"), 1)));
 
         String result = aiService.extractFromMultimodal(image, "text", 45.0, 25.0, TEST_USER_EMAIL);
 

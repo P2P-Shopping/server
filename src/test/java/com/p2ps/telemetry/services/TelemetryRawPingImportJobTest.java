@@ -53,9 +53,9 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void shouldImportOnlyAcceptedTelemetryRecords() {
-        TelemetryRecord accepted = record(PingStatus.ACCEPTED);
-        TelemetryRecord degraded = record(PingStatus.DEGRADED);
-        TelemetryRecord rejected = record(PingStatus.REJECTED);
+        TelemetryRecord accepted = createTelemetryRecord(PingStatus.ACCEPTED);
+        TelemetryRecord degraded = createTelemetryRecord(PingStatus.DEGRADED);
+        TelemetryRecord rejected = createTelemetryRecord(PingStatus.REJECTED);
 
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("telemetry_raw_ping_import")))
                 .thenReturn(List.of());
@@ -197,8 +197,7 @@ class TelemetryRawPingImportJobTest {
         String value = "my-store-id";
         String result1 = (String) ReflectionTestUtils.invokeMethod(importJob, "toInternalUuid", "store", value);
         String result2 = (String) ReflectionTestUtils.invokeMethod(importJob, "toInternalUuid", "store", value);
-        assertThat(result1).isEqualTo(result2);
-        assertThat(result1).isNotEqualTo(value);
+        assertThat(result1).isEqualTo(result2).isNotEqualTo(value);
     }
 
     @Test
@@ -211,14 +210,14 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void isImportable_shouldReturnTrueForValidRecord() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isTrue();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullId() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setId(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
@@ -226,30 +225,30 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void isImportable_shouldReturnFalseForDegradedStatus() {
-        TelemetryRecord telemetryRecord = record(PingStatus.DEGRADED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.DEGRADED);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
     }
 
     @Test
-    void isImportable_shouldReturnFalseForNullLat() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+    void isImportable_shouldAcceptNullLat_withStoreCentroidFallback() {
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setLat(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
-        assertThat(result).isFalse();
+        assertThat(result).isTrue();
     }
 
     @Test
-    void isImportable_shouldReturnFalseForNullLng() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+    void isImportable_shouldAcceptNullLng_withStoreCentroidFallback() {
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setLng(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
-        assertThat(result).isFalse();
+        assertThat(result).isTrue();
     }
 
     @Test
     void isImportable_shouldReturnFalseForNullStoreId() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setStoreId(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
@@ -257,7 +256,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void isImportable_shouldReturnFalseForBlankStoreId() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setStoreId("   ");
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
@@ -265,7 +264,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void isImportable_shouldReturnFalseForNullItemId() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setItemId(null);
         Boolean result = (Boolean) ReflectionTestUtils.invokeMethod(importJob, "isImportable", telemetryRecord);
         assertThat(result).isFalse();
@@ -273,7 +272,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void toMarkedAt_shouldUseRecordTimestamp() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         long timestamp = System.currentTimeMillis();
         telemetryRecord.setTimestamp(timestamp);
         telemetryRecord.setServerReceivedTimestamp(null);
@@ -284,7 +283,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void toMarkedAt_shouldFallbackToServerReceivedTimestamp() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setTimestamp(null);
         java.time.Instant serverTime = java.time.Instant.now();
         telemetryRecord.setServerReceivedTimestamp(serverTime);
@@ -295,7 +294,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void toMarkedAt_shouldFallbackToNow() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         telemetryRecord.setTimestamp(null);
         telemetryRecord.setServerReceivedTimestamp(null);
 
@@ -334,7 +333,7 @@ class TelemetryRawPingImportJobTest {
 
     @Test
     void insertRawPing_shouldReturnFalseOnException() {
-        TelemetryRecord telemetryRecord = record(PingStatus.ACCEPTED);
+        TelemetryRecord telemetryRecord = createTelemetryRecord(PingStatus.ACCEPTED);
         when(jdbcTemplate.update(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("DB error"));
 
@@ -351,7 +350,7 @@ class TelemetryRawPingImportJobTest {
         verify(mongoTemplate, never()).find(any(), eq(TelemetryRecord.class));
     }
 
-    private TelemetryRecord record(PingStatus status) {
+    private TelemetryRecord createTelemetryRecord(PingStatus status) {
         TelemetryRecord telemetryRecord = new TelemetryRecord();
         telemetryRecord.setId(new ObjectId().toHexString());
         telemetryRecord.setDeviceId("device-1");

@@ -42,12 +42,12 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
         private final byte[] cachedBody;
 
         private CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
-            super(request);
-
             long contentLength = request.getContentLengthLong();
             if (contentLength > MAX_BODY_BYTES) {
                 throw new PayloadTooLargeException("Declared content-length exceeds limit: " + contentLength);
             }
+
+            super(request);
 
             if (contentLength > 0) {
                 byte[] body = StreamUtils.copyToByteArray(request.getInputStream());

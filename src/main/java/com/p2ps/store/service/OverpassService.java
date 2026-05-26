@@ -80,8 +80,8 @@ public class OverpassService {
             Polygon polygon = GEOMETRY_FACTORY.createPolygon(coordinates.toArray(new Coordinate[0]));
             polygon.setSRID(4326);
 
-            logger.info("Fetched OSM building polygon with {} vertices for [{}, {}] (store: {})",
-                    coordinates.size() - 1, latitude, longitude, storeName);
+            logger.info("Fetched OSM building polygon with {} vertices for [{}, {}]",
+                    coordinates.size() - 1, latitude, longitude);
             return polygon;
 
         } catch (Exception e) {
@@ -156,7 +156,8 @@ public class OverpassService {
         // --- Proximity scoring (tiebreaker) ---
         JsonNode geometry = way.path("geometry");
         if (geometry.isArray() && !geometry.isEmpty()) {
-            double centroidLat = 0, centroidLng = 0;
+            double centroidLat = 0;
+            double centroidLng = 0;
             int count = 0;
             for (JsonNode point : geometry) {
                 centroidLat += point.path("lat").asDouble();
@@ -180,14 +181,14 @@ public class OverpassService {
     }
 
     private double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
-        double R = 6371000;
+        double earthRadius = 6371000;
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                    Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+        return earthRadius * c;
     }
 
     private Polygon createFallbackPolygon(double latitude, double longitude) {

@@ -8,7 +8,6 @@ import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.catalog.service.CatalogService;
 import com.p2ps.catalog.service.StorePriceService;
-import com.p2ps.shopping.dto.ShoppingSessionDTO;
 import com.p2ps.shopping.service.ShoppingSessionService;
 import com.p2ps.lists.dto.ItemDTO;
 import com.p2ps.lists.dto.ItemRequest;

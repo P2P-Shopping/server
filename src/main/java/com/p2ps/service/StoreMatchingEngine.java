@@ -153,6 +153,7 @@ public class StoreMatchingEngine {
             SELECT
                 sg.store_id::text AS store_id,
                 sg.name,
+                sg.address,
                 ST_Distance(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance_m,
                 COUNT(DISTINCT mi.requested_item_id) AS matched_items,
                 spa.total_estimated_price AS total_estimated_price,
@@ -167,7 +168,7 @@ public class StoreMatchingEngine {
                 ST_DWithin(sg.boundary_polygon, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :radiusDegrees)
                 -- Pasul 2: Filtrare exactă pe geografie (metrică)
                 AND ST_DWithin(sg.boundary_polygon::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
-            GROUP BY sg.store_id, sg.name, sg.boundary_polygon, spa.total_estimated_price, spa.priced_items
+            GROUP BY sg.store_id, sg.name, sg.address, sg.boundary_polygon, spa.total_estimated_price, spa.priced_items
             HAVING COUNT(DISTINCT mi.requested_item_id) > 0
             ORDER BY
                 matched_items DESC,
@@ -193,6 +194,7 @@ public class StoreMatchingEngine {
                 (rs, ignoredRowNum) -> new StoreMatchResult(
                         rs.getString("store_id"),
                         rs.getString("name"),
+                        rs.getString("address"),
                         rs.getInt("matched_items"),
                         rs.getDouble("distance_m"),
                         rs.getBigDecimal("total_estimated_price"),
@@ -253,6 +255,7 @@ public class StoreMatchingEngine {
     public record StoreMatchResult(
             String storeId,
             String storeName,
+            String address,
             int matchedItems,
             double distanceMeters,
             java.math.BigDecimal totalEstimatedPrice,

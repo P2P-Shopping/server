@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UserService implements UserDetailsService {
 
+    private static final String USER_NOT_FOUND_PREFIX = "User not found with email: ";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -28,11 +30,15 @@ public class UserService implements UserDetailsService {
         return userRepository.findByEmail(email);
     }
 
+    public Optional<Users> findById(Integer id) {
+        return userRepository.findById(id);
+    }
+
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
 
 
         return User.builder()
@@ -64,5 +70,27 @@ public class UserService implements UserDetailsService {
             user.setTokenVersion(user.getTokenVersion() + 1);
             userRepository.save(user);
         });
+    }
+
+    @Transactional
+    public Users updateProfile(String email, String firstName, String lastName) {
+        Users user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
+        if (firstName != null && !firstName.isBlank()) {
+            user.setFirstName(firstName);
+        }
+        if (lastName != null && !lastName.isBlank()) {
+            user.setLastName(lastName);
+        }
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public Users updateProfilePicture(String email, byte[] picture, String contentType) {
+        Users user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException(USER_NOT_FOUND_PREFIX + email));
+        user.setProfilePicture(picture);
+        user.setProfilePictureContentType(contentType);
+        return userRepository.save(user);
     }
 }

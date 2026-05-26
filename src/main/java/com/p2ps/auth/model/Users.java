@@ -31,13 +31,18 @@ public class Users {
     @Column(name = "last_name", nullable = false)
     private String lastName;
 
+    @Lob
+    @Column(name = "profile_picture")
+    private byte[] profilePicture;
+
+    @Column(name = "profile_picture_content_type")
+    private String profilePictureContentType;
+
     public Users(String email, String password, String firstName, String lastName) {
         this.email = email;
         this.password = password;
         this.firstName = firstName;
         this.lastName = lastName;
     }
-
-
 
 }

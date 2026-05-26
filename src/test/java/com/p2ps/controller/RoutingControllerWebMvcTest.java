@@ -91,7 +91,7 @@ class RoutingControllerWebMvcTest {
         String storeId = UUID.randomUUID().toString();
 
         when(storeMatchingEngine.findOptimalStores(eq(47.15), eq(27.58), eq(5000.0), any(), any()))
-                .thenReturn(List.of(new StoreMatchingEngine.StoreMatchResult(storeId, "Store A", 1, 800.0, new BigDecimal("12.30"), 1)));
+                .thenReturn(List.of(new StoreMatchingEngine.StoreMatchResult(storeId, "Store A", "Str. Test 1", 1, 800.0, new BigDecimal("12.30"), 1)));
 
         StoreMatchRequest request = new StoreMatchRequest();
         request.setUserLat(47.15);

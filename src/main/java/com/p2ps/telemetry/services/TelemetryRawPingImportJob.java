@@ -2,7 +2,6 @@ package com.p2ps.telemetry.services;
 
 import com.p2ps.telemetry.model.PingStatus;
 import com.p2ps.telemetry.model.TelemetryRecord;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +29,6 @@ import java.util.UUID;
 @Component
 @ConditionalOnProperty(name = "telemetry.raw-ping-import.enabled", havingValue = "true", matchIfMissing = true)
 @DependsOn("locationProcessorWorker")
-@RequiredArgsConstructor
 @Slf4j
 public class TelemetryRawPingImportJob {
 
@@ -56,6 +54,12 @@ public class TelemetryRawPingImportJob {
     private boolean autoProvisionDimensions;
 
     private volatile Boolean postgresDetected;
+
+    public TelemetryRawPingImportJob(MongoTemplate mongoTemplate, JdbcTemplate jdbcTemplate, DataSource dataSource) {
+        this.mongoTemplate = mongoTemplate;
+        this.jdbcTemplate = jdbcTemplate;
+        this.dataSource = dataSource;
+    }
 
     @PostConstruct
     public void initialize() {
@@ -217,6 +221,12 @@ public class TelemetryRawPingImportJob {
     private void ensureStore(TelemetryRecord telemetryRecord) {
         String internalStoreId = toInternalUuid("store", telemetryRecord.getStoreId());
 
+        if (telemetryRecord.getLat() == null || telemetryRecord.getLng() == null) {
+            log.debug("[TELEMETRY_IMPORT] Skipping store geofence auto-provision for store {} — no coordinates.",
+                    internalStoreId);
+            return;
+        }
+
         jdbcTemplate.update("""
             INSERT INTO store_geofences (
                 store_id,
@@ -299,8 +309,6 @@ public class TelemetryRawPingImportJob {
     private boolean isImportable(TelemetryRecord telemetryRecord) {
         return telemetryRecord.getId() != null
                 && telemetryRecord.getStatus() == PingStatus.ACCEPTED
-                && telemetryRecord.getLat() != null
-                && telemetryRecord.getLng() != null
                 && hasText(telemetryRecord.getStoreId())
                 && hasText(telemetryRecord.getItemId());
     }
@@ -308,6 +316,31 @@ public class TelemetryRawPingImportJob {
     private boolean insertRawPing(TelemetryRecord telemetryRecord) {
         String internalStoreId = toInternalUuid("store", telemetryRecord.getStoreId());
         String internalItemId = toInternalUuid("item", telemetryRecord.getItemId());
+
+        Double lat = telemetryRecord.getLat();
+        Double lng = telemetryRecord.getLng();
+
+        if (lat == null || lng == null) {
+            try {
+                List<java.util.Map<String, Object>> rows = jdbcTemplate.queryForList(
+                        "SELECT ST_Y(ST_Centroid(boundary_polygon)) AS lat, " +
+                        "ST_X(ST_Centroid(boundary_polygon)) AS lng " +
+                        "FROM store_geofences WHERE store_id = ?::uuid LIMIT 1",
+                        internalStoreId);
+                if (!rows.isEmpty()) {
+                    lat = ((Number) rows.get(0).get("lat")).doubleValue();
+                    lng = ((Number) rows.get(0).get("lng")).doubleValue();
+                }
+            } catch (Exception e) {
+                log.debug("[TELEMETRY_IMPORT] Could not resolve store centroid for storeId={}", internalStoreId, e);
+            }
+        }
+
+        if (lat == null || lng == null) {
+            log.debug("[TELEMETRY_IMPORT] Skipping telemetry record {} — no coordinates and no store centroid available.",
+                    telemetryRecord.getId());
+            return false;
+        }
 
         try {
             int rows = jdbcTemplate.update("""
@@ -330,9 +363,9 @@ public class TelemetryRawPingImportJob {
                     internalItemId,
                     telemetryRecord.getStoreId(),
                     telemetryRecord.getItemId(),
-                    telemetryRecord.getLng(),
-                    telemetryRecord.getLat(),
-                    telemetryRecord.getAccuracyMeters(),
+                    lng,
+                    lat,
+                    telemetryRecord.getAccuracyMeters() != null ? telemetryRecord.getAccuracyMeters() : 10.0,
                     DEFAULT_LOC_PROVIDER,
                     toMarkedAt(telemetryRecord));
             return rows > 0;

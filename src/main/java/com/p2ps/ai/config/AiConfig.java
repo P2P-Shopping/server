@@ -19,7 +19,7 @@ public class AiConfig {
     @Value("${ai.api.url:}")
     private String apiUrl;
 
-    @Value("${ai.model:gemini-2.5-flash-lite}")
+    @Value("${ai.model:gemini-3.1-flash-lite}")
     private String model;
 
     @Value("${ai.provider:gemini}")

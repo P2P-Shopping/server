@@ -8,6 +8,8 @@ import com.p2ps.catalog.repository.ProductCatalogRepository;
 import com.p2ps.lists.repo.UserProductHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -277,48 +279,23 @@ class CatalogServiceTest {
         assertEquals("Produs Global", results.get(0).name());
     }
 
-    @Test
-    void suggestProductsShouldUseFallbackForBlankQuantity() {
+    @ParameterizedTest
+    @CsvSource(nullValues = "NULL", delimiter = '|', textBlock = """
+              '  '          | Produs Fara Cantitate | 1 buc
+              NULL          | Produs Null Cantitate | 1 buc
+              '  1 L  '     | Produs Trim Quantity  | 1 L
+            """)
+    void suggestProductsShouldUseFallbackQuantity(String defaultQuantity, String productName, String expectedQuantity) {
         lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
 
         ProductCatalog p = new ProductCatalog();
-        p.setSpecificName("Produs Fara Cantitate");
-        p.setDefaultQuantity("  "); // Blank quantity
+        p.setSpecificName(productName);
+        p.setDefaultQuantity(defaultQuantity);
         lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
 
         List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
 
         assertEquals(1, results.size());
-        assertEquals("1 buc", results.get(0).quantity());
-    }
-
-    @Test
-    void suggestProductsShouldUseFallbackForNullQuantity() {
-        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-
-        ProductCatalog p = new ProductCatalog();
-        p.setSpecificName("Produs Null Cantitate");
-        p.setDefaultQuantity(null);
-        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
-
-        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
-
-        assertEquals(1, results.size());
-        assertEquals("1 buc", results.get(0).quantity());
-    }
-
-    @Test
-    void suggestProductsShouldTrimValidQuantity() {
-        lenient().when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-
-        ProductCatalog p = new ProductCatalog();
-        p.setSpecificName("Produs Trim Quantity");
-        p.setDefaultQuantity("  1 L  ");
-        lenient().when(catalogRepository.searchByKeyword(anyString())).thenReturn(List.of(p));
-
-        List<ProductSuggestionDTO> results = catalogService.suggestProducts("test", "user@test.com");
-
-        assertEquals(1, results.size());
-        assertEquals("1 L", results.get(0).quantity());
+        assertEquals(expectedQuantity, results.get(0).quantity());
     }
 }

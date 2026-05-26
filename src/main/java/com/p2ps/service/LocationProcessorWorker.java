@@ -212,7 +212,14 @@ public class LocationProcessorWorker {
 
             int insertedRows = jdbcTemplate.update(sql);
 
-            logger.info("Location recalculation finished successfully. Updated {} unique shelf locations.", insertedRows);
+            if (insertedRows == 0) {
+                Integer totalRows = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM store_inventory_map", Integer.class);
+                logger.info("Location recalculation finished. No new or changed shelf locations ({} existing mappings).",
+                        totalRows != null ? totalRows : 0);
+            } else {
+                logger.info("Location recalculation finished successfully. Updated {} unique shelf locations.", insertedRows);
+            }
 
         } catch (Exception e) {
             logger.error("Scheduled location centroid recalculation failed.", e);

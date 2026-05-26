@@ -6,6 +6,7 @@ import com.p2ps.catalog.repository.StorePriceRepository;
 import com.p2ps.store.model.StoreGeofence;
 import com.p2ps.store.repository.StoreGeofenceRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,21 +21,26 @@ public class StorePriceService {
     private final StorePriceRepository storePriceRepository;
     private final StoreGeofenceRepository storeGeofenceRepository;
     private final Clock clock;
+    private final StorePriceService self;
 
     @Autowired
     public StorePriceService(StorePriceRepository storePriceRepository,
-                             StoreGeofenceRepository storeGeofenceRepository) {
+                             StoreGeofenceRepository storeGeofenceRepository,
+                             @Lazy StorePriceService self) {
         this.storePriceRepository = storePriceRepository;
         this.storeGeofenceRepository = storeGeofenceRepository;
         this.clock = Clock.systemUTC();
+        this.self = self;
     }
 
     StorePriceService(StorePriceRepository storePriceRepository,
                       StoreGeofenceRepository storeGeofenceRepository,
-                      Clock clock) {
+                      Clock clock,
+                      StorePriceService self) {
         this.storePriceRepository = storePriceRepository;
         this.storeGeofenceRepository = storeGeofenceRepository;
         this.clock = clock;
+        this.self = self;
     }
 
     @Transactional
@@ -64,7 +70,7 @@ public class StorePriceService {
 
     @Transactional
     public StorePrice recordStorePrice(ProductCatalog catalogItem, String ignoredStoreName, BigDecimal price) {
-        return recordStorePrice(catalogItem, (UUID) null, price);
+        return self.recordStorePrice(catalogItem, (UUID) null, price);
     }
 
     @Transactional
