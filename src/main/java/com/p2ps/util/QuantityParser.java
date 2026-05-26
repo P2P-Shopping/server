@@ -32,6 +32,10 @@ public class QuantityParser {
             this.family = family;
         }
 
+        public String symbol() {
+            return symbol;
+        }
+
         public static Unit fromString(String str) {
             if (str == null || str.isBlank()) return PCS;
             String normalized = normalizeUnit(str);
@@ -93,6 +97,19 @@ public class QuantityParser {
         }
 
         return formatToOptimalUnit(totalBaseValue, parsed1.unit().family);
+    }
+
+    public static String convertToUnit(String sourceQuantity, String targetQuantityTemplate) {
+        ParsedQuantity source = parse(sourceQuantity);
+        ParsedQuantity target = parse(targetQuantityTemplate);
+
+        if (!source.unit().family.equals(target.unit().family)) {
+            throw new ListValidationException("Cannot convert quantity between different unit families.");
+        }
+
+        double sourceBaseValue = source.value() * source.unit().baseMultiplier;
+        double convertedValue = sourceBaseValue / target.unit().baseMultiplier;
+        return formatNumber(convertedValue) + " " + target.unit().symbol;
     }
 
 

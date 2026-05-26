@@ -11,6 +11,7 @@ import com.p2ps.catalog.model.ProductCatalog;
 import com.p2ps.catalog.service.ProductResolutionService;
 import com.p2ps.exception.AiProcessingException;
 import com.p2ps.util.ProductStringUtils;
+import com.p2ps.util.QuantityParser;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -159,6 +160,7 @@ public class AiOrchestrationService {
     private void normalizeDetectedProducts(AiGenerationResponse response, Users user) {
         // Extragem email-ul în siguranță pentru a preveni NullPointerException
         String email = (user != null) ? user.getEmail() : null;
+        boolean recipeList = "RECIPE".equalsIgnoreCase(response.getListType());
 
         for (ParsedItemResponse item : response.getItems()) {
             if (item != null) {
@@ -166,12 +168,13 @@ public class AiOrchestrationService {
                 if (keyword != null) {
                     // Java face căutarea INSTANT, direct pe backend!
                     productResolutionService.resolveForUser(keyword, email)
-                            .ifPresent(match -> applyResolvedProduct(item, match));
+                            .ifPresent(match -> applyResolvedProduct(item, match, recipeList));
                 }
             }
         }
     }
-    private void applyResolvedProduct(ParsedItemResponse item, ProductResolutionService.ResolvedProduct match) {
+
+    private void applyResolvedProduct(ParsedItemResponse item, ProductResolutionService.ResolvedProduct match, boolean recipeList) {
         ProductCatalog catalogProduct = match.catalogProduct();
         item.setGenericName(ProductStringUtils.firstNonBlank(
                 match.matchedName(),
@@ -184,11 +187,42 @@ public class AiOrchestrationService {
             item.setSpecificName(ProductStringUtils.firstNonBlank(catalogProduct.getSpecificName(), item.getSpecificName()));
             item.setBrand(ProductStringUtils.firstNonBlank(catalogProduct.getBrand(), item.getBrand(), match.brand()));
             item.setCategory(ProductStringUtils.firstNonBlank(catalogProduct.getCategory(), item.getCategory(), match.category()));
+            applyRecipeQuantityNormalization(item, catalogProduct, recipeList);
             return;
         }
 
         item.setBrand(ProductStringUtils.firstNonBlank(item.getBrand(), match.brand()));
         item.setCategory(ProductStringUtils.firstNonBlank(item.getCategory(), match.category()));
+    }
+
+    private void applyRecipeQuantityNormalization(ParsedItemResponse item, ProductCatalog catalogProduct, boolean recipeList) {
+        if (!recipeList || catalogProduct == null) {
+            return;
+        }
+
+        String defaultQuantity = catalogProduct.getDefaultQuantity();
+        String itemQuantity = item.getQuantity();
+        String itemUnit = item.getUnit();
+        if (defaultQuantity == null || defaultQuantity.isBlank() || itemQuantity == null || itemQuantity.isBlank()
+                || itemUnit == null || itemUnit.isBlank()) {
+            return;
+        }
+
+        try {
+            String converted = QuantityParser.convertToUnit(itemQuantity.trim() + " " + itemUnit.trim(), defaultQuantity.trim());
+            QuantityParser.ParsedQuantity parsedConverted = QuantityParser.parse(converted);
+            item.setQuantity(formatQuantityValue(parsedConverted.value()));
+            item.setUnit(parsedConverted.unit().symbol());
+        } catch (RuntimeException ignored) {
+            // Keep the AI quantity when parsing or conversion fails.
+        }
+    }
+
+    private String formatQuantityValue(double value) {
+        if (value == (long) value) {
+            return Long.toString((long) value);
+        }
+        return Double.toString(value);
     }
 
 }

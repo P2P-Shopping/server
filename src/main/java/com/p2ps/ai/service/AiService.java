@@ -47,6 +47,7 @@ public class AiService {
         RULE 2 (LOCATION AWARENESS): If user coordinates are provided, use the 'find_optimal_store' tool to recommend the best place to shop.
         RULE 3 (TIERED CATEGORIZATION): Classify the list as 'RECIPE', 'FREQUENT', or 'CART'.
         RECIPE LOGIC: If the user describes a dish, dessert, meal, or recipe idea (e.g., negresa, clatite, ciorba, pasta, cake), classify it as 'RECIPE' even if the word 'recipe' is not used.
+        RECIPE QUANTITY RULE (CRITICAL): For RECIPE outputs, estimate a realistic required quantity for each ingredient and always return both quantity and unit when the ingredient is measurable. Return the amount needed by the recipe itself, not package size or store packaging. If the exact amount is unclear, return your best conservative estimate.
         CRITICAL CATEGORY RULE: The 'category' field MUST be chosen EXACTLY from this strict list: [Fructe și Legume, Lactate și Ouă, Carne, Băcănie, Dulciuri, Curățenie, Altele]. DO NOT invent categories!
         Format: {"listType": "string", "suggestedStore": "string or null", "items": [{"genericName": "string", "specificName": "string or null", "brand": "string or null", "quantity": number or null, "unit": "string or null", "catalogId": "string or null", "category": "string", "price": number or null}]}.
         """;
