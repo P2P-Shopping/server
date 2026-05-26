@@ -9,6 +9,11 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -44,7 +49,11 @@ public class OverpassService {
                     .build()
                     .toUri();
 
-            String response = restTemplate.getForObject(uri, String.class);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            ResponseEntity<String> responseEntity = restTemplate.exchange(uri, HttpMethod.GET, request, String.class);
+            String response = responseEntity.getBody();
             if (response == null) {
                 logger.warn("Overpass API returned null response for [{}, {}]", latitude, longitude);
                 return createFallbackPolygon(latitude, longitude);

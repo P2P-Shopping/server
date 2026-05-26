@@ -4,10 +4,12 @@ import com.p2ps.client.OsrmClient;
 import com.p2ps.controller.MacroRoutingResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -42,6 +44,7 @@ public class MacroRoutingService {
      * @param storeId UUID string — must match a store_geofences.store_id
      * @return MacroRoutingResponse with walking and driving fields (either can be null if OSRM fails)
      */
+    @Cacheable(value = "macroRouting", key = "T(String).format(\"%s:%.3f:%.3f\", #storeId, #userLat, #userLng)")
     public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId) {
         if (storeId == null) {
             logger.warn("Store ID is null");
@@ -59,14 +62,25 @@ public class MacroRoutingService {
         logger.info("Macro-routing: calculating estimates to store entrance");
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "walking"));
         CompletableFuture<OsrmClient.TransportEstimate> drivingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "driving"));
 
         CompletableFuture.allOf(walkingFuture, drivingFuture).join();
 
-        MacroRoutingResponse.TransportEstimate walking = toDto(walkingFuture.join());
-        MacroRoutingResponse.TransportEstimate driving = toDto(drivingFuture.join());
+        OsrmClient.TransportEstimate drivingRaw = drivingFuture.join();
+        OsrmClient.TransportEstimate walkingRaw  = walkingFuture.join();
+
+        // If OSRM has no walking profile (public demo only serves driving), the walking call
+        // either returns null or the same duration as driving.  Fall back to a distance-based
+        // estimate: average walking speed = 1.39 m/s (5 km/h), same polyline as driving.
+        if (walkingRaw == null || isSameProfileResult(walkingRaw, drivingRaw)) {
+            walkingRaw = estimateWalkingFromDriving(drivingRaw);
+            logger.info("Walking OSRM unavailable or identical to driving — using distance-based estimate");
+        }
+
+        MacroRoutingResponse.TransportEstimate walking = toDto(walkingRaw);
+        MacroRoutingResponse.TransportEstimate driving = toDto(drivingRaw);
 
         logger.info("Macro-routing result: walking={} driving={}", walking, driving);
         return new MacroRoutingResponse(walking, driving);
@@ -97,6 +111,24 @@ public class MacroRoutingService {
         }
 
         return new double[]{((Number) latObj).doubleValue(), ((Number) lngObj).doubleValue()};
+    }
+
+    /** True when walking OSRM returned the same duration as driving (same profile was used). */
+    private boolean isSameProfileResult(OsrmClient.TransportEstimate walking,
+                                        OsrmClient.TransportEstimate driving) {
+        if (driving == null) return false;
+        return Math.abs(walking.durationSeconds() - driving.durationSeconds()) < 1.0;
+    }
+
+    /**
+     * Estimates walking time from a driving estimate.
+     * Uses average walking speed of 5 km/h (1.39 m/s) and reuses the driving polyline
+     * so the map still draws the road-network route.
+     */
+    private OsrmClient.TransportEstimate estimateWalkingFromDriving(OsrmClient.TransportEstimate driving) {
+        if (driving == null) return null;
+        double walkingDuration = driving.distanceM() / 1.39;
+        return new OsrmClient.TransportEstimate(driving.distanceM(), walkingDuration, driving.polyline());
     }
 
     private MacroRoutingResponse.TransportEstimate toDto(OsrmClient.TransportEstimate raw) {

@@ -33,9 +33,9 @@ class MacroRoutingServiceTest {
     @Test
     void getEstimates_shouldReturnBothEstimatesWithPolylineWhenOsrmResponds() {
         mockStoreEntrance(47.156, 27.587);
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("foot")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("walking")))
                 .thenReturn(new OsrmClient.TransportEstimate(850.0, 612.0, "walking_polyline"));
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("car")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("driving")))
                 .thenReturn(new OsrmClient.TransportEstimate(1200.0, 145.0, "driving_polyline"));
 
         MacroRoutingResponse response = service.getEstimates(47.15, 27.58, STORE_ID);
@@ -62,26 +62,28 @@ class MacroRoutingServiceTest {
     }
 
     @Test
-    void getEstimates_shouldReturnNullWalkingWhenOsrmFailsForFoot() {
+    void getEstimates_shouldFallbackWalkingWhenOsrmFailsForWalking() {
         mockStoreEntrance(47.156, 27.587);
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("foot")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("walking")))
                 .thenReturn(null);
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("car")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("driving")))
                 .thenReturn(new OsrmClient.TransportEstimate(1200.0, 145.0, "driving_polyline"));
 
         MacroRoutingResponse response = service.getEstimates(47.15, 27.58, STORE_ID);
 
         assertNotNull(response);
-        assertNull(response.getWalking());
+        assertNotNull(response.getWalking());
         assertNotNull(response.getDriving());
+        assertEquals(1200.0, response.getWalking().getDistanceM(), 0.001);
+        assertEquals("driving_polyline", response.getWalking().getPolyline());
     }
 
     @Test
-    void getEstimates_shouldReturnNullDrivingWhenOsrmFailsForCar() {
+    void getEstimates_shouldReturnNullDrivingWhenOsrmFailsForDriving() {
         mockStoreEntrance(47.156, 27.587);
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("foot")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("walking")))
                 .thenReturn(new OsrmClient.TransportEstimate(850.0, 612.0, "walking_polyline"));
-        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("car")))
+        when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("driving")))
                 .thenReturn(null);
 
         MacroRoutingResponse response = service.getEstimates(47.15, 27.58, STORE_ID);
@@ -95,12 +97,12 @@ class MacroRoutingServiceTest {
     void getEstimates_shouldCallOsrmWithCorrectProfiles() {
         mockStoreEntrance(47.156, 27.587);
         when(osrmClient.getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), any()))
-                .thenReturn(null);
+                .thenReturn(new OsrmClient.TransportEstimate(100.0, 60.0, "poly"));
 
         service.getEstimates(47.15, 27.58, STORE_ID);
 
-        verify(osrmClient).getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("foot"));
-        verify(osrmClient).getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("car"));
+        verify(osrmClient).getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("walking"));
+        verify(osrmClient).getEstimate(anyDouble(), anyDouble(), anyDouble(), anyDouble(), eq("driving"));
     }
 
     @Test
