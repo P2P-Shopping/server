@@ -4,10 +4,12 @@ import com.p2ps.client.OsrmClient;
 import com.p2ps.controller.MacroRoutingResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -42,6 +44,7 @@ public class MacroRoutingService {
      * @param storeId UUID string — must match a store_geofences.store_id
      * @return MacroRoutingResponse with walking and driving fields (either can be null if OSRM fails)
      */
+    @Cacheable(value = "macroRouting", key = "T(String).format(\"%s:%.3f:%.3f\", #storeId, #userLat, #userLng)")
     public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId) {
         if (storeId == null) {
             logger.warn("Store ID is null");
