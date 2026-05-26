@@ -31,8 +31,11 @@ public class OsrmClient {
 
     private static final Logger logger = LoggerFactory.getLogger(OsrmClient.class);
 
-    @Value("${osrm.base-url:http://router.project-osrm.org}")
+    @Value("${osrm.base-url:https://router.project-osrm.org}")
     private String osrmBaseUrl;
+
+    @Value("${osrm.walking-base-url:https://routing.openstreetmap.de/routed-foot}")
+    private String walkingBaseUrl;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -55,15 +58,24 @@ public class OsrmClient {
      * Calls OSRM and returns distance, duration, and polyline for the given profile.
      * Returns null if OSRM is unreachable or returns no route.
      *
-     * @param profile "foot" or "car"
+     * @param profile "driving", "walking", "foot", etc.
      */
     public TransportEstimate getEstimate(double fromLat, double fromLng,
                                          double toLat,   double toLng,
                                          String profile) {
+        String baseUrl = "walking".equals(profile) || "foot".equals(profile)
+                ? walkingBaseUrl
+                : osrmBaseUrl;
+        return getEstimate(fromLat, fromLng, toLat, toLng, profile, baseUrl);
+    }
+
+    private TransportEstimate getEstimate(double fromLat, double fromLng,
+                                          double toLat,   double toLng,
+                                          String profile, String baseUrl) {
         String coordinates = String.format(Locale.ROOT, "%f,%f;%f,%f", fromLng, fromLat, toLng, toLat);
 
         // overview=full returns the complete geometry; geometries=polyline uses Encoded Polyline format
-        String url = osrmBaseUrl + "/route/v1/" + profile + "/" + coordinates
+        String url = baseUrl + "/route/v1/" + profile + "/" + coordinates
                 + "?overview=full&geometries=polyline";
 
         try {

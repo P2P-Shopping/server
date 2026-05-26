@@ -59,14 +59,25 @@ public class MacroRoutingService {
         logger.info("Macro-routing: calculating estimates to store entrance");
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "foot"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "walking"));
         CompletableFuture<OsrmClient.TransportEstimate> drivingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "car"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "driving"));
 
         CompletableFuture.allOf(walkingFuture, drivingFuture).join();
 
-        MacroRoutingResponse.TransportEstimate walking = toDto(walkingFuture.join());
-        MacroRoutingResponse.TransportEstimate driving = toDto(drivingFuture.join());
+        OsrmClient.TransportEstimate drivingRaw = drivingFuture.join();
+        OsrmClient.TransportEstimate walkingRaw  = walkingFuture.join();
+
+        // If OSRM has no walking profile (public demo only serves driving), the walking call
+        // either returns null or the same duration as driving.  Fall back to a distance-based
+        // estimate: average walking speed = 1.39 m/s (5 km/h), same polyline as driving.
+        if (walkingRaw == null || isSameProfileResult(walkingRaw, drivingRaw)) {
+            walkingRaw = estimateWalkingFromDriving(drivingRaw);
+            logger.info("Walking OSRM unavailable or identical to driving — using distance-based estimate");
+        }
+
+        MacroRoutingResponse.TransportEstimate walking = toDto(walkingRaw);
+        MacroRoutingResponse.TransportEstimate driving = toDto(drivingRaw);
 
         logger.info("Macro-routing result: walking={} driving={}", walking, driving);
         return new MacroRoutingResponse(walking, driving);
@@ -97,6 +108,24 @@ public class MacroRoutingService {
         }
 
         return new double[]{((Number) latObj).doubleValue(), ((Number) lngObj).doubleValue()};
+    }
+
+    /** True when walking OSRM returned the same duration as driving (same profile was used). */
+    private boolean isSameProfileResult(OsrmClient.TransportEstimate walking,
+                                        OsrmClient.TransportEstimate driving) {
+        if (driving == null) return false;
+        return Math.abs(walking.durationSeconds() - driving.durationSeconds()) < 1.0;
+    }
+
+    /**
+     * Estimates walking time from a driving estimate.
+     * Uses average walking speed of 5 km/h (1.39 m/s) and reuses the driving polyline
+     * so the map still draws the road-network route.
+     */
+    private OsrmClient.TransportEstimate estimateWalkingFromDriving(OsrmClient.TransportEstimate driving) {
+        if (driving == null) return null;
+        double walkingDuration = driving.distanceM() / 1.39;
+        return new OsrmClient.TransportEstimate(driving.distanceM(), walkingDuration, driving.polyline());
     }
 
     private MacroRoutingResponse.TransportEstimate toDto(OsrmClient.TransportEstimate raw) {
