@@ -11,7 +11,7 @@ public class GlobalCatalogPopulationJob {
 
     private final GlobalCatalogPopulationService globalCatalogPopulationService;
 
-    @Value("${catalog.population.min-distinct-users:3}")
+    @Value("${catalog.population.min-distinct-users:1}")
     private int minDistinctUsers;
 
     public GlobalCatalogPopulationJob(GlobalCatalogPopulationService globalCatalogPopulationService) {
