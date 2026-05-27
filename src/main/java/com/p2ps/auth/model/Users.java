@@ -32,6 +32,7 @@ public class Users {
     private String lastName;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "profile_picture")
     private byte[] profilePicture;
 
