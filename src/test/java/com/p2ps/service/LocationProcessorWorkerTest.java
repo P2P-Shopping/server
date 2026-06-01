@@ -102,9 +102,9 @@ class LocationProcessorWorkerTest {
     @Test
     @DisplayName("Trebuie să marcheze corect produsele cu confidence scăzut")
     void isLowConfidence_ShouldReflectThresholds() {
-        assertTrue(worker.isLowConfidence(0.39d, 10));
-        assertTrue(worker.isLowConfidence(0.8d, 4));
-        assertFalse(worker.isLowConfidence(0.8d, 6));
+        assertTrue(worker.isLowConfidence(0.05d, 10)); // 0.05 < 0.1
+        assertTrue(worker.isLowConfidence(0.8d, 0));  // 0 < 1
+        assertFalse(worker.isLowConfidence(0.15d, 2)); // 0.15 > 0.1, 2 > 1
     }
 
     @Test

@@ -17,14 +17,14 @@ public class DataDecayService {
     @Value("${data-decay.enabled:true}")
     private boolean dataDecayEnabled = true;
 
-    @Value("${data-decay.penalty:0.02}")
-    private double penalty = 0.02d;
+    @Value("${data-decay.penalty:0.1}")
+    private double penalty = 0.1d;
 
-    @Value("${data-decay.cutoff-days:14}")
-    private long cutoffDays = 14L;
+    @Value("${data-decay.cutoff-days:3}")
+    private long cutoffDays = 3L;
 
-    @Value("${data-decay.min-confidence-floor:0.15}")
-    private double minConfidenceFloor = 0.15d;
+    @Value("${data-decay.min-confidence-floor:0.05}")
+    private double minConfidenceFloor = 0.05d;
 
     public DataDecayService(StoreInventoryMapRepository repository) {
         this.repository = repository;

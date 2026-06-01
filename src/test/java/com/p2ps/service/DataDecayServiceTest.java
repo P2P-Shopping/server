@@ -28,8 +28,8 @@ class DataDecayServiceTest {
 
     @Test
     void shouldExecuteDataDecayAndCallRepositoryWithCorrectPenalty() {
-        Double expectedPenalty = 0.02;
-        Double expectedMinConfidenceFloor = 0.15;
+        Double expectedPenalty = 0.1;
+        Double expectedMinConfidenceFloor = 0.05;
 
         when(repository.applyDecayToOldRecords(eq(expectedPenalty), any(LocalDateTime.class), eq(expectedMinConfidenceFloor)))
                 .thenReturn(5);
