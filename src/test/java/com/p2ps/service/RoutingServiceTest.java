@@ -257,7 +257,7 @@ class RoutingServiceTest {
         assertEquals("success", response.getStatus());
         assertTrue(response.isPartial());
         assertNotNull(response.getRouteId());
-        assertEquals(6, response.getRoute().size());
+        assertEquals(5, response.getRoute().size()); // 5 products, user point removed
     }
 
     // -------------------------------------------------------------------------
@@ -474,7 +474,7 @@ class RoutingServiceTest {
         // Depending on implementation, we might have 1 product in route (unique) or 2.
         // Current logic in getProductLocations doesn't de-duplicate, it just returns what the DB returns.
         // If DB returns one row (because item_id is unique per store), then we have 1 product.
-        assertTrue(response.getRoute().size() >= 2); // user + at least one product
+        assertTrue(response.getRoute().size() >= 1); // at least one product (user removed)
     }
 
     @Test

@@ -63,9 +63,11 @@ public class RoutingAsyncService {
         try {
             List<RoutePoint> optimized = optimizer.threeOptImprove(fullNnRoute);
 
-            // BE 3.2 Add audio instructions
+            // BE 3.2 Add audio instructions (must do while user_loc is present to get first segment)
             RoutingService routingService = applicationContext.getBean(RoutingService.class);
             routingService.addAudioInstructions(optimized);
+
+            double fullDistance = optimizer.routeDistance(optimized);
 
             // Updated instantiation to use constructor and setters
             RoutingResponse fullResponse = new RoutingResponse();
@@ -75,8 +77,8 @@ public class RoutingAsyncService {
             fullResponse.setWarnings(warnings);
             fullResponse.setPartial(false);
 
-            fullResponse.setTotalDistanceMeters(optimizer.routeDistance(optimized));
-            fullResponse.setTotalStops(optimized.size() - 1);
+            fullResponse.setTotalDistanceMeters(fullDistance);
+            fullResponse.setTotalStops(optimized.size());
             fullResponse.setEstimatedTimeSeconds((int) (fullResponse.getTotalDistanceMeters() / 1.4));
 
             String json = objectMapper.writeValueAsString(fullResponse);

@@ -77,7 +77,7 @@ public class RoutingService {
             return errorResponse;
         }
 
-        RoutePoint userPoint = new RoutePoint("user_loc", "Tu", request.getUserLat(), request.getUserLng());
+        RoutePoint userPoint = new RoutePoint("user_loc", "", request.getUserLat(), request.getUserLng(), "USER");
 
         // Full NN route (fast — always computed eagerly)
         List<RoutePoint> nnRoute = new ArrayList<>();
@@ -125,7 +125,7 @@ public class RoutingService {
         String routeId = UUID.randomUUID().toString();
 
         // Partial response: user point + first lazyN products
-        List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+        List<RoutePoint> partial = new ArrayList<>(fullNnRoute.subList(0, Math.min(lazyN + 1, fullNnRoute.size())));
         addAudioInstructions(partial); // BE 3.2
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
@@ -139,9 +139,9 @@ public class RoutingService {
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
         RoutingResponse partialResponse = new RoutingResponse();
-        partialResponse.setStatus("success"); // Fixed: Now correctly setting status to "partial"
+        partialResponse.setStatus("success"); 
         partialResponse.setRouteId(routeId);
-        partialResponse.setRoute(new ArrayList<>(partial));
+        partialResponse.setRoute(partial);
         partialResponse.setWarnings(warnings);
         partialResponse.setPartial(true);
 

@@ -70,7 +70,6 @@ class RoutingControllerTest {
         RoutingResponse mockResponse = new RoutingResponse();
         mockResponse.setStatus("success");
         mockResponse.setRoute(List.of(
-                new RoutePoint("user_loc", "Punctul Albastru (Tu)", 47.151726, 27.587914),
                 new RoutePoint("item_101", "Lapte", 47.151800, 27.588000),
                 new RoutePoint("item_102", "Paine", 47.151850, 27.588050),
                 new RoutePoint("item_103", "Mere", 47.151900, 27.588100)
@@ -84,8 +83,8 @@ class RoutingControllerTest {
 
         assertEquals("success", response.getStatus());
         assertNotNull(response.getRoute());
-        assertEquals(4, response.getRoute().size());
-        assertEquals("user_loc", response.getRoute().getFirst().getItemId());
+        assertEquals(3, response.getRoute().size());
+        assertNotEquals("user_loc", response.getRoute().getFirst().getItemId());
         assertFalse(response.isPartial());
     }
 
@@ -95,9 +94,7 @@ class RoutingControllerTest {
 
         RoutingResponse mockResponse = new RoutingResponse();
         mockResponse.setStatus("success");
-        mockResponse.setRoute(List.of(
-                new RoutePoint("user_loc", "Tu", 47.151726, 27.587914)
-        ));
+        mockResponse.setRoute(List.of()); // user point removed, route empty if no products
         mockResponse.setWarnings(List.of());
 
         when(routingService.calculateOptimalRoute(request)).thenReturn(mockResponse);
