@@ -69,6 +69,11 @@ public class RoutingAsyncService {
 
             double fullDistance = optimizer.routeDistance(optimized);
 
+            // Remove user point from the list sent to UI (issue: redundant with blue ping)
+            if (!optimized.isEmpty() && "user_loc".equals(optimized.getFirst().getItemId())) {
+                optimized.removeFirst();
+            }
+
             // Updated instantiation to use constructor and setters
             RoutingResponse fullResponse = new RoutingResponse();
             fullResponse.setStatus("success");

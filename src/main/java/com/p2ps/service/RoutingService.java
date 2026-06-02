@@ -95,6 +95,15 @@ public class RoutingService {
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
         addAudioInstructions(optimizedRoute); // BE 3.2
+
+        // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
+        double distEager = optimizer.routeDistance(optimizedRoute);
+
+        // Remove user point from the list sent to UI (issue: redundant with blue ping)
+        if (!optimizedRoute.isEmpty() && "user_loc".equals(optimizedRoute.getFirst().getItemId())) {
+            optimizedRoute.removeFirst();
+        }
+
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
 
         RoutingResponse response = new RoutingResponse();
@@ -103,8 +112,6 @@ public class RoutingService {
         response.setWarnings(warnings);
         response.setPartial(false);
 
-        // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
-        double distEager = optimizer.routeDistance(optimizedRoute);
         response.setTotalDistanceMeters(distEager);
         response.setTotalStops(optimizedRoute.size());
         response.setEstimatedTimeSeconds((int) (distEager / 1.4)); // viteză estimată 1.4 m/s
@@ -131,6 +138,14 @@ public class RoutingService {
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
 
+        // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
+        double distLazy = optimizer.routeDistance(partial);
+
+        // Remove user point from the list sent to UI (issue: redundant with blue ping)
+        if (!partial.isEmpty() && "user_loc".equals(partial.getFirst().getItemId())) {
+            partial.removeFirst();
+        }
+
         // Set pending marker in Redis
         String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
         redis.opsForValue().set(pendingKey, "true", RoutingAsyncService.PENDING_TTL);
@@ -145,8 +160,6 @@ public class RoutingService {
         partialResponse.setWarnings(warnings);
         partialResponse.setPartial(true);
 
-        // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
-        double distLazy = optimizer.routeDistance(partial);
         partialResponse.setTotalDistanceMeters(distLazy);
         partialResponse.setTotalStops(partial.size());
         partialResponse.setEstimatedTimeSeconds((int) (distLazy / 1.4));

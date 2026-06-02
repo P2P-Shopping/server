@@ -291,7 +291,7 @@ class LocationProcessorWorkerTest {
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> worker.initialize());
         
-        assertTrue(worker.isLowConfidence(0.1d, 1)); // Just a dummy call to isLowConfidence to show worker is active
+        assertTrue(worker.isLowConfidence(0.05d, 1)); // 0.05 < 0.1 threshold -> true
         // Verify database type was detected correctly
         verify(connection, atLeastOnce()).getMetaData();
     }
