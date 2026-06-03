@@ -77,7 +77,7 @@ public class RoutingService {
             return errorResponse;
         }
 
-        RoutePoint userPoint = new RoutePoint("user_loc", "Tu", request.getUserLat(), request.getUserLng());
+        RoutePoint userPoint = new RoutePoint("user_loc", "", request.getUserLat(), request.getUserLng(), "USER");
 
         // Full NN route (fast — always computed eagerly)
         List<RoutePoint> nnRoute = new ArrayList<>();
@@ -95,6 +95,15 @@ public class RoutingService {
         List<RoutePoint> optimizedRoute = optimizer.threeOptImprove(nnRoute);
         logImprovement(nnRoute, optimizedRoute);
         addAudioInstructions(optimizedRoute); // BE 3.2
+
+        // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
+        double distEager = optimizer.routeDistance(optimizedRoute);
+
+        // Remove user point from the list sent to UI (issue: redundant with blue ping)
+        if (!optimizedRoute.isEmpty() && "user_loc".equals(optimizedRoute.getFirst().getItemId())) {
+            optimizedRoute.removeFirst();
+        }
+
         logger.info("Ruta calculata: {} puncte, {} warnings", optimizedRoute.size(), warnings.size());
 
         RoutingResponse response = new RoutingResponse();
@@ -103,8 +112,6 @@ public class RoutingService {
         response.setWarnings(warnings);
         response.setPartial(false);
 
-        // --- Injectarea metricilor pentru răspunsul complet (Eager) ---
-        double distEager = optimizer.routeDistance(optimizedRoute);
         response.setTotalDistanceMeters(distEager);
         response.setTotalStops(optimizedRoute.size());
         response.setEstimatedTimeSeconds((int) (distEager / 1.4)); // viteză estimată 1.4 m/s
@@ -125,11 +132,19 @@ public class RoutingService {
         String routeId = UUID.randomUUID().toString();
 
         // Partial response: user point + first lazyN products
-        List<RoutePoint> partial = fullNnRoute.subList(0, lazyN + 1); // inclusive of user point
+        List<RoutePoint> partial = new ArrayList<>(fullNnRoute.subList(0, Math.min(lazyN + 1, fullNnRoute.size())));
         addAudioInstructions(partial); // BE 3.2
 
         logger.info("Lazy routing: returnez {} noduri imediat, {} in background (routeId={})",
                 partial.size(), fullNnRoute.size() - partial.size(), routeId);
+
+        // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
+        double distLazy = optimizer.routeDistance(partial);
+
+        // Remove user point from the list sent to UI (issue: redundant with blue ping)
+        if (!partial.isEmpty() && "user_loc".equals(partial.getFirst().getItemId())) {
+            partial.removeFirst();
+        }
 
         // Set pending marker in Redis
         String pendingKey = RoutingAsyncService.PENDING_KEY_PREFIX + routeId;
@@ -139,14 +154,12 @@ public class RoutingService {
         asyncService.completeRouteAsync(routeId, new ArrayList<>(fullNnRoute), new ArrayList<>(warnings));
 
         RoutingResponse partialResponse = new RoutingResponse();
-        partialResponse.setStatus("success"); // Fixed: Now correctly setting status to "partial"
+        partialResponse.setStatus("success"); 
         partialResponse.setRouteId(routeId);
-        partialResponse.setRoute(new ArrayList<>(partial));
+        partialResponse.setRoute(partial);
         partialResponse.setWarnings(warnings);
         partialResponse.setPartial(true);
 
-        // --- Injectarea metricilor pentru ruta parțială returnată imediat (Lazy) ---
-        double distLazy = optimizer.routeDistance(partial);
         partialResponse.setTotalDistanceMeters(distLazy);
         partialResponse.setTotalStops(partial.size());
         partialResponse.setEstimatedTimeSeconds((int) (distLazy / 1.4));

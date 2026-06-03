@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LocationProcessorWorker {
 
     private static final Logger logger = LoggerFactory.getLogger(LocationProcessorWorker.class);
-    private static final double LOW_CONFIDENCE_THRESHOLD = 0.4d;
-    private static final int MIN_PING_COUNT_FOR_CONFIDENCE = 5;
+    private static final double LOW_CONFIDENCE_THRESHOLD = 0.1d;
+    private static final int MIN_PING_COUNT_FOR_CONFIDENCE = 1;
     private static final AtomicLong RAPID_RECALCULATION_FAILURES = new AtomicLong();
 
     private final JdbcTemplate jdbcTemplate;
@@ -170,13 +170,15 @@ public class LocationProcessorWorker {
             String sql = """
                 INSERT INTO store_inventory_map (map_id, store_id, item_id, estimated_loc_point, confidence_score, ping_count, last_updated)
                 WITH FilteredPings AS (
-                    SELECT item_id, store_id, location_point, accuracy_m
+                    SELECT item_id, store_id, location_point, accuracy_m, marked_at
                     FROM raw_user_pings
-                    WHERE loc_provider IN ('WIFI_RTT', 'GPS') AND accuracy_m < 30.0
+                    WHERE loc_provider IN ('WIFI_RTT', 'GPS') 
+                      AND accuracy_m < 30.0
+                      AND marked_at > NOW() - INTERVAL '3 days'
                 ),
                 ClusteredData AS (
                     SELECT 
-                        item_id, store_id, location_point, accuracy_m,
+                        item_id, store_id, location_point, accuracy_m, marked_at,
                         ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1) 
                         OVER (PARTITION BY store_id, item_id) AS cluster_id
                     FROM FilteredPings
@@ -187,8 +189,9 @@ public class LocationProcessorWorker {
                         item_id,
                         cluster_id,
                         ST_GeometricMedian(ST_Collect(location_point)) AS estimated_loc_point,
-                        LEAST(1.0, (COUNT(item_id) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS confidence_score, 
-                        COUNT(item_id) AS ping_count
+                        1.0 AS confidence_score, 
+                        COUNT(item_id) AS ping_count,
+                        MAX(marked_at) AS last_seen
                     FROM ClusteredData
                     WHERE cluster_id IS NOT NULL
                     GROUP BY store_id, item_id, cluster_id
@@ -200,14 +203,14 @@ public class LocationProcessorWorker {
                     estimated_loc_point,
                     confidence_score,
                     ping_count,
-                    NOW()
+                    last_seen
                 FROM ClusterStats
                 ORDER BY store_id, item_id, ping_count DESC
                 ON CONFLICT (store_id, item_id) DO UPDATE SET
                     estimated_loc_point = EXCLUDED.estimated_loc_point,
                     confidence_score = EXCLUDED.confidence_score,
                     ping_count = EXCLUDED.ping_count,
-                    last_updated = NOW()
+                    last_updated = EXCLUDED.last_updated
             """;
 
             int insertedRows = jdbcTemplate.update(sql);
@@ -239,14 +242,15 @@ public class LocationProcessorWorker {
         try {
             String sql = """
                 WITH ItemPings AS (
-                    SELECT location_point, accuracy_m
+                    SELECT location_point, accuracy_m, marked_at
                     FROM raw_user_pings
                     WHERE store_id = ? AND item_id = ?
                       AND loc_provider IN ('WIFI_RTT', 'GPS')
                       AND accuracy_m < 30.0
+                      AND marked_at > NOW() - INTERVAL '3 days'
                 ),
                 Clustered AS (
-                    SELECT location_point, accuracy_m,
+                    SELECT location_point, accuracy_m, marked_at,
                            ST_ClusterDBSCAN(ST_Transform(location_point, 3857), eps := 30.0, minpoints := 1)
                            OVER () AS cluster_id
                     FROM ItemPings
@@ -255,8 +259,9 @@ public class LocationProcessorWorker {
                     SELECT
                         cluster_id,
                         ST_GeometricMedian(ST_Collect(location_point)) AS estimated_loc_point,
-                        LEAST(1.0, (COUNT(*) / 50.0) * (1.0 / GREATEST(1.0, AVG(accuracy_m)))) AS confidence_score,
-                        COUNT(*) AS ping_count
+                        1.0 AS confidence_score,
+                        COUNT(*) AS ping_count,
+                        MAX(marked_at) AS last_seen
                     FROM Clustered
                     WHERE cluster_id IS NOT NULL
                     GROUP BY cluster_id
@@ -267,7 +272,7 @@ public class LocationProcessorWorker {
                 SET estimated_loc_point = COALESCE(stats.estimated_loc_point, inventory.estimated_loc_point),
                     confidence_score = COALESCE(stats.confidence_score, inventory.confidence_score),
                     ping_count = COALESCE(stats.ping_count, inventory.ping_count),
-                    last_updated = NOW()
+                    last_updated = COALESCE(stats.last_seen, inventory.last_updated)
                 FROM ClusterStats stats
                 WHERE inventory.store_id = ? AND inventory.item_id = ?
             """;
