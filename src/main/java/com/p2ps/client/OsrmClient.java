@@ -63,24 +63,26 @@ public class OsrmClient {
      *
      * @param profile "driving", "walking", "foot", "car", etc.
      */
+    private static final String OSRM_BASE_URL = "https://router.project-osrm.org";
+
     public TransportEstimate getEstimate(double fromLat, double fromLng,
                                          double toLat,   double toLng,
                                          String profile) {
+        if (routingApiKey == null || routingApiKey.isBlank()) {
+            return getEstimateOsrm(fromLat, fromLng, toLat, toLng, profile);
+        }
         String orsProfile = mapProfile(profile);
-        return getEstimate(fromLat, fromLng, toLat, toLng, orsProfile, routingBaseUrl);
+        return getEstimateOrs(fromLat, fromLng, toLat, toLng, orsProfile);
     }
 
-    private TransportEstimate getEstimate(double fromLat, double fromLng,
-                                          double toLat,   double toLng,
-                                          String profile, String baseUrl) {
-        String url = baseUrl + "/v2/directions/" + profile;
-
+    private TransportEstimate getEstimateOrs(double fromLat, double fromLng,
+                                              double toLat,   double toLng,
+                                              String profile) {
+        String url = routingBaseUrl + "/v2/directions/" + profile;
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            if (routingApiKey != null && !routingApiKey.isBlank()) {
-                headers.set("Authorization", routingApiKey);
-            }
+            headers.set("Authorization", routingApiKey);
 
             String body = String.format(Locale.ROOT,
                     "{\"coordinates\":[[%.6f,%.6f],[%.6f,%.6f]]}",
@@ -92,25 +94,52 @@ public class OsrmClient {
 
             JsonNode routes = root.path("routes");
             if (routes.isMissingNode() || !routes.isArray() || routes.isEmpty()) {
-                logger.warn("Routing returned no routes for profile '{}'", profile);
+                logger.warn("ORS returned no routes for profile '{}'", profile);
                 return null;
             }
 
             JsonNode route = routes.get(0);
             JsonNode summary = route.path("summary");
-
             double distance = summary.path("distance").asDouble();
             double duration = summary.path("duration").asDouble();
             String polyline = route.path("geometry").asText(null);
 
-            logger.debug("Routing [{}]: {}m in {}s polyline={}", profile,
-                    Math.round(distance), Math.round(duration),
-                    polyline != null ? polyline.length() + " chars" : "null");
-
             return new TransportEstimate(distance, duration, polyline);
-
         } catch (Exception e) {
-            logger.warn("Routing request failed for profile '{}': {}", profile, e.getMessage());
+            logger.warn("ORS request failed for profile '{}': {}", profile, e.getMessage());
+            return null;
+        }
+    }
+
+    private TransportEstimate getEstimateOsrm(double fromLat, double fromLng,
+                                               double toLat,   double toLng,
+                                               String profile) {
+        String osrmProfile = profile.toLowerCase().contains("walk") || profile.toLowerCase().contains("foot")
+                ? "foot" : "driving";
+        String url = String.format(Locale.ROOT,
+                "%s/route/v1/%s/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=polyline",
+                OSRM_BASE_URL, osrmProfile, fromLng, fromLat, toLng, toLat);
+        try {
+            String response = restTemplate.getForObject(url, String.class);
+            JsonNode root = objectMapper.readTree(response);
+
+            if (!"Ok".equals(root.path("code").asText())) {
+                logger.warn("OSRM returned non-Ok code for profile '{}'", osrmProfile);
+                return null;
+            }
+
+            JsonNode routes = root.path("routes");
+            if (!routes.isArray() || routes.isEmpty()) return null;
+
+            JsonNode route = routes.get(0);
+            double distance = route.path("distance").asDouble();
+            double duration = route.path("duration").asDouble();
+            String polyline = route.path("geometry").asText(null);
+
+            logger.debug("OSRM [{}]: {}m in {}s", osrmProfile, Math.round(distance), Math.round(duration));
+            return new TransportEstimate(distance, duration, polyline);
+        } catch (Exception e) {
+            logger.warn("OSRM request failed for profile '{}': {}", osrmProfile, e.getMessage());
             return null;
         }
     }

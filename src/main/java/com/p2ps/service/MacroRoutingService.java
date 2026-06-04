@@ -46,25 +46,33 @@ public class MacroRoutingService {
      */
     @Cacheable(value = "macroRouting", key = "T(String).format(\"%s:%.3f:%.3f\", #storeId, #userLat, #userLng)")
     public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId) {
-        if (storeId == null) {
-            logger.warn("Store ID is null");
+        return getEstimates(userLat, userLng, storeId, null, null);
+    }
+
+    public MacroRoutingResponse getEstimates(double userLat, double userLng, String storeId,
+                                              Double storeLat, Double storeLng) {
+        double[] entrance = null;
+
+        if (storeLat != null && storeLng != null) {
+            entrance = new double[]{storeLat, storeLng};
+        } else if (storeId != null) {
+            double[] dbEntrance = fetchStoreEntrance(storeId);
+            if (dbEntrance.length > 0) entrance = dbEntrance;
+        }
+
+        if (entrance == null) {
+            logger.warn("Store not found and no coordinates provided for storeId={}", storeId);
             return null;
         }
 
-        double[] entrance = fetchStoreEntrance(storeId);
-        if (entrance.length == 0) {
-            logger.warn("Store not found or has no boundary polygon");
-            return null;
-        }
-
-        double storeLat = entrance[0];
-        double storeLng = entrance[1];
+        double storeLat2 = entrance[0];
+        double storeLng2 = entrance[1];
         logger.info("Macro-routing: calculating estimates to store entrance");
 
         CompletableFuture<OsrmClient.TransportEstimate> walkingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "walking"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat2, storeLng2, "walking"));
         CompletableFuture<OsrmClient.TransportEstimate> drivingFuture = CompletableFuture.supplyAsync(
-                () -> osrmClient.getEstimate(userLat, userLng, storeLat, storeLng, "driving"));
+                () -> osrmClient.getEstimate(userLat, userLng, storeLat2, storeLng2, "driving"));
 
         CompletableFuture.allOf(walkingFuture, drivingFuture).join();
 

@@ -30,46 +30,38 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
         try {
             CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(request);
             filterChain.doFilter(cached, response);
-        } catch (PayloadTooLargeException _) {
+        } catch (PayloadTooLargeException e) {
             response.sendError(413, "Payload too large");
         }
     }
 
     private static final class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
-        private static final long MAX_BODY_BYTES = 1 * 1024 * 1024L; // 1 MB cap
+        private static final long MAX_BODY_BYTES = 1024 * 1024L; // 1 MB cap
 
         private final byte[] cachedBody;
 
         private CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
+            super(request);
+
             long contentLength = request.getContentLengthLong();
             if (contentLength > MAX_BODY_BYTES) {
                 throw new PayloadTooLargeException("Declared content-length exceeds limit: " + contentLength);
             }
 
-            super(request);
-
-            if (contentLength > 0) {
-                byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
-                if (body.length > MAX_BODY_BYTES) {
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            ServletInputStream in = request.getInputStream();
+            byte[] buffer = new byte[8192];
+            int read;
+            long total = 0;
+            while ((read = in.read(buffer)) != -1) {
+                total += read;
+                if (total > MAX_BODY_BYTES) {
                     throw new PayloadTooLargeException("Request body exceeds maximum allowed size");
                 }
-                this.cachedBody = body;
-            } else {
-                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                ServletInputStream in = request.getInputStream();
-                byte[] buffer = new byte[8192];
-                int read;
-                long total = 0;
-                while ((read = in.read(buffer)) != -1) {
-                    total += read;
-                    if (total > MAX_BODY_BYTES) {
-                        throw new PayloadTooLargeException("Request body exceeds maximum allowed size");
-                    }
-                    baos.write(buffer, 0, read);
-                }
-                this.cachedBody = baos.toByteArray();
+                baos.write(buffer, 0, read);
             }
+            this.cachedBody = baos.toByteArray();
         }
 
         @Override
@@ -79,7 +71,15 @@ public class TelemetryRequestBodyCachingFilter extends OncePerRequestFilter {
 
         @Override
         public BufferedReader getReader() {
-            Charset charset = Charset.forName(getCharacterEncoding() != null ? getCharacterEncoding() : "UTF-8");
+            Charset charset = java.nio.charset.StandardCharsets.UTF_8;
+            String encoding = getCharacterEncoding();
+            if (encoding != null) {
+                try {
+                    charset = Charset.forName(encoding);
+                } catch (IllegalArgumentException e) {
+                    // Fallback to UTF-8
+                }
+            }
             return new BufferedReader(new InputStreamReader(getInputStream(), charset));
         }
     }

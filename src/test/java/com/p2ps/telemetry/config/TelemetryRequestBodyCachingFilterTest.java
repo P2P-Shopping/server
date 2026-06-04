@@ -193,4 +193,25 @@ class TelemetryRequestBodyCachingFilterTest {
 
         assertThrows(UnsupportedOperationException.class, () -> in.setReadListener(null));
     }
+    @Test
+    void getReader_withInvalidCharset_fallsBackToUTF8() throws Exception {
+        TelemetryRequestBodyCachingFilter filter = new TelemetryRequestBodyCachingFilter();
+        String payload = "fallback test";
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/v1/telemetry/ping");
+        req.setContentType("application/json");
+        req.setCharacterEncoding("INVALID-CHARSET-123");
+        req.setContent(payload.getBytes(StandardCharsets.UTF_8));
+
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        AtomicReference<jakarta.servlet.ServletRequest> captured = new AtomicReference<>();
+        FilterChain chain = (request, response) -> captured.set(request);
+
+        filter.doFilter(req, resp, chain);
+
+        jakarta.servlet.http.HttpServletRequest wrapped = (jakarta.servlet.http.HttpServletRequest) captured.get();
+
+        String read = wrapped.getReader().lines().collect(Collectors.joining("\n"));
+        assertEquals(payload, read);
+    }
 }

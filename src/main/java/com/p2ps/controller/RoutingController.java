@@ -193,9 +193,16 @@ public class RoutingController {
     public ResponseEntity<MacroRoutingResponse> getMacroEstimates(
             @RequestParam double userLat,
             @RequestParam double userLng,
-            @RequestParam String storeId) {
+            @RequestParam(required = false) String storeId,
+            @RequestParam(required = false) Double storeLat,
+            @RequestParam(required = false) Double storeLng) {
 
-        MacroRoutingResponse response = macroRoutingService.getEstimates(userLat, userLng, storeId);
+        MacroRoutingResponse response;
+        if (storeLat != null && storeLng != null) {
+            response = macroRoutingService.getEstimates(userLat, userLng, storeId, storeLat, storeLng);
+        } else {
+            response = macroRoutingService.getEstimates(userLat, userLng, storeId);
+        }
         if (response == null) {
             return ResponseEntity.notFound().build();
         }
