@@ -43,7 +43,7 @@ public class UserService implements UserDetailsService {
 
         return User.builder()
                 .username(user.getEmail())
-                .password(user.getPassword())
+                .password(user.getPassword() != null ? user.getPassword() : "")
                 .roles("USER")
                 .build();
     }
@@ -62,6 +62,25 @@ public class UserService implements UserDetailsService {
         } catch (DataIntegrityViolationException _) {
             throw new UserAlreadyExistsException("Email already in use!");
         }
+    }
+
+    @Transactional
+    public Users findOrCreateGoogleUser(String googleId, String email, String firstName, String lastName) {
+        return userRepository.findByGoogleId(googleId)
+                .orElseGet(() -> userRepository.findByEmail(email)
+                        .map(existing -> {
+                            existing.setGoogleId(googleId);
+                            return userRepository.save(existing);
+                        })
+                        .orElseGet(() -> {
+                            Users newUser = new Users();
+                            newUser.setEmail(email);
+                            newUser.setGoogleId(googleId);
+                            newUser.setFirstName(firstName);
+                            newUser.setLastName(lastName.isBlank() ? "-" : lastName);
+                            newUser.setTokenVersion(0);
+                            return userRepository.save(newUser);
+                        }));
     }
 
     @Transactional

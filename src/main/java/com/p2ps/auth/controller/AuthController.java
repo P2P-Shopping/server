@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.client.RestTemplate;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,14 +39,17 @@ public class AuthController {
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
+    private final RestTemplate restTemplate;
 
     @Value("${app.security.cookie-secure-flag:true}")
     private boolean isCookieSecure;
 
-    public AuthController(UserService userService, AuthenticationManager authenticationManager, JwtUtil jwtUtil) {
+    public AuthController(UserService userService, AuthenticationManager authenticationManager,
+                          JwtUtil jwtUtil, RestTemplate restTemplate) {
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
+        this.restTemplate = restTemplate;
     }
 
     @GetMapping("/me")
@@ -194,6 +198,51 @@ public class AuthController {
                         .contentType(MediaType.parseMediaType(u.getProfilePictureContentType()))
                         .body(u.getProfilePicture()))
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<Map<String, Object>> googleLogin(
+            @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-Return-Token", required = false) String returnToken,
+            HttpServletRequest servletRequest) {
+
+        String credential = body.get("credential");
+        if (credential == null || credential.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(KEY_ERROR, "Missing credential"));
+        }
+
+        try {
+            String verifyUrl = "https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + credential;
+            @SuppressWarnings("unchecked")
+            Map<String, String> googleData = restTemplate.getForObject(verifyUrl, Map.class);
+
+            if (googleData == null || googleData.get("email") == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(KEY_ERROR, "Invalid Google token"));
+            }
+
+            String email = googleData.get("email");
+            String googleId = googleData.get("id");
+            String firstName = googleData.getOrDefault("given_name", "User");
+            String lastName = googleData.getOrDefault("family_name", "");
+
+            Users user = userService.findOrCreateGoogleUser(googleId, email, firstName, lastName);
+            String token = jwtUtil.generateToken(email, user.getTokenVersion());
+            ResponseCookie cookie = createJwtCookie(token, 24L * 60 * 60, servletRequest.isSecure());
+
+            Map<String, Object> data = toUserResponse(user);
+            if ("true".equalsIgnoreCase(returnToken)) {
+                data.put("token", token);
+            }
+            data.put(KEY_MESSAGE, "Login successful");
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                    .body(data);
+        } catch (Exception e) {
+            logger.error("Google login failed", e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(KEY_ERROR, "Google authentication failed"));
+        }
     }
 
     @PostMapping("/logout")

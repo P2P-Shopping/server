@@ -24,6 +24,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
 class RoutingControllerTest {
@@ -212,7 +217,7 @@ class RoutingControllerTest {
         );
         when(macroRoutingService.getEstimates(47.15, 27.58, "store-uuid")).thenReturn(macroResponse);
 
-        ResponseEntity<MacroRoutingResponse> response = controller.getMacroEstimates(47.15, 27.58, "store-uuid");
+        ResponseEntity<MacroRoutingResponse> response = controller.getMacroEstimates(47.15, 27.58, "store-uuid", null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -225,7 +230,7 @@ class RoutingControllerTest {
     void getMacroEstimates_shouldReturn404WhenStoreNotFound() {
         when(macroRoutingService.getEstimates(anyDouble(), anyDouble(), anyString())).thenReturn(null);
 
-        ResponseEntity<MacroRoutingResponse> response = controller.getMacroEstimates(47.15, 27.58, "nonexistent");
+       ResponseEntity<MacroRoutingResponse> response = controller.getMacroEstimates(47.15, 27.58, "nonexistent", null, null);
 
         assertEquals(404, response.getStatusCode().value());
     }
